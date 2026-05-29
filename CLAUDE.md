@@ -16,11 +16,14 @@ All packages pass. `internal/importing` and `internal/parser` were once broken i
 | Package | What it does |
 | :--- | :--- |
 | `cmd/mutago/` | Binary entrypoint; all flag wiring and orchestration |
-| `mutator/` | Mutator implementations (arithmetic, branch, expression, loop, numbers, statement) |
+| `mutator/` | Mutator implementations (arithmetic, branch, concurrency, conditional, expression, loop, numbers, select, statement) |
 | `internal/models/` | `Report`, `Stats`, `Mutant` types; MSI and quality gate logic |
 | `internal/gitdiff/` | Git diff line filter for `--git-diff-lines` |
 | `internal/filter/` | Annotation and skip filters |
 | `internal/coverage/` | Coverage profile parsing (`--coverage`) and per-test coverage map (`--per-test`) |
+| `internal/parser/` | Package loading and the AST cache (`ClearPackageCache`) |
+| `internal/annotation/` | Comment-directive filters (block, chain, function, line, regex) |
+| `internal/reportmaker/` | JSON / HTML / agentic report generation |
 
 ## Self-mutation and quality gates
 
