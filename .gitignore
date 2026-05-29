@@ -23,6 +23,12 @@ _testmain.go
 *.test
 *.prof
 
+# Config test fixtures use a .yml.test suffix and must be tracked even though
+# the *.test rule above (for compiled Go test binaries) would otherwise ignore
+# them. Without this negation a plain `git add` silently drops them and the
+# cmd/mutago config tests fail on a fresh checkout.
+!testdata/configs/*.yml.test
+
 # go-mutesting build output and run artifacts
 /go-mutesting
 report.json
@@ -31,3 +37,6 @@ go-mutesting-report.html
 go-mutesting-summary.json
 go-mutesting-agentic.json
 *.go.new
+
+# Claude Code local scheduler artifacts
+.claude/scheduled_tasks.lock

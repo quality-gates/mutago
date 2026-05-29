@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
+## [v2.6.16] — 2026-05-29
+
+### Fixed
+- The `cmd/mutago` config integration tests no longer fail on a fresh checkout. Their fixture files (`testdata/configs/*.yml.test`) matched the `*.test` `.gitignore` rule (intended for compiled Go test binaries) and were silently dropped from the initial commit, so a clean clone had a red test suite. The fixtures are now committed and a `.gitignore` negation keeps them tracked.
+
+---
+
 ## [v2.6.15] — 2026-05-26
 
 ### Fixed
@@ -326,3 +333,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.6.13]: https://github.com/quality-gates/mutago/compare/v2.6.12...v2.6.13
 [v2.6.14]: https://github.com/quality-gates/mutago/compare/v2.6.13...v2.6.14
 [v2.6.15]: https://github.com/quality-gates/mutago/compare/v2.6.14...v2.6.15
+[v2.6.16]: https://github.com/quality-gates/mutago/compare/v2.6.15...v2.6.16
