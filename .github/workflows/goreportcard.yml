@@ -1,0 +1,115 @@
+name: Go Report Card
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  report-card:
+    name: Enforce A+ grade
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install tools
+        run: |
+          go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+          go install github.com/gordonklaus/ineffassign@latest
+
+      - name: Score (must be > 90% for A+)
+        run: |
+          python3 - <<'EOF'
+          import subprocess, sys, os
+
+          def lines(cmd):
+              r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+              return [l for l in (r.stdout + r.stderr).splitlines() if l]
+
+          # Replicate goreportcard's GoFiles() exclusions
+          files = lines(
+              "find . -name '*.go'"
+              " -not -path './vendor/*'"
+              " -not -path './Godeps/*'"
+              " -not -path './third_party/*'"
+              " -not -path './testdata/*'"
+              " -not -name '*.pb.go'"
+              " -not -name '*.pb.gw.go'"
+              " -not -name '*.generated.go'"
+              " -not -name 'bindata.go'"
+              " -not -name '*_string.go'"
+          )
+          n = len(files)
+          farg = " ".join(files)
+          pkgs = lines("go list ./...")
+          np = len(pkgs)
+
+          # gofmt -s: per-file pass rate (weight 0.30)
+          gofmt_fail = len(lines(f"gofmt -s -l {farg}"))
+          gofmt = (n - gofmt_fail) / n
+
+          # go vet: per-file pass rate (weight 0.30)
+          # Run once on all packages (matches gometalinter --enable=vet ./...),
+          # then count files mentioned in output as failing.
+          vet_r = subprocess.run("go vet ./...", shell=True, capture_output=True, text=True)
+          if vet_r.returncode == 0:
+              vet = 1.0
+          else:
+              vet_fail_files = set()
+              for line in (vet_r.stdout + vet_r.stderr).splitlines():
+                  if not line or line.startswith("#"):
+                      continue
+                  fname = line.split(":")[0].lstrip("./")
+                  if fname.endswith(".go"):
+                      vet_fail_files.add(fname)
+              vet = (n - len(vet_fail_files)) / n
+
+          # gocyclo --cyclo-over=15: per-file pass rate (weight 0.10)
+          # raw output: "complexity pkg func path/to/file.go:line:col"
+          over = {l.split()[-1].split(":")[0] for l in lines("gocyclo -over 15 .")}
+          cyclo = (n - len(over)) / n
+
+          # license: 1.0 if present, 0.0 if not (weight 0.05)
+          prefixes = {"license", "copying", "copyright", "licence", "unlicense", "copyleft"}
+          has_license = any(
+              any(f.lower().startswith(p) for p in prefixes)
+              for f in os.listdir(".")
+          )
+          license_score = 1.0 if has_license else 0.0
+
+          # ineffassign: auto-passes on repos > 100 files (weight 0.10)
+          # goreportcard skips it at that threshold (check/utils.go)
+          if n > 100:
+              ineffassign = 1.0
+          else:
+              ia_lines = lines(f"ineffassign {farg}")
+              ia_fail = len({l.split(":")[0] for l in ia_lines if ":" in l})
+              ineffassign = (n - ia_fail) / n
+
+          # misspell weight is 0.0 — shown on report card but never affects grade
+
+          checks = [
+              ("gofmt",       gofmt,         0.30),
+              ("go vet",      vet,           0.30),
+              ("gocyclo",     cyclo,         0.10),
+              ("license",     license_score, 0.05),
+              ("ineffassign", ineffassign,   0.10),
+          ]
+          total_weight = sum(w for _, _, w in checks)
+          score = sum(r * w for _, r, w in checks) / total_weight
+
+          for name, rate, w in checks:
+              print(f"  {name:<14} {rate:6.1%}  weight={w:.2f}")
+          print(f"  {'score':<14} {score:6.1%}")
+          grade = "A+" if score > 0.90 else "A" if score > 0.80 else "B" if score > 0.70 else "<B"
+          print(f"  {'grade':<14} {grade}")
+
+          if score <= 0.90:
+              print("FAIL: score must be > 90% for A+")
+              sys.exit(1)
+          print("PASS: A+")
+          EOF

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jonbaldie/go-mutesting/master/schema/config-schema.json",
+  "title": "go-mutesting config",
+  "description": "Configuration file schema for go-mutesting (--config flag). All fields are optional; CLI flags override config values.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "skip_without_test": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip source files that have no corresponding _test.go file."
+    },
+    "skip_with_build_tags": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip test files that contain Go build tags."
+    },
+    "json_output": {
+      "type": "boolean",
+      "default": false,
+      "description": "Write a full mutation report to report.json after the run."
+    },
+    "html_output": {
+      "type": "boolean",
+      "default": false,
+      "description": "Write an HTML mutation report to go-mutesting-report.html after the run."
+    },
+    "silent_mode": {
+      "type": "boolean",
+      "default": false,
+      "description": "Suppress all per-mutation output including diffs; print only the final summary."
+    },
+    "min_msi": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 0,
+      "description": "Minimum overall Mutation Score Indicator (0–100). Exit code 4 if not met. 0 disables the gate. Overridden by --min-msi CLI flag when >= 0."
+    },
+    "min_covered_msi": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 0,
+      "description": "Minimum covered-code MSI (0–100). Exit code 4 if not met. 0 disables the gate. Requires --coverage. Overridden by --min-covered-msi CLI flag when >= 0."
+    },
+    "exclude_dirs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Directory path prefixes to exclude from mutation. Matched as prefixes, not globs (e.g. 'vendor' excludes any path starting with 'vendor')."
+    },
+    "disable_mutators": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Mutator names to disable. Merged with --disable CLI flags (union; both are denylists). Supports trailing-* wildcard to disable a whole category (e.g. 'arithmetic/*'). Run go-mutesting --list-mutators for all available names."
+    },
+    "enable_mutators": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Allowlist: if non-empty, only mutators matching these names run. Supports trailing-* wildcard (e.g. 'branch/*'). The CLI --disable flag can still exclude entries from this list."
+    },
+    "ignore_source_lines": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "List of regular expressions. Source lines that match any pattern are excluded from mutation. Useful for suppressing mutations on generated code, nolint annotations, or boilerplate lines."
+    }
+  }
+}

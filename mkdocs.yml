@@ -1,0 +1,49 @@
+site_name: mutago
+site_description: Mutation testing for Go — find gaps in your test suite
+site_url: https://quality-gates.github.io/mutago/
+repo_url: https://github.com/quality-gates/mutago
+repo_name: quality-gates/mutago
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: install.md
+  - Quick Start: quickstart.md
+  - CLI Reference: cli.md
+  - Mutators: mutators.md
+  - CI Integration: ci.md
+  - Writing Custom Mutators: custom-mutators.md
+  - Configuration: config.md
+  - JSON Output Schemas: json-outputs.md
