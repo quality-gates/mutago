@@ -600,6 +600,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#composite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composite
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Composite">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compositefield-clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        composite/field-clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#concurrency" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -827,6 +855,28 @@
     <span class="md-ellipsis">
       
         expression/error-guard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#expressionerrorf-wrap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        expression/errorf-wrap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#expressionrecover-clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        expression/recover-clear
       
     </span>
   </a>
@@ -1236,6 +1286,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#composite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composite
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Composite">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compositefield-clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        composite/field-clear
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#concurrency" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1463,6 +1541,28 @@
     <span class="md-ellipsis">
       
         expression/error-guard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#expressionerrorf-wrap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        expression/errorf-wrap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#expressionrecover-clear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        expression/recover-clear
       
     </span>
   </a>
@@ -1776,6 +1876,23 @@
 </tr>
 </tbody>
 </table>
+<h2 id="composite">Composite<a class="headerlink" href="#composite" title="Permanent link">&para;</a></h2>
+<h3 id="compositefield-clear">composite/field-clear<a class="headerlink" href="#compositefield-clear" title="Permanent link">&para;</a></h3>
+<p>Drops one keyed field from a composite literal (struct, map, or keyed array/slice literal), letting it fall back to its zero value. Targets fields set to a meaningful value that no test asserts — e.g. a config or options struct populated in full where only a couple of fields matter to the suite. Fields already at a zero value (<code>0</code>, <code>""</code>, <code>false</code>, <code>nil</code>) and positional elements are skipped.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Original</th>
+<th style="text-align: left;">Mutated</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Config{Timeout: 30, Retries: 3}</code></td>
+<td style="text-align: left;"><code>Config{Retries: 3}</code></td>
+</tr>
+</tbody>
+</table>
 <h2 id="concurrency">Concurrency<a class="headerlink" href="#concurrency" title="Permanent link">&para;</a></h2>
 <h3 id="concurrencygoroutine-remove">concurrency/goroutine-remove<a class="headerlink" href="#concurrencygoroutine-remove" title="Permanent link">&para;</a></h3>
 <p>Removes the <code>go</code> keyword from goroutine launches, making concurrent calls synchronous. Kills tests that rely on goroutines running independently.</p>
@@ -1884,6 +2001,38 @@
 <tr>
 <td style="text-align: left;"><code>if err == nil</code></td>
 <td style="text-align: left;"><code>if true</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="expressionerrorf-wrap">expression/errorf-wrap<a class="headerlink" href="#expressionerrorf-wrap" title="Permanent link">&para;</a></h3>
+<p>Downgrades the error-wrapping verb in <code>Errorf</code>-style calls from <code>%w</code> to <code>%v</code>. The message is identical, but the returned error no longer wraps its cause, so <code>errors.Is</code> / <code>errors.As</code> stop matching. Finds error wrapping that no test ever unwraps.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Original</th>
+<th style="text-align: left;">Mutated</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>fmt.Errorf("load: %w", err)</code></td>
+<td style="text-align: left;"><code>fmt.Errorf("load: %v", err)</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="expressionrecover-clear">expression/recover-clear<a class="headerlink" href="#expressionrecover-clear" title="Permanent link">&para;</a></h3>
+<p>Neutralises a <code>recover()</code> call by rewriting it to <code>any(nil)</code>. The recovered value is always nil, so the recovery branch never runs and a panic propagates. Finds deferred recovery blocks that no test exercises.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Original</th>
+<th style="text-align: left;">Mutated</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>if r := recover(); r != nil</code></td>
+<td style="text-align: left;"><code>if r := any(nil); r != nil</code></td>
 </tr>
 </tbody>
 </table>
