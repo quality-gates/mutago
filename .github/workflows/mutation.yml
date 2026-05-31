@@ -39,6 +39,7 @@ jobs:
             --min-covered-msi 80 \
             github.com/quality-gates/mutago/v2/mutator/arithmetic \
             github.com/quality-gates/mutago/v2/mutator/branch \
+            github.com/quality-gates/mutago/v2/mutator/composite \
             github.com/quality-gates/mutago/v2/mutator/concurrency \
             github.com/quality-gates/mutago/v2/mutator/conditional \
             github.com/quality-gates/mutago/v2/mutator/expression \

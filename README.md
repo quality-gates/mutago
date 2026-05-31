@@ -594,6 +594,14 @@ Replaces a float literal with its negation. Catches missing sign-handling in ari
 | :---------- | :------- | :------ |
 | FloatNegate | 3.14     | -3.14   |
 
+### Composite mutators
+#### composite/field-clear
+Drops one keyed field from a composite literal (struct, map, or keyed array/slice literal), letting it fall back to its zero value. Targets fields that are set to a meaningful value but never asserted by a test — e.g. an options or config struct populated in full where only one or two fields actually matter to the suite. Fields already set to a zero value (`0`, `""`, `false`, `nil`) and positional (unkeyed) elements are skipped to avoid no-op mutations.
+
+| Name       | Original                          | Mutated              |
+| :--------- | :-------------------------------- | :------------------- |
+| FieldClear | `Config{Timeout: 30, Retries: 3}` | `Config{Retries: 3}` |
+
 ### Concurrency mutators
 #### concurrency/goroutine-remove
 Removes the `go` keyword from goroutine launches, turning concurrent calls into synchronous ones. Kills tests that rely on goroutines running independently.
@@ -682,6 +690,20 @@ Replaces the condition of `if err != nil` and `if err == nil` guards with a bool
 | :--------- | :---------------- | :-------------- |
 | ErrNotNil  | if err != nil     | if false        |
 | ErrIsNil   | if err == nil     | if true         |
+
+#### expression/errorf-wrap
+Downgrades the error-wrapping verb in `Errorf`-style calls from `%w` to `%v`. The message is byte-for-byte identical, but the returned error no longer wraps its cause, so `errors.Is` and `errors.As` against the original error stop matching. Finds code that wraps errors out of habit where no test ever unwraps the result.
+
+| Name       | Original                      | Mutated                       |
+| :--------- | :---------------------------- | :---------------------------- |
+| ErrorfWrap | `fmt.Errorf("load: %w", err)` | `fmt.Errorf("load: %v", err)` |
+
+#### expression/recover-clear
+Neutralises a `recover()` call by turning it into `any(nil)`. Because both expressions have type `any`, the rewrite type-checks in every context, but the recovered value is always nil, so the guarded recovery branch never runs and a panic propagates. Finds deferred recovery blocks that no test exercises.
+
+| Name         | Original                      | Mutated                      |
+| :----------- | :---------------------------- | :--------------------------- |
+| RecoverClear | `if r := recover(); r != nil` | `if r := any(nil); r != nil` |
 
 #### expression/string-literal
 Replaces non-empty string literals in `==` and `!=` comparisons with `""`. Finds code that compares against a specific string value that tests never assert on — e.g. `if err.Error() == "not found"` where an empty-string match would still pass.

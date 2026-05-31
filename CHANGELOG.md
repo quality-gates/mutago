@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
+## [v2.7.0] — 2026-05-31
+
+### Added
+- Three Go-idiomatic mutators aimed at the kinds of subtly-untested code that machine-generated Go tends to produce:
+  - `composite/field-clear` drops one keyed field from a struct, map, or keyed array/slice literal, leaving it at its zero value. It targets fields set to a meaningful value that no test asserts — e.g. a fully-populated config or options struct where only a couple of fields matter to the suite. Fields already at a zero value (`0`, `""`, `false`, `nil`) and positional elements are skipped to avoid no-op mutations.
+  - `expression/errorf-wrap` downgrades the error-wrapping verb in `Errorf`-style calls from `%w` to `%v`. The message is byte-for-byte identical, but the returned error no longer wraps its cause, so `errors.Is` / `errors.As` stop matching. It finds error wrapping that no test ever unwraps.
+  - `expression/recover-clear` neutralises a `recover()` call by rewriting it to `any(nil)`, so the recovered value is always nil and a panic propagates instead of being recovered. It finds deferred recovery blocks that no test exercises.
+- The self-mutation quality gate (`mutation.yml`) now also covers the new `mutator/composite` package.
+
+---
+
 ## [v2.6.16] — 2026-05-29
 
 ### Fixed
@@ -334,3 +345,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.6.14]: https://github.com/quality-gates/mutago/compare/v2.6.13...v2.6.14
 [v2.6.15]: https://github.com/quality-gates/mutago/compare/v2.6.14...v2.6.15
 [v2.6.16]: https://github.com/quality-gates/mutago/compare/v2.6.15...v2.6.16
+[v2.7.0]: https://github.com/quality-gates/mutago/compare/v2.6.16...v2.7.0

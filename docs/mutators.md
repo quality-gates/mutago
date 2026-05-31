@@ -87,6 +87,15 @@ Replaces a float literal with its negation.
 | :------- | :------ |
 | `3.14` | `-3.14` |
 
+## Composite
+
+### composite/field-clear
+Drops one keyed field from a composite literal (struct, map, or keyed array/slice literal), letting it fall back to its zero value. Targets fields set to a meaningful value that no test asserts — e.g. a config or options struct populated in full where only a couple of fields matter to the suite. Fields already at a zero value (`0`, `""`, `false`, `nil`) and positional elements are skipped.
+
+| Original | Mutated |
+| :------- | :------ |
+| `Config{Timeout: 30, Retries: 3}` | `Config{Retries: 3}` |
+
 ## Concurrency
 
 ### concurrency/goroutine-remove
@@ -160,6 +169,20 @@ Replaces the condition of `if err != nil` / `if err == nil` guards with a boolea
 | :------- | :------ |
 | `if err != nil` | `if false` |
 | `if err == nil` | `if true` |
+
+### expression/errorf-wrap
+Downgrades the error-wrapping verb in `Errorf`-style calls from `%w` to `%v`. The message is identical, but the returned error no longer wraps its cause, so `errors.Is` / `errors.As` stop matching. Finds error wrapping that no test ever unwraps.
+
+| Original | Mutated |
+| :------- | :------ |
+| `fmt.Errorf("load: %w", err)` | `fmt.Errorf("load: %v", err)` |
+
+### expression/recover-clear
+Neutralises a `recover()` call by rewriting it to `any(nil)`. The recovered value is always nil, so the recovery branch never runs and a panic propagates. Finds deferred recovery blocks that no test exercises.
+
+| Original | Mutated |
+| :------- | :------ |
+| `if r := recover(); r != nil` | `if r := any(nil); r != nil` |
 
 ### expression/string-literal
 Replaces non-empty string literals in `==` and `!=` comparisons with `""`. Finds code that compares against a specific string value that tests never assert on.
