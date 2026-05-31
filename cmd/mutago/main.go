@@ -43,6 +43,7 @@ import (
 	"github.com/quality-gates/mutago/v2/mutator"
 	_ "github.com/quality-gates/mutago/v2/mutator/arithmetic"
 	_ "github.com/quality-gates/mutago/v2/mutator/branch"
+	_ "github.com/quality-gates/mutago/v2/mutator/composite"
 	_ "github.com/quality-gates/mutago/v2/mutator/concurrency"
 	_ "github.com/quality-gates/mutago/v2/mutator/conditional"
 	_ "github.com/quality-gates/mutago/v2/mutator/expression"
