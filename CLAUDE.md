@@ -67,9 +67,9 @@ Follow these steps in order when landing a change:
 3. **Manual smoke test** — build the binary and actually run it against a real package. Check that user-facing output looks right. Do not skip this.
 4. **Update docs if needed** — if your change adds, removes, or renames a flag, mutator, or user-facing behavior, update `README.md` and `docs/*.md` to match before committing.
 5. **Update CHANGELOG.md** — add an entry under `[Unreleased]` describing what changed (Added / Fixed / Changed). Keep entries concise. When releasing, rename the `[Unreleased]` section to the new version tag and update the comparison URL at the bottom.
-6. **Commit and push** — fix forward only. No `--force-push` and no `--amend` on published commits. If a hook or check fails, fix it in a new commit. **The `master` branch has push protection — direct pushes are rejected by GitHub. All changes must land via a PR.**
-7. **Watch CI** — wait for the Actions run to go green before merging into master. Run `gh pr checks <number>` to confirm every workflow is passing; do not merge if any is red.
-8. **Merge to master** — then push master.
+6. **Commit and push** — fix forward only. No `--force-push` and no `--amend` on published commits. If a hook or check fails, fix it in a new commit. **The `main` branch has push protection — direct pushes are rejected by GitHub. All changes must land via a PR.**
+7. **Watch CI** — wait for the Actions run to go green before merging into main. Run `gh pr checks <number>` to confirm every workflow is passing; do not merge if any is red.
+8. **Merge to main** — then push main.
 9. **Tag and release** — pick the next semver tag. Create a GitHub release page: following prior release pages, use a very succinct style and 8th grade English.
 
 ## Conventions
