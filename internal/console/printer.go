@@ -11,8 +11,8 @@ import (
 
 // for colouring
 const (
-	PASS    = "PASS"
-	FAIL    = "FAIL"
+	KILLED  = "KILLED"
+	ESCAPED = "ESCAPED"
 	SKIP    = "SKIP"
 	UNKNOWN = "UNKNOWN"
 )
@@ -22,18 +22,18 @@ var (
 	frameLine = strings.Repeat("-", length)
 )
 
-// PrintPass prints in green
-func PrintPass(out string) {
-	pass := color.New(color.FgHiWhite, color.BgGreen).SprintfFunc()
-	out = strings.Replace(out, PASS, pass(PASS), 1)
+// PrintKilled prints killed mutants in green (the test suite caught the mutation).
+func PrintKilled(out string) {
+	killed := color.New(color.FgHiWhite, color.BgGreen).SprintfFunc()
+	out = strings.Replace(out, KILLED, killed(KILLED), 1)
 	fmt.Print(out)
 	color.Blue(frameLine)
 }
 
-// PrintFail prints in red
-func PrintFail(out string) {
-	fail := color.New(color.FgHiWhite, color.BgRed).SprintfFunc()
-	out = strings.Replace(out, FAIL, fail(FAIL), 1)
+// PrintEscaped prints escaped mutants in red (the test suite missed the mutation).
+func PrintEscaped(out string) {
+	escaped := color.New(color.FgHiWhite, color.BgRed).SprintfFunc()
+	out = strings.Replace(out, ESCAPED, escaped(ESCAPED), 1)
 	fmt.Print(out)
 	color.Blue(frameLine)
 }

@@ -160,10 +160,10 @@ func TestMainJSONReport(t *testing.T) {
 	assert.Nil(t, mutationReport.Errored)
 
 	for i := 0; i < len(mutationReport.Escaped); i++ {
-		assert.Contains(t, mutationReport.Escaped[i].ProcessOutput, "FAIL")
+		assert.Contains(t, mutationReport.Escaped[i].ProcessOutput, "ESCAPED")
 	}
 	for i := 0; i < len(mutationReport.Killed); i++ {
-		assert.Contains(t, mutationReport.Killed[i].ProcessOutput, "PASS")
+		assert.Contains(t, mutationReport.Killed[i].ProcessOutput, "KILLED")
 	}
 }
 

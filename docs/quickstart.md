@@ -12,7 +12,7 @@ go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
 mutago ./...
 ```
 
-Each mutation prints `PASS` (killed — tests detected it) or `FAIL` (escaped — tests missed it). Escaped mutants print a diff showing exactly what changed.
+Each mutation prints `KILLED` (tests detected it) or `ESCAPED` (tests missed it). Escaped mutants print a diff showing exactly what changed.
 
 ## 3. Add coverage-awareness
 

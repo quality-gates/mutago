@@ -1081,9 +1081,9 @@ func recordMutantResult(opts *models.Options, stats *models.Report, mutant model
 	}
 	switch execExitCode {
 	case 0: // Tests failed → mutation killed
-		out := fmt.Sprintf("PASS %s\n", msg)
+		out := fmt.Sprintf("%s %s\n", console.KILLED, msg)
 		if statusVisible(opts, 'k') {
-			console.PrintPass(out)
+			console.PrintKilled(out)
 		}
 		if opts.General.Debug && !opts.General.NoDiffs && mutant.Diff != "" {
 			console.PrintDiff([]byte(mutant.Diff))
@@ -1092,9 +1092,9 @@ func recordMutantResult(opts *models.Options, stats *models.Report, mutant model
 		stats.Killed = append(stats.Killed, mutant)
 		stats.Stats.KilledCount++
 	case 1: // Tests passed → mutation escaped
-		out := fmt.Sprintf("FAIL %s\n", msg)
+		out := fmt.Sprintf("%s %s\n", console.ESCAPED, msg)
 		if statusVisible(opts, 'e') {
-			console.PrintFail(out)
+			console.PrintEscaped(out)
 		}
 		if !opts.General.NoDiffs && statusVisible(opts, 'e') && mutant.Diff != "" {
 			console.PrintDiff([]byte(mutant.Diff))

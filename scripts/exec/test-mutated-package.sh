@@ -44,12 +44,12 @@ fi
 clean_up
 
 case $GOMUTESTING_RESULT in
-0) # tests passed -> FAIL
+0) # tests passed -> ESCAPED
 	echo "$GOMUTESTING_DIFF"
 
 	exit 1
 	;;
-1) # tests failed -> PASS
+1) # tests failed -> KILLED
 	if [ "$MUTATE_DEBUG" = true ] ; then
 		echo "$GOMUTESTING_DIFF"
 	fi
