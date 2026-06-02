@@ -89,7 +89,7 @@ Integration tests live in `cmd/mutago/main_test.go`. They invoke `mainCmd` direc
 - Exit codes are correct (`returnOk`, `returnMsiThresholdNotMet`, etc.).
 - JSON report totals are internally consistent: `TotalMutantsCount == KilledCount + EscapedCount + ErrorCount + SkippedCount + NotCoveredCount`.
 - Collection lengths match stat fields: `len(Escaped) == EscapedCount`, `len(Killed) == KilledCount`.
-- Each escaped mutant's `ProcessOutput` contains `"FAIL"`; each killed one contains `"PASS"`.
+- Each escaped mutant's `ProcessOutput` contains `"ESCAPED"`; each killed one contains `"KILLED"`.
 - MSI is in `[0.0, 1.0]`.
 
 **For quality gate tests that must fail**, use a threshold that is permanently out of reach (e.g. `--min-msi 101`) rather than relying on the example package having escaped mutants.

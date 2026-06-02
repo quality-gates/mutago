@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
+## [v2.7.1] — 2026-06-02
+
+### Changed
+- Per-mutant console output now uses mutation-testing terminology instead of test-runner terminology. A caught mutant is labelled `KILLED` (was `PASS`) and a surviving one is labelled `ESCAPED` (was `FAIL`). The old `PASS`/`FAIL` wording was confusing: `PASS` looked like a good result for the line it sat on, when it actually meant the mutation had been killed, and `FAIL` meant the mutation escaped. The labels now match the wording already used in the summary line and the `KILLED`/`ESCAPED` colour coding (green/red) is unchanged. The same relabelling is applied to the `--exec` script comments and the documented example output.
+
+---
+
 ## [v2.7.0] — 2026-05-31
 
 ### Added
@@ -346,3 +353,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.6.15]: https://github.com/quality-gates/mutago/compare/v2.6.14...v2.6.15
 [v2.6.16]: https://github.com/quality-gates/mutago/compare/v2.6.15...v2.6.16
 [v2.7.0]: https://github.com/quality-gates/mutago/compare/v2.6.16...v2.7.0
+[v2.7.1]: https://github.com/quality-gates/mutago/compare/v2.7.0...v2.7.1
