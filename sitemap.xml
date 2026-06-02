@@ -2,38 +2,38 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://quality-gates.github.io/mutago/</loc>
-         <lastmod>2026-05-31</lastmod>
+         <lastmod>2026-06-02</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/ci/</loc>
-         <lastmod>2026-05-31</lastmod>
+         <lastmod>2026-06-02</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/cli/</loc>
-         <lastmod>2026-05-31</lastmod>
+         <lastmod>2026-06-02</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/config/</loc>
-         <lastmod>2026-05-31</lastmod>
+         <lastmod>2026-06-02</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/custom-mutators/</loc>
-         <lastmod>2026-05-31</lastmod>
+         <lastmod>2026-06-02</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/install/</loc>
-         <lastmod>2026-05-31</lastmod>
+         <lastmod>2026-06-02</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/json-outputs/</loc>
-         <lastmod>2026-05-31</lastmod>
+         <lastmod>2026-06-02</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/mutators/</loc>
-         <lastmod>2026-05-31</lastmod>
+         <lastmod>2026-06-02</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/quickstart/</loc>
-         <lastmod>2026-05-31</lastmod>
+         <lastmod>2026-06-02</lastmod>
     </url>
 </urlset>

@@ -750,7 +750,7 @@
 <h2 id="2-run-against-your-package">2. Run against your package<a class="headerlink" href="#2-run-against-your-package" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>mutago<span class="w"> </span>./...
 </code></pre></div>
-<p>Each mutation prints <code>PASS</code> (killed — tests detected it) or <code>FAIL</code> (escaped — tests missed it). Escaped mutants print a diff showing exactly what changed.</p>
+<p>Each mutation prints <code>KILLED</code> (tests detected it) or <code>ESCAPED</code> (tests missed it). Escaped mutants print a diff showing exactly what changed.</p>
 <h2 id="3-add-coverage-awareness">3. Add coverage-awareness<a class="headerlink" href="#3-add-coverage-awareness" title="Permanent link">&para;</a></h2>
 <p>Without <code>--coverage</code>, uncovered code inflates the "not covered" bucket and can produce a misleadingly low MSI. With it, mutants on untested lines are separated out and excluded from the covered-MSI denominator.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>mutago<span class="w"> </span>--coverage<span class="w"> </span>./...
