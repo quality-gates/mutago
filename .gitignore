@@ -40,3 +40,9 @@ go-mutesting-agentic.json
 
 # Claude Code local scheduler artifacts
 .claude/scheduled_tasks.lock
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
