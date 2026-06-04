@@ -52,10 +52,16 @@ func parse(output string) ChangedLines {
 		if m == nil {
 			continue
 		}
-		start, _ := strconv.Atoi(m[1])
+		start, err := strconv.Atoi(m[1])
+		if err != nil {
+			continue // malformed or out-of-range line number — skip the hunk
+		}
 		count := 1
 		if m[2] != "" {
-			count, _ = strconv.Atoi(m[2])
+			count, err = strconv.Atoi(m[2])
+			if err != nil {
+				continue // malformed or out-of-range count — skip the hunk
+			}
 		}
 		if count == 0 {
 			continue // pure deletion — nothing to mutate on a removed line
