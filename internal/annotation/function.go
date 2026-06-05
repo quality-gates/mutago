@@ -12,9 +12,9 @@ type FunctionAnnotation struct {
 	Name       string
 }
 
-// collectFunctions records all nodes within a function declaration to be excluded from mutation.
+// CollectFunctions records all nodes within a function declaration to be excluded from mutation.
 // It collects both the function declaration itself and all its child nodes.
-func (f *FunctionAnnotation) collectFunctions(fun *ast.FuncDecl) {
+func (f *FunctionAnnotation) CollectFunctions(fun *ast.FuncDecl) {
 	f.Exclusions[fun.Pos()] = struct{}{}
 
 	ast.Inspect(fun, func(n ast.Node) bool {
@@ -26,8 +26,8 @@ func (f *FunctionAnnotation) collectFunctions(fun *ast.FuncDecl) {
 	})
 }
 
-// filterFunctions checks whether a given node should be excluded from mutation
-func (f *FunctionAnnotation) filterFunctions(node ast.Node) bool {
+// FilterFunctions checks whether a given node should be excluded from mutation
+func (f *FunctionAnnotation) FilterFunctions(node ast.Node) bool {
 	_, exists := f.Exclusions[node.Pos()]
 	return exists
 }

@@ -50,7 +50,7 @@ func (p *Processor) Collect(file *ast.File, fset *token.FileSet, fileAbs string)
 	for _, decl := range file.Decls {
 		if f, ok := decl.(*ast.FuncDecl); ok {
 			if p.existsFuncAnnotation(f) {
-				p.FunctionAnnotation.collectFunctions(f)
+				p.FunctionAnnotation.CollectFunctions(f)
 			}
 		}
 	}
@@ -69,9 +69,9 @@ func (p *Processor) Collect(file *ast.File, fset *token.FileSet, fileAbs string)
 
 // ShouldSkip determines if a given node should be excluded from mutation.
 func (p *Processor) ShouldSkip(node ast.Node, mutatorName string) bool {
-	return p.FunctionAnnotation.filterFunctions(node) ||
-		p.RegexAnnotation.filterRegexNodes(node, mutatorName) ||
-		p.LineAnnotation.filterNodesOnNextLine(node, mutatorName)
+	return p.FunctionAnnotation.FilterFunctions(node) ||
+		p.RegexAnnotation.FilterRegexNodes(node, mutatorName) ||
+		p.LineAnnotation.FilterNodesOnNextLine(node, mutatorName)
 }
 
 // DecoratorFilter creates a mutator that applies one or more filters before executing the provided mutator.

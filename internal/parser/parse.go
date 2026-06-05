@@ -101,6 +101,22 @@ func ParseSource(data interface{}) (*ast.File, *token.FileSet, error) {
 	return src, fset, err
 }
 
+func findFileInPkg(entry *pkgCacheEntry, fileAbs string, collectors []filter.NodeCollector) (*ast.File, *token.FileSet, *types.Package, *types.Info) {
+	if len(entry.pkgs) == 0 {
+		return nil, nil, nil, nil
+	}
+	pkg := entry.pkgs[0]
+	for _, f := range pkg.Syntax {
+		if entry.fset.Position(f.Pos()).Filename == fileAbs {
+			for _, c := range collectors {
+				c.Collect(f, entry.fset, fileAbs)
+			}
+			return f, entry.fset, pkg.Types, pkg.TypesInfo
+		}
+	}
+	return nil, nil, nil, nil
+}
+
 // ParseAndTypeCheckFile parses and type-checks the given file, and returns everything interesting about the file.
 // If a fatal error is encountered the error return argument is not nil.
 func ParseAndTypeCheckFile(file string, collectors []filter.NodeCollector) (*ast.File, *token.FileSet, *types.Package, *types.Info, error) {
@@ -115,16 +131,8 @@ func ParseAndTypeCheckFile(file string, collectors []filter.NodeCollector) (*ast
 		return nil, nil, nil, nil, fmt.Errorf("Could not load package of file %q: %v", file, entry.err)
 	}
 
-	if len(entry.pkgs) > 0 {
-		pkg := entry.pkgs[0]
-		for _, f := range pkg.Syntax {
-			if entry.fset.Position(f.Pos()).Filename == fileAbs {
-				for _, c := range collectors {
-					c.Collect(f, entry.fset, fileAbs)
-				}
-				return f, entry.fset, pkg.Types, pkg.TypesInfo, nil
-			}
-		}
+	if f, fset, typPkg, typInfo := findFileInPkg(entry, fileAbs, collectors); f != nil {
+		return f, fset, typPkg, typInfo, nil
 	}
 
 	// The file was not found in the loaded package syntax (e.g., excluded by

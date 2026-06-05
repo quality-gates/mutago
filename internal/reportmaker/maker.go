@@ -218,7 +218,7 @@ type agenticReport struct {
 // mutant. For simple one-line changes it returns "Changes: <from> → <to>".
 // For multi-line or unparseable diffs it falls back to the static per-mutator
 // description.
-func generateInstanceDescription(mutatorName, diff string) string {
+func parseDiffLines(diff string) ([]string, []string) {
 	var fromLines, toLines []string
 	for _, line := range strings.Split(diff, "\n") {
 		if strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "@@ ") {
@@ -226,10 +226,17 @@ func generateInstanceDescription(mutatorName, diff string) string {
 		}
 		if strings.HasPrefix(line, "-") {
 			fromLines = append(fromLines, strings.TrimPrefix(line, "-"))
-		} else if strings.HasPrefix(line, "+") {
+			continue
+		}
+		if strings.HasPrefix(line, "+") {
 			toLines = append(toLines, strings.TrimPrefix(line, "+"))
 		}
 	}
+	return fromLines, toLines
+}
+
+func generateInstanceDescription(mutatorName, diff string) string {
+	fromLines, toLines := parseDiffLines(diff)
 	if len(fromLines) == 1 && len(toLines) == 1 {
 		from := strings.TrimSpace(fromLines[0])
 		to := strings.TrimSpace(toLines[0])
@@ -323,11 +330,12 @@ func findTestFiles(dir, moduleRoot string) []string {
 	}
 	result := make([]string, 0, len(matches))
 	for _, f := range matches {
-		if rel, err := filepath.Rel(moduleRoot, f); err == nil {
-			result = append(result, filepath.ToSlash(rel))
-		} else {
+		rel, err := filepath.Rel(moduleRoot, f)
+		if err != nil {
 			result = append(result, filepath.ToSlash(f))
+			continue
 		}
+		result = append(result, filepath.ToSlash(rel))
 	}
 	return result
 }

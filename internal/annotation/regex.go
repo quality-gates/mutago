@@ -42,11 +42,11 @@ func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, 
 	}
 }
 
-// collectMatchNodes processes a "mutator-disable-regexp" annotation comment by:
+// CollectMatchNodes processes a "mutator-disable-regexp" annotation comment by:
 // 1. Parsing the regex pattern and mutators from the comment
 // 2. Finding all lines in the file that match the regex
 // 3. Recording nodes from matching lines to be excluded
-func (r *RegexAnnotation) collectMatchNodes(comment *ast.Comment, fset *token.FileSet, file *ast.File, fileAbs string) {
+func (r *RegexAnnotation) CollectMatchNodes(comment *ast.Comment, fset *token.FileSet, file *ast.File, fileAbs string) {
 	regex, mutators := r.parseRegexAnnotation(comment.Text)
 
 	lines, err := r.findLinesMatchingRegex(fileAbs, regex)
@@ -95,10 +95,10 @@ func (r *RegexAnnotation) findLinesMatchingRegex(filePath string, regex *regexp.
 	return matchedLineNumbers, nil
 }
 
-// filterRegexNodes checks if a given node should be excluded from mutation based on:
+// FilterRegexNodes checks if a given node should be excluded from mutation based on:
 // 1. Whether the node appears in the Exclusions map
 // 2. Whether the current mutator is in the node's exclusion list
-func (r *RegexAnnotation) filterRegexNodes(node ast.Node, mutatorName string) bool {
+func (r *RegexAnnotation) FilterRegexNodes(node ast.Node, mutatorName string) bool {
 	for _, nodes := range r.Exclusions {
 		if mutatorInfo, exists := nodes[node.Pos()]; exists {
 			if shouldSkipMutator(mutatorInfo, mutatorName) {

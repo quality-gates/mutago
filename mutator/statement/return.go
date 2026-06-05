@@ -49,22 +49,42 @@ func MutatorReturnValue(pkg *types.Package, info *types.Info, node ast.Node) []m
 	return mutations
 }
 
+func zeroBasicExpr(u *types.Basic) ast.Expr {
+	if u.Kind() == types.Bool {
+		return ast.NewIdent("false")
+	}
+	if u.Info()&types.IsString != 0 {
+		return &ast.BasicLit{Kind: token.STRING, Value: `""`}
+	}
+	if u.Info()&types.IsNumeric != 0 {
+		return &ast.BasicLit{Kind: token.INT, Value: "0"}
+	}
+	if u.Kind() == types.UnsafePointer {
+		return ast.NewIdent("nil")
+	}
+	return nil
+}
+
+func zeroTypeExpr(obj *types.TypeName, currentPkg *types.Package) ast.Expr {
+	if currentPkg != nil && obj.Pkg() != nil && obj.Pkg().Path() == currentPkg.Path() {
+		return ast.NewIdent(obj.Name())
+	}
+	if obj.Pkg() != nil {
+		return &ast.SelectorExpr{
+			X:   ast.NewIdent(obj.Pkg().Name()),
+			Sel: ast.NewIdent(obj.Name()),
+		}
+	}
+	return ast.NewIdent(obj.Name())
+}
+
 // zeroExprForType returns the zero-value AST expression for t as seen from
 // currentPkg. Named struct types produce TypeName{} (or pkg.TypeName{} for
 // imported types). All other types follow the same rules as before.
 func zeroExprForType(t types.Type, currentPkg *types.Package) ast.Expr {
 	switch u := t.(type) {
 	case *types.Basic:
-		switch {
-		case u.Kind() == types.Bool:
-			return ast.NewIdent("false")
-		case u.Info()&types.IsString != 0:
-			return &ast.BasicLit{Kind: token.STRING, Value: `""`}
-		case u.Info()&types.IsNumeric != 0:
-			return &ast.BasicLit{Kind: token.INT, Value: "0"}
-		case u.Kind() == types.UnsafePointer:
-			return ast.NewIdent("nil")
-		}
+		return zeroBasicExpr(u)
 	case *types.Pointer, *types.Slice, *types.Map, *types.Chan, *types.Interface, *types.Signature:
 		return ast.NewIdent("nil")
 	case *types.Named:
@@ -75,18 +95,7 @@ func zeroExprForType(t types.Type, currentPkg *types.Package) ast.Expr {
 			return nil
 		}
 		if _, ok := u.Underlying().(*types.Struct); ok {
-			obj := u.Obj()
-			var typeExpr ast.Expr
-			if currentPkg != nil && obj.Pkg() != nil && obj.Pkg().Path() == currentPkg.Path() {
-				typeExpr = ast.NewIdent(obj.Name())
-			} else if obj.Pkg() != nil {
-				typeExpr = &ast.SelectorExpr{
-					X:   ast.NewIdent(obj.Pkg().Name()),
-					Sel: ast.NewIdent(obj.Name()),
-				}
-			} else {
-				typeExpr = ast.NewIdent(obj.Name())
-			}
+			typeExpr := zeroTypeExpr(u.Obj(), currentPkg)
 			return &ast.CompositeLit{Type: typeExpr}
 		}
 		return zeroExprForType(u.Underlying(), currentPkg)

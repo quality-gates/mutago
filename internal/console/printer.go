@@ -54,36 +54,26 @@ func PrintUnknown(out string) {
 	color.Blue(frameLine)
 }
 
-// PrintDiff prints colorful diff
 func PrintDiff(diff []byte) {
 	green := color.New(color.FgHiWhite).Add(color.BgGreen)
 	red := color.New(color.FgHiWhite).Add(color.BgRed)
 
 	lines := string(diff)
 	for _, line := range strings.Split(lines, "\n") {
-		switch {
-		case strings.HasPrefix(line, "+++"):
-			_, err := green.Println(line)
-			if err != nil {
-				log.Printf("Error printing output: %s", err)
-			}
-		case strings.HasPrefix(line, "---"):
-			_, err := red.Println(line)
-			if err != nil {
-				log.Printf("Error printing output: %s", err)
-			}
-		case strings.HasPrefix(line, "+"):
-			_, err := green.Println(line)
-			if err != nil {
-				log.Printf("Error printing output: %s", err)
-			}
-		case strings.HasPrefix(line, "-"):
-			_, err := red.Println(line)
-			if err != nil {
-				log.Printf("Error printing output: %s", err)
-			}
-		default:
+		var pr *color.Color
+		if strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "+") {
+			pr = green
+		} else if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "-") {
+			pr = red
+		}
+
+		if pr == nil {
 			fmt.Println(line)
+			continue
+		}
+
+		if _, err := pr.Println(line); err != nil {
+			log.Printf("Error printing output: %s", err)
 		}
 	}
 }

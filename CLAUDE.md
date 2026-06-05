@@ -11,6 +11,8 @@ go test ./...
 
 All packages pass. `internal/importing` and `internal/parser` were once broken in module mode but are fixed; do not skip them.
 
+When creating Git worktrees, place them inside the `.worktrees/` directory (which is ignored by Git) to avoid cluttering the repository root.
+
 ## Key packages
 
 | Package | What it does |

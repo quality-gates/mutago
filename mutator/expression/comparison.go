@@ -20,7 +20,7 @@ var comparisonMutations = map[token.Token]token.Token{
 }
 
 // MutatorComparison implements a mutator to change comparisons.
-func MutatorComparison(pkg *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorComparison(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
 	n, ok := node.(*ast.BinaryExpr)
 	if !ok {
 		return nil

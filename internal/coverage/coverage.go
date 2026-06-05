@@ -58,6 +58,36 @@ func (p *Profile) IsCovered(absFile string, line int) bool {
 	return false
 }
 
+var errSilentSkip = fmt.Errorf("silent skip")
+
+func parseRange(rangeStr string) (int, int, error) {
+	rangeParts := strings.SplitN(rangeStr, ",", 2)
+	if len(rangeParts) != 2 {
+		return 0, 0, errSilentSkip
+	}
+	startLine, err := parseLineNum(rangeParts[0])
+	if err != nil {
+		return 0, 0, err
+	}
+	endLine, err := parseLineNum(rangeParts[1])
+	if err != nil {
+		return 0, 0, err
+	}
+	return startLine, endLine, nil
+}
+
+func parseCoverageFields(rest string) (string, int, error) {
+	fields := strings.Fields(rest)
+	if len(fields) != 3 {
+		return "", 0, errSilentSkip
+	}
+	hitCount, err := strconv.Atoi(fields[2])
+	if err != nil {
+		return "", 0, err
+	}
+	return fields[0], hitCount, nil
+}
+
 // parseLine parses one data line from a coverage profile and strips modulePfx
 // from the file name before storing coverage data.
 // Format: file:startLine.startCol,endLine.endCol stmtCount hitCount
@@ -69,36 +99,24 @@ func (p *Profile) parseLine(line, modulePfx string) error {
 	rawFile := line[:colonIdx]
 	rest := line[colonIdx+1:]
 
-	relFile := strings.TrimPrefix(rawFile, modulePfx)
-	if relFile == rawFile {
-		// Module prefix not present — use the raw path as-is.
-		relFile = rawFile
-	}
-	relFile = filepath.ToSlash(relFile)
+	relFile := filepath.ToSlash(strings.TrimPrefix(rawFile, modulePfx))
 
-	fields := strings.Fields(rest)
-	if len(fields) != 3 {
-		return nil
-	}
-
-	hitCount, err := strconv.Atoi(fields[2])
+	rangeStr, hitCount, err := parseCoverageFields(rest)
 	if err != nil {
+		if err == errSilentSkip {
+			return nil
+		}
 		return err
 	}
 	if hitCount == 0 {
 		return nil
 	}
 
-	rangeParts := strings.SplitN(fields[0], ",", 2)
-	if len(rangeParts) != 2 {
-		return nil
-	}
-	startLine, err := parseLineNum(rangeParts[0])
+	startLine, endLine, err := parseRange(rangeStr)
 	if err != nil {
-		return err
-	}
-	endLine, err := parseLineNum(rangeParts[1])
-	if err != nil {
+		if err == errSilentSkip {
+			return nil
+		}
 		return err
 	}
 
@@ -158,6 +176,30 @@ func CountTests(pkgPath string) int {
 	return count
 }
 
+func listTestNames(pkgPath string) ([]string, error) {
+	listOut, err := exec.Command("go", "test", "-list", ".*", pkgPath).Output()
+	if err != nil {
+		return nil, fmt.Errorf("go test -list: %w", err)
+	}
+
+	var testNames []string
+	for _, line := range strings.Split(strings.TrimSpace(string(listOut)), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Test") || strings.HasPrefix(line, "Benchmark") || strings.HasPrefix(line, "Fuzz") {
+			testNames = append(testNames, line)
+		}
+	}
+	return testNames, nil
+}
+
+func sortPerTestProfile(p *PerTestProfile) {
+	for _, lines := range p.data {
+		for line := range lines {
+			sort.Strings(lines[line])
+		}
+	}
+}
+
 // BuildPerTestProfile runs each test function in pkgPath individually with
 // -coverprofile to build a map of which lines each test covers.  It uses up
 // to workers goroutines in parallel.  Returns nil on any hard failure (the
@@ -178,18 +220,9 @@ type perTestResult struct {
 }
 
 func BuildPerTestProfile(pkgPath, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags []string) (*PerTestProfile, error) {
-	// List test functions (not subtests).
-	listOut, err := exec.Command("go", "test", "-list", ".*", pkgPath).Output()
+	testNames, err := listTestNames(pkgPath)
 	if err != nil {
-		return nil, fmt.Errorf("go test -list: %w", err)
-	}
-
-	var testNames []string
-	for _, line := range strings.Split(strings.TrimSpace(string(listOut)), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Test") || strings.HasPrefix(line, "Benchmark") || strings.HasPrefix(line, "Fuzz") {
-			testNames = append(testNames, line)
-		}
+		return nil, err
 	}
 	if len(testNames) == 0 {
 		return nil, nil
@@ -219,11 +252,7 @@ func BuildPerTestProfile(pkgPath, modulePath, tmpDir string, timeout uint, worke
 	}
 
 	// Sort test lists for deterministic -run patterns.
-	for _, lines := range p.data {
-		for line := range lines {
-			sort.Strings(lines[line])
-		}
-	}
+	sortPerTestProfile(p)
 
 	return p, nil
 }

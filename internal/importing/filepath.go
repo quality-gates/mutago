@@ -68,17 +68,39 @@ func resolveFileList(args []string) []string {
 			for _, dirname := range allPackagesInFS(arg) {
 				filenames = append(filenames, checkDir(dirname)...)
 			}
-		} else if isDir(arg) {
+			continue
+		}
+		if isDir(arg) {
 			filenames = append(filenames, checkDir(arg)...)
-		} else if exists(arg) {
+			continue
+		}
+		if exists(arg) {
 			filenames = append(filenames, arg)
-		} else {
-			for _, pkgname := range importPaths([]string{arg}) {
-				filenames = append(filenames, checkPackage(pkgname)...)
-			}
+			continue
+		}
+		for _, pkgname := range importPaths([]string{arg}) {
+			filenames = append(filenames, checkPackage(pkgname)...)
 		}
 	}
 	return filenames
+}
+
+func hasBuildTagOrNoTest(filename string, opts *models.Options) bool {
+	if !opts.Config.SkipFileWithoutTest && !opts.Config.SkipFileWithBuildTag {
+		return false
+	}
+	nameSize := len(filename)
+	if nameSize <= 3 {
+		return true
+	}
+	testName := filename[:nameSize-3] + testFileSuffix
+	if !exists(testName) {
+		return true
+	}
+	if opts.Config.SkipFileWithBuildTag && regexpSearchInFile(testName, buildTagRegex) {
+		return true
+	}
+	return false
 }
 
 // shouldSkipFile reports whether filename should be excluded from mutation.
@@ -91,20 +113,7 @@ func shouldSkipFile(filename string, opts *models.Options) bool {
 			return true
 		}
 	}
-	if opts.Config.SkipFileWithoutTest || opts.Config.SkipFileWithBuildTag {
-		nameSize := len(filename)
-		if nameSize <= 3 {
-			return true
-		}
-		testName := filename[:nameSize-3] + testFileSuffix
-		if !exists(testName) {
-			return true
-		}
-		if opts.Config.SkipFileWithBuildTag && regexpSearchInFile(testName, buildTagRegex) {
-			return true
-		}
-	}
-	return false
+	return hasBuildTagOrNoTest(filename, opts)
 }
 
 func regexpSearchInFile(file string, re *regexp.Regexp) bool {

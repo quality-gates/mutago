@@ -46,6 +46,28 @@ func (s *SkipMakeArgsFilter) ShouldSkip(node ast.Node, _ string) bool {
 	return exists
 }
 
+func (s *SkipMakeArgsFilter) collectBinary(e *ast.BinaryExpr, callExpr *ast.CallExpr) {
+	s.IgnoredNodes[e.OpPos] = callExpr
+	s.collectForIgnoredNodes(e.X, callExpr)
+	s.collectForIgnoredNodes(e.Y, callExpr)
+}
+
+func (s *SkipMakeArgsFilter) collectCall(e *ast.CallExpr, callExpr *ast.CallExpr) {
+	for _, arg := range e.Args {
+		s.collectForIgnoredNodes(arg, callExpr)
+	}
+}
+
+func (s *SkipMakeArgsFilter) collectUnary(e *ast.UnaryExpr, callExpr *ast.CallExpr) {
+	xLit, ok := e.X.(*ast.BasicLit)
+	if ok && xLit.Kind == token.INT {
+		s.IgnoredNodes[e.OpPos] = callExpr
+		s.IgnoredNodes[xLit.Pos()] = callExpr
+		return
+	}
+	s.collectForIgnoredNodes(e.X, callExpr)
+}
+
 // collectForIgnoredNodes recursively collects all numeric literals and unary/binary operators in an expression
 func (s *SkipMakeArgsFilter) collectForIgnoredNodes(expr ast.Expr, callExpr *ast.CallExpr) {
 	switch e := expr.(type) {
@@ -55,27 +77,13 @@ func (s *SkipMakeArgsFilter) collectForIgnoredNodes(expr ast.Expr, callExpr *ast
 			s.IgnoredNodes[e.Pos()] = callExpr
 		}
 	case *ast.BinaryExpr:
-		// Binary operations (addition, subtraction, multiplication, division, etc.)
-		s.IgnoredNodes[e.OpPos] = callExpr
-		s.collectForIgnoredNodes(e.X, callExpr)
-		s.collectForIgnoredNodes(e.Y, callExpr)
+		s.collectBinary(e, callExpr)
 	case *ast.CallExpr:
-		// Calling a function (e.g. len())
-		for _, arg := range e.Args {
-			s.collectForIgnoredNodes(arg, callExpr)
-		}
+		s.collectCall(e, callExpr)
 	case *ast.ParenExpr:
 		// Expression in brackets
 		s.collectForIgnoredNodes(e.X, callExpr)
 	case *ast.UnaryExpr:
-		// Unary operators (+, -, etc.)
-		if xLit, ok := e.X.(*ast.BasicLit); ok && xLit.Kind == token.INT {
-			// If a unary operator is applied to a numeric literal, both the operator and the literal itself are added.
-			s.IgnoredNodes[e.OpPos] = callExpr
-			s.IgnoredNodes[xLit.Pos()] = callExpr
-		} else {
-			// Otherwise, we continue the tour inside.
-			s.collectForIgnoredNodes(e.X, callExpr)
-		}
+		s.collectUnary(e, callExpr)
 	}
 }

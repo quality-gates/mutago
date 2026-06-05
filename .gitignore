@@ -40,3 +40,6 @@ go-mutesting-agentic.json
 
 # Claude Code local scheduler artifacts
 .claude/scheduled_tasks.lock
+
+# Git worktrees
+.worktrees/

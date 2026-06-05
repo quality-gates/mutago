@@ -18,6 +18,28 @@ func init() {
 //	if err == nil  →  if true
 //
 // Inspired by gomu's error-handling mutations.
+func isErrorComparison(bin *ast.BinaryExpr, info *types.Info) bool {
+	if bin.Op != token.NEQ && bin.Op != token.EQL {
+		return false
+	}
+	xIsNil := isNilIdent(bin.X)
+	yIsNil := isNilIdent(bin.Y)
+	if !xIsNil && !yIsNil {
+		return false
+	}
+	errExpr := bin.Y
+	if yIsNil {
+		errExpr = bin.X
+	}
+	return isErrorExpr(info, errExpr)
+}
+
+// MutatorErrorGuard replaces error-check conditions in if-statements:
+//
+//	if err != nil  →  if false
+//	if err == nil  →  if true
+//
+// Inspired by gomu's error-handling mutations.
 func MutatorErrorGuard(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	ifStmt, ok := node.(*ast.IfStmt)
 	if !ok || info == nil {
@@ -28,29 +50,13 @@ func MutatorErrorGuard(_ *types.Package, info *types.Info, node ast.Node) []muta
 	if !ok {
 		return nil
 	}
-	if bin.Op != token.NEQ && bin.Op != token.EQL {
-		return nil
-	}
-	// Require one side to be nil and the other to be of type error.
-	// This avoids triggering on `if err1 != err2` (two-error comparisons).
-	xIsNil := isNilIdent(bin.X)
-	yIsNil := isNilIdent(bin.Y)
-	if !xIsNil && !yIsNil {
-		return nil
-	}
-	errExpr := bin.Y
-	if yIsNil {
-		errExpr = bin.X
-	}
-	if !isErrorExpr(info, errExpr) {
+	if !isErrorComparison(bin, info) {
 		return nil
 	}
 
-	var replacement ast.Expr
+	replacement := ast.NewIdent("true")
 	if bin.Op == token.NEQ {
 		replacement = ast.NewIdent("false")
-	} else {
-		replacement = ast.NewIdent("true")
 	}
 
 	original := ifStmt.Cond

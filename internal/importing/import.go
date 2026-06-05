@@ -43,13 +43,10 @@ func importPathsNoDotExpansion(args []string) []string {
 		}
 
 		// Put argument in canonical form, but preserve leading ./.
-		if strings.HasPrefix(a, "./") {
-			a = "./" + path.Clean(a)
-			if a == "./." {
-				a = "."
-			}
-		} else {
-			a = path.Clean(a)
+		isLocal := strings.HasPrefix(a, "./")
+		a = path.Clean(a)
+		if isLocal && a != "." {
+			a = "./" + a
 		}
 		if a == "all" || a == "std" {
 			out = append(out, allPackages(a)...)
@@ -68,9 +65,9 @@ func importPaths(args []string) []string {
 		if strings.Contains(a, "...") {
 			if build.IsLocalImport(a) {
 				out = append(out, allPackagesInFS(a)...)
-			} else {
-				out = append(out, allPackages(a)...)
+				continue
 			}
+			out = append(out, allPackages(a)...)
 			continue
 		}
 		out = append(out, a)
@@ -169,20 +166,31 @@ func matchPackages(pattern string) []string {
 	return append(cmdPkgs, srcPkgs...)
 }
 
+func shouldSkipCmdDir(path, cmd string, fi os.FileInfo, treeCanMatch func(string) bool) (bool, error) {
+	if !fi.IsDir() || path == cmd {
+		return true, nil
+	}
+	name := path[len(cmd):]
+	if !treeCanMatch(name) {
+		return true, filepath.SkipDir
+	}
+	if strings.Contains(name, string(filepath.Separator)) {
+		return true, filepath.SkipDir
+	}
+	return false, nil
+}
+
 func walkCmdPackages(cmd string, treeCanMatch, match func(string) bool, have map[string]bool) ([]string, error) {
 	var pkgs []string
 	err := filepath.Walk(cmd, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || !fi.IsDir() || path == cmd {
+		if err != nil {
 			return nil
 		}
-		name := path[len(cmd):]
-		if !treeCanMatch(name) {
-			return filepath.SkipDir
+		skip, skipErr := shouldSkipCmdDir(path, cmd, fi, treeCanMatch)
+		if skip {
+			return skipErr
 		}
-		if strings.Contains(name, string(filepath.Separator)) {
-			return filepath.SkipDir
-		}
-		name = "cmd/" + name
+		name := "cmd/" + path[len(cmd):]
 		if have[name] {
 			return nil
 		}
@@ -190,8 +198,10 @@ func walkCmdPackages(cmd string, treeCanMatch, match func(string) bool, have map
 		if !match(name) {
 			return nil
 		}
-		if _, err = buildContext.ImportDir(path, 0); err != nil {
-			if _, noGo := err.(*build.NoGoError); !noGo {
+		_, err = buildContext.ImportDir(path, 0)
+		if err != nil {
+			_, noGo := err.(*build.NoGoError)
+			if !noGo {
 				log.Print(err)
 			}
 			return nil
@@ -218,6 +228,20 @@ func walkSrcPackages(pattern string, treeCanMatch, match func(string) bool, have
 	return pkgs, nil
 }
 
+func shouldSkipSrcDir(path, src, elem string, pattern string, treeCanMatch func(string) bool) (bool, error) {
+	if isSkippableDir(elem) {
+		return true, filepath.SkipDir
+	}
+	name := filepath.ToSlash(path[len(src):])
+	if pattern == "std" && strings.Contains(name, ".") {
+		return true, filepath.SkipDir
+	}
+	if !treeCanMatch(name) {
+		return true, filepath.SkipDir
+	}
+	return false, nil
+}
+
 func walkSrcDir(src, pattern string, treeCanMatch, match func(string) bool, have map[string]bool) ([]string, error) {
 	var pkgs []string
 	err := filepath.Walk(src, func(path string, fi os.FileInfo, err error) error {
@@ -225,16 +249,11 @@ func walkSrcDir(src, pattern string, treeCanMatch, match func(string) bool, have
 			return nil
 		}
 		_, elem := filepath.Split(path)
-		if isSkippableDir(elem) {
-			return filepath.SkipDir
+		skip, skipErr := shouldSkipSrcDir(path, src, elem, pattern, treeCanMatch)
+		if skip {
+			return skipErr
 		}
 		name := filepath.ToSlash(path[len(src):])
-		if pattern == "std" && strings.Contains(name, ".") {
-			return filepath.SkipDir
-		}
-		if !treeCanMatch(name) {
-			return filepath.SkipDir
-		}
 		if have[name] {
 			return nil
 		}
@@ -242,8 +261,10 @@ func walkSrcDir(src, pattern string, treeCanMatch, match func(string) bool, have
 		if !match(name) {
 			return nil
 		}
-		if _, err = buildContext.ImportDir(path, 0); err != nil {
-			if _, noGo := err.(*build.NoGoError); !noGo {
+		_, err = buildContext.ImportDir(path, 0)
+		if err != nil {
+			_, noGo := err.(*build.NoGoError)
+			if !noGo {
 				log.Print(err)
 			}
 			return nil
@@ -267,6 +288,26 @@ func allPackagesInFS(pattern string) []string {
 		fmt.Fprintf(os.Stderr, "warning: %q matched no packages\n", pattern)
 	}
 	return pkgs
+}
+
+func shouldSkipFSDir(elem string) (bool, error) {
+	dot := strings.HasPrefix(elem, ".") && elem != "." && elem != ".."
+	if dot || strings.HasPrefix(elem, "_") || elem == "testdata" {
+		return true, filepath.SkipDir
+	}
+	return false, nil
+}
+
+func importDirOk(path string) bool {
+	_, err := build.ImportDir(path, 0)
+	if err == nil {
+		return true
+	}
+	_, noGo := err.(*build.NoGoError)
+	if !noGo {
+		log.Print(err)
+	}
+	return false
 }
 
 func matchPackagesInFS(pattern string) []string {
@@ -306,19 +347,16 @@ func matchPackagesInFS(pattern string) []string {
 
 		// Avoid .foo, _foo, and testdata directory trees, but do not avoid "." or "..".
 		_, elem := filepath.Split(path)
-		dot := strings.HasPrefix(elem, ".") && elem != "." && elem != ".."
-		if dot || strings.HasPrefix(elem, "_") || elem == "testdata" {
-			return filepath.SkipDir
+		skip, skipErr := shouldSkipFSDir(elem)
+		if skip {
+			return skipErr
 		}
 
 		name := prefix + filepath.ToSlash(path)
 		if !match(name) {
 			return nil
 		}
-		if _, err = build.ImportDir(path, 0); err != nil {
-			if _, noGo := err.(*build.NoGoError); !noGo {
-				log.Print(err)
-			}
+		if !importDirOk(path) {
 			return nil
 		}
 		pkgs = append(pkgs, name)
