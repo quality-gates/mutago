@@ -10,12 +10,6 @@ import (
 	"strings"
 )
 
-// RegexAnnotation represents a collection of exclusions based on regex pattern matches.
-type RegexAnnotation struct {
-	Exclusions map[int]map[token.Pos]mutatorInfo
-	Name       string
-}
-
 // parseRegexAnnotation parses a comment line containing a regex annotation.
 func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, mutatorInfo) {
 	content := strings.TrimSpace(strings.TrimPrefix(comment, r.Name))

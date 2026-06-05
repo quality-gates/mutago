@@ -59,32 +59,22 @@ func PrintDiff(diff []byte) {
 	green := color.New(color.FgHiWhite).Add(color.BgGreen)
 	red := color.New(color.FgHiWhite).Add(color.BgRed)
 
-	lines := string(diff)
-	for _, line := range strings.Split(lines, "\n") {
+	for _, line := range strings.Split(string(diff), "\n") {
 		switch {
-		case strings.HasPrefix(line, "+++"):
-			_, err := green.Println(line)
-			if err != nil {
-				log.Printf("Error printing output: %s", err)
-			}
-		case strings.HasPrefix(line, "---"):
-			_, err := red.Println(line)
-			if err != nil {
-				log.Printf("Error printing output: %s", err)
-			}
 		case strings.HasPrefix(line, "+"):
-			_, err := green.Println(line)
-			if err != nil {
-				log.Printf("Error printing output: %s", err)
-			}
+			printColoredLine(green, line)
 		case strings.HasPrefix(line, "-"):
-			_, err := red.Println(line)
-			if err != nil {
-				log.Printf("Error printing output: %s", err)
-			}
+			printColoredLine(red, line)
 		default:
 			fmt.Println(line)
 		}
+	}
+}
+
+// printColoredLine prints line using c, logging any write error.
+func printColoredLine(c *color.Color, line string) {
+	if _, err := c.Println(line); err != nil {
+		log.Printf("Error printing output: %s", err)
 	}
 }
 

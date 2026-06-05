@@ -108,23 +108,14 @@ func ParseAndTypeCheckFile(file string, collectors []filter.NodeCollector) (*ast
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("Could not absolute the file path of %q: %v", file, err)
 	}
-	dir := filepath.Dir(fileAbs)
-
-	entry := loadPkgForDir(dir)
+	entry := loadPkgForDir(filepath.Dir(fileAbs))
 	if entry.err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("Could not load package of file %q: %v", file, entry.err)
 	}
 
-	if len(entry.pkgs) > 0 {
-		pkg := entry.pkgs[0]
-		for _, f := range pkg.Syntax {
-			if entry.fset.Position(f.Pos()).Filename == fileAbs {
-				for _, c := range collectors {
-					c.Collect(f, entry.fset, fileAbs)
-				}
-				return f, entry.fset, pkg.Types, pkg.TypesInfo, nil
-			}
-		}
+	if pkg, f := fileInLoadedPkg(entry, fileAbs); f != nil {
+		applyCollectors(collectors, f, entry.fset, fileAbs)
+		return f, entry.fset, pkg.Types, pkg.TypesInfo, nil
 	}
 
 	// The file was not found in the loaded package syntax (e.g., excluded by
@@ -136,12 +127,33 @@ func ParseAndTypeCheckFile(file string, collectors []filter.NodeCollector) (*ast
 	}
 
 	if src != nil {
-		for _, c := range collectors {
-			c.Collect(src, entry.fset, fileAbs)
-		}
+		applyCollectors(collectors, src, entry.fset, fileAbs)
 	}
 
 	return src, entry.fset, typPkg, typInfo, nil
+}
+
+// fileInLoadedPkg returns the loaded package and parsed syntax for fileAbs, or
+// nil when the file is not part of the loaded package (e.g. excluded by build
+// constraints).
+func fileInLoadedPkg(entry *pkgCacheEntry, fileAbs string) (*packages.Package, *ast.File) {
+	if len(entry.pkgs) == 0 {
+		return nil, nil
+	}
+	pkg := entry.pkgs[0]
+	for _, f := range pkg.Syntax {
+		if entry.fset.Position(f.Pos()).Filename == fileAbs {
+			return pkg, f
+		}
+	}
+	return nil, nil
+}
+
+// applyCollectors runs every node collector over the given file.
+func applyCollectors(collectors []filter.NodeCollector, f *ast.File, fset *token.FileSet, fileAbs string) {
+	for _, c := range collectors {
+		c.Collect(f, fset, fileAbs)
+	}
 }
 
 // parseAndTypeCheckDirect parses a file directly (ignoring build constraints)

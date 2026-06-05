@@ -31,28 +31,11 @@ func MutatorErrorGuard(_ *types.Package, info *types.Info, node ast.Node) []muta
 	if bin.Op != token.NEQ && bin.Op != token.EQL {
 		return nil
 	}
-	// Require one side to be nil and the other to be of type error.
-	// This avoids triggering on `if err1 != err2` (two-error comparisons).
-	xIsNil := isNilIdent(bin.X)
-	yIsNil := isNilIdent(bin.Y)
-	if !xIsNil && !yIsNil {
-		return nil
-	}
-	errExpr := bin.Y
-	if yIsNil {
-		errExpr = bin.X
-	}
-	if !isErrorExpr(info, errExpr) {
+	if !isErrorNilComparison(info, bin) {
 		return nil
 	}
 
-	var replacement ast.Expr
-	if bin.Op == token.NEQ {
-		replacement = ast.NewIdent("false")
-	} else {
-		replacement = ast.NewIdent("true")
-	}
-
+	replacement := boolIdentForOp(bin.Op)
 	original := ifStmt.Cond
 	return []mutator.Mutation{
 		{
@@ -60,6 +43,31 @@ func MutatorErrorGuard(_ *types.Package, info *types.Info, node ast.Node) []muta
 			Reset:  func() { ifStmt.Cond = original },
 		},
 	}
+}
+
+// isErrorNilComparison reports whether bin compares an error-typed expression
+// against nil in either order, e.g. `err != nil` or `nil == err`. Requiring one
+// side to be nil avoids triggering on `if err1 != err2` (two-error comparisons).
+func isErrorNilComparison(info *types.Info, bin *ast.BinaryExpr) bool {
+	xIsNil := isNilIdent(bin.X)
+	yIsNil := isNilIdent(bin.Y)
+	if !xIsNil && !yIsNil {
+		return false
+	}
+	errExpr := bin.Y
+	if yIsNil {
+		errExpr = bin.X
+	}
+	return isErrorExpr(info, errExpr)
+}
+
+// boolIdentForOp returns the constant the guard collapses to: `!=` checks become
+// false, `==` checks become true.
+func boolIdentForOp(op token.Token) *ast.Ident {
+	if op == token.NEQ {
+		return ast.NewIdent("false")
+	}
+	return ast.NewIdent("true")
 }
 
 func isNilIdent(expr ast.Expr) bool {

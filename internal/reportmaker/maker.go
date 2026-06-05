@@ -219,28 +219,46 @@ type agenticReport struct {
 // For multi-line or unparseable diffs it falls back to the static per-mutator
 // description.
 func generateInstanceDescription(mutatorName, diff string) string {
-	var fromLines, toLines []string
+	fromLines, toLines := diffChangedLines(diff)
+	if desc, ok := singleLineChangeDesc(fromLines, toLines); ok {
+		return desc
+	}
+	if desc, ok := mutatorDescriptions[mutatorName]; ok {
+		return desc
+	}
+	return ""
+}
+
+// diffChangedLines splits a unified diff into its removed (from) and added (to)
+// content lines, ignoring file and hunk headers.
+func diffChangedLines(diff string) (fromLines, toLines []string) {
 	for _, line := range strings.Split(diff, "\n") {
 		if strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "@@ ") {
 			continue
 		}
 		if strings.HasPrefix(line, "-") {
 			fromLines = append(fromLines, strings.TrimPrefix(line, "-"))
-		} else if strings.HasPrefix(line, "+") {
+			continue
+		}
+		if strings.HasPrefix(line, "+") {
 			toLines = append(toLines, strings.TrimPrefix(line, "+"))
 		}
 	}
-	if len(fromLines) == 1 && len(toLines) == 1 {
-		from := strings.TrimSpace(fromLines[0])
-		to := strings.TrimSpace(toLines[0])
-		if from != "" && to != "" && from != to {
-			return fmt.Sprintf("Changes: `%s` → `%s`", from, to)
-		}
+	return fromLines, toLines
+}
+
+// singleLineChangeDesc returns a "Changes: from → to" description when the diff
+// is a single-line replacement, reporting ok=false otherwise.
+func singleLineChangeDesc(fromLines, toLines []string) (string, bool) {
+	if len(fromLines) != 1 || len(toLines) != 1 {
+		return "", false
 	}
-	if desc, ok := mutatorDescriptions[mutatorName]; ok {
-		return desc
+	from := strings.TrimSpace(fromLines[0])
+	to := strings.TrimSpace(toLines[0])
+	if from == "" || to == "" || from == to {
+		return "", false
 	}
-	return ""
+	return fmt.Sprintf("Changes: `%s` → `%s`", from, to), true
 }
 
 // MakeAgenticJSONReport writes mutago-agentic.json with enriched escaped-mutant
@@ -323,11 +341,12 @@ func findTestFiles(dir, moduleRoot string) []string {
 	}
 	result := make([]string, 0, len(matches))
 	for _, f := range matches {
-		if rel, err := filepath.Rel(moduleRoot, f); err == nil {
-			result = append(result, filepath.ToSlash(rel))
-		} else {
+		rel, err := filepath.Rel(moduleRoot, f)
+		if err != nil {
 			result = append(result, filepath.ToSlash(f))
+			continue
 		}
+		result = append(result, filepath.ToSlash(rel))
 	}
 	return result
 }

@@ -46,20 +46,24 @@ type NextLineAnnotationCollector struct {
 
 // Handle processes regex pattern annotations, delegating other types to the next handler.
 func (r *RegexAnnotationCollector) Handle(name string, comment *ast.Comment, fset *token.FileSet, file *ast.File, fileAbs string) {
-	if name == RegexpAnnotation {
-		r.Processor.collectMatchNodes(comment, fset, file, fileAbs)
-	} else {
+	if name != RegexpAnnotation {
 		r.BaseCollector.Handle(name, comment, fset, file, fileAbs)
+
+		return
 	}
+
+	r.Processor.collectMatchNodes(comment, fset, file, fileAbs)
 }
 
 // Handle processes regex pattern annotations, delegating other types to the next handler.
 func (n *NextLineAnnotationCollector) Handle(name string, comment *ast.Comment, fset *token.FileSet, file *ast.File, fileAbs string) {
-	if name == NextLineAnnotation {
-		n.Processor.collectNodesOnNextLine(comment, fset, file)
-	} else {
+	if name != NextLineAnnotation {
 		n.BaseCollector.Handle(name, comment, fset, file, fileAbs)
+
+		return
 	}
+
+	n.Processor.collectNodesOnNextLine(comment, fset, file)
 }
 
 func (p *Processor) buildChain() ChainCollector {

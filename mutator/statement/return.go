@@ -55,43 +55,58 @@ func MutatorReturnValue(pkg *types.Package, info *types.Info, node ast.Node) []m
 func zeroExprForType(t types.Type, currentPkg *types.Package) ast.Expr {
 	switch u := t.(type) {
 	case *types.Basic:
-		switch {
-		case u.Kind() == types.Bool:
-			return ast.NewIdent("false")
-		case u.Info()&types.IsString != 0:
-			return &ast.BasicLit{Kind: token.STRING, Value: `""`}
-		case u.Info()&types.IsNumeric != 0:
-			return &ast.BasicLit{Kind: token.INT, Value: "0"}
-		case u.Kind() == types.UnsafePointer:
-			return ast.NewIdent("nil")
-		}
+		return zeroExprForBasic(u)
 	case *types.Pointer, *types.Slice, *types.Map, *types.Chan, *types.Interface, *types.Signature:
 		return ast.NewIdent("nil")
 	case *types.Named:
-		// For named struct types, generate TypeName{} or pkg.TypeName{}.
-		// Skip generic types (TypeParams present) — the instantiation syntax
-		// is complex and rarely worth mutating.
-		if u.TypeParams() != nil {
-			return nil
-		}
-		if _, ok := u.Underlying().(*types.Struct); ok {
-			obj := u.Obj()
-			var typeExpr ast.Expr
-			if currentPkg != nil && obj.Pkg() != nil && obj.Pkg().Path() == currentPkg.Path() {
-				typeExpr = ast.NewIdent(obj.Name())
-			} else if obj.Pkg() != nil {
-				typeExpr = &ast.SelectorExpr{
-					X:   ast.NewIdent(obj.Pkg().Name()),
-					Sel: ast.NewIdent(obj.Name()),
-				}
-			} else {
-				typeExpr = ast.NewIdent(obj.Name())
-			}
-			return &ast.CompositeLit{Type: typeExpr}
-		}
-		return zeroExprForType(u.Underlying(), currentPkg)
+		return zeroExprForNamed(u, currentPkg)
 	}
 	return nil
+}
+
+// zeroExprForBasic returns the zero-value expression for a basic type.
+func zeroExprForBasic(u *types.Basic) ast.Expr {
+	switch {
+	case u.Kind() == types.Bool:
+		return ast.NewIdent("false")
+	case u.Info()&types.IsString != 0:
+		return &ast.BasicLit{Kind: token.STRING, Value: `""`}
+	case u.Info()&types.IsNumeric != 0:
+		return &ast.BasicLit{Kind: token.INT, Value: "0"}
+	case u.Kind() == types.UnsafePointer:
+		return ast.NewIdent("nil")
+	}
+	return nil
+}
+
+// zeroExprForNamed returns the zero-value expression for a named type. Named
+// struct types produce TypeName{} (or pkg.TypeName{} for imported types);
+// other named types fall back to the zero value of their underlying type.
+func zeroExprForNamed(u *types.Named, currentPkg *types.Package) ast.Expr {
+	// Skip generic types (TypeParams present) — the instantiation syntax is
+	// complex and rarely worth mutating.
+	if u.TypeParams() != nil {
+		return nil
+	}
+	if _, ok := u.Underlying().(*types.Struct); !ok {
+		return zeroExprForType(u.Underlying(), currentPkg)
+	}
+	return &ast.CompositeLit{Type: structTypeExpr(u.Obj(), currentPkg)}
+}
+
+// structTypeExpr builds the type expression used in a named struct's zero
+// literal: TypeName for types in currentPkg, pkg.TypeName for imported types.
+func structTypeExpr(obj *types.TypeName, currentPkg *types.Package) ast.Expr {
+	if obj.Pkg() == nil {
+		return ast.NewIdent(obj.Name())
+	}
+	if currentPkg != nil && obj.Pkg().Path() == currentPkg.Path() {
+		return ast.NewIdent(obj.Name())
+	}
+	return &ast.SelectorExpr{
+		X:   ast.NewIdent(obj.Pkg().Name()),
+		Sel: ast.NewIdent(obj.Name()),
+	}
 }
 
 // isAlreadyZero reports whether expr is already a zero-value literal,

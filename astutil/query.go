@@ -38,61 +38,78 @@ func checkForSelectorExpr(node ast.Expr) bool {
 func (w *identifierWalker) Visit(node ast.Node) ast.Visitor {
 	switch n := node.(type) {
 	case *ast.Ident:
-		// Ignore the blank identifier
-		if n.Name == "_" {
-			return nil
-		}
-
-		// Ignore keywords
-		if token.Lookup(n.Name) != token.IDENT {
-			return nil
-		}
-
-		// We are only interested in variables
-		if obj, ok := w.info.Uses[n]; ok {
-			if _, ok := obj.(*types.Var); !ok {
-				return nil
-			}
-		}
-
-		// FIXME instead of manually creating a new node, clone it and trim the node from its comments and position https://github.com/zimmski/go-mutesting/issues/49
-		w.identifiers = append(w.identifiers, &ast.Ident{
-			Name: n.Name,
-		})
-
-		return nil
+		return w.visitIdent(n)
 	case *ast.SelectorExpr:
-		if !checkForSelectorExpr(n) {
+		return w.visitSelector(n)
+	}
+
+	return w
+}
+
+// visitIdent records variable identifiers, skipping the blank identifier,
+// keywords, and non-variable uses.
+func (w *identifierWalker) visitIdent(n *ast.Ident) ast.Visitor {
+	if n.Name == "_" {
+		return nil
+	}
+
+	if token.Lookup(n.Name) != token.IDENT {
+		return nil
+	}
+
+	if obj, ok := w.info.Uses[n]; ok {
+		if _, ok := obj.(*types.Var); !ok {
 			return nil
 		}
+	}
 
-		// Check if we need to instantiate the expression
-		initialize := false
-		if n.Sel != nil {
-			if obj, ok := w.info.Uses[n.Sel]; ok {
-				t := obj.Type()
+	// FIXME instead of manually creating a new node, clone it and trim the node from its comments and position https://github.com/zimmski/go-mutesting/issues/49
+	w.identifiers = append(w.identifiers, &ast.Ident{
+		Name: n.Name,
+	})
 
-				switch t.Underlying().(type) {
-				case *types.Array, *types.Map, *types.Slice, *types.Struct:
-					initialize = true
-				}
-			}
-		}
+	return nil
+}
 
-		if initialize {
-			// FIXME we need to clone the node and trim comments and position recursively https://github.com/zimmski/go-mutesting/issues/49
-			w.identifiers = append(w.identifiers, &ast.CompositeLit{
-				Type: n,
-			})
-		} else {
-			// FIXME we need to clone the node and trim comments and position recursively https://github.com/zimmski/go-mutesting/issues/49
-			w.identifiers = append(w.identifiers, n)
-		}
+// visitSelector records selector expressions, wrapping composite types in a
+// composite literal so they can be instantiated.
+func (w *identifierWalker) visitSelector(n *ast.SelectorExpr) ast.Visitor {
+	if !checkForSelectorExpr(n) {
+		return nil
+	}
+
+	// FIXME we need to clone the node and trim comments and position recursively https://github.com/zimmski/go-mutesting/issues/49
+	if w.shouldInitialize(n) {
+		w.identifiers = append(w.identifiers, &ast.CompositeLit{
+			Type: n,
+		})
 
 		return nil
 	}
 
-	return w
+	w.identifiers = append(w.identifiers, n)
+
+	return nil
+}
+
+// shouldInitialize reports whether the selector refers to a composite type
+// (array, map, slice, or struct) that needs a composite literal.
+func (w *identifierWalker) shouldInitialize(n *ast.SelectorExpr) bool {
+	if n.Sel == nil {
+		return false
+	}
+
+	obj, ok := w.info.Uses[n.Sel]
+	if !ok {
+		return false
+	}
+
+	switch obj.Type().Underlying().(type) {
+	case *types.Array, *types.Map, *types.Slice, *types.Struct:
+		return true
+	}
+
+	return false
 }
 
 // Functions returns all found functions.
