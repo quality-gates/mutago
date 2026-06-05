@@ -69,13 +69,20 @@ func (s *SkipMakeArgsFilter) collectForIgnoredNodes(expr ast.Expr, callExpr *ast
 		s.collectForIgnoredNodes(e.X, callExpr)
 	case *ast.UnaryExpr:
 		// Unary operators (+, -, etc.)
-		if xLit, ok := e.X.(*ast.BasicLit); ok && xLit.Kind == token.INT {
-			// If a unary operator is applied to a numeric literal, both the operator and the literal itself are added.
-			s.IgnoredNodes[e.OpPos] = callExpr
-			s.IgnoredNodes[xLit.Pos()] = callExpr
-		} else {
-			// Otherwise, we continue the tour inside.
-			s.collectForIgnoredNodes(e.X, callExpr)
-		}
+		s.collectFromUnary(e, callExpr)
 	}
+}
+
+// collectFromUnary handles a unary expression: a unary operator applied to a
+// numeric literal records both the operator and the literal; otherwise it
+// continues the walk inside the operand.
+func (s *SkipMakeArgsFilter) collectFromUnary(e *ast.UnaryExpr, callExpr *ast.CallExpr) {
+	xLit, ok := e.X.(*ast.BasicLit)
+	if !ok || xLit.Kind != token.INT {
+		s.collectForIgnoredNodes(e.X, callExpr)
+		return
+	}
+
+	s.IgnoredNodes[e.OpPos] = callExpr
+	s.IgnoredNodes[xLit.Pos()] = callExpr
 }

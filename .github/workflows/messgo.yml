@@ -1,0 +1,29 @@
+name: messgo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  messgo:
+    name: Mess detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install messgo
+        run: go install github.com/quality-gates/messgo/cmd/messgo@v0.1.1
+
+      - name: Run messgo
+        # Recommended Go settings: the `go` ruleset (with `codesize` thresholds)
+        # over source files only (--ignore-tests). Test fixtures under testdata/
+        # and example/ are intentionally un-idiomatic and are excluded; docs/ has
+        # no Go sources. messgo exits 2 on any violation, failing the job.
+        run: messgo . text go,codesize --ignore-tests --exclude testdata,example,docs

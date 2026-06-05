@@ -28,18 +28,7 @@ func MutatorRemoveSelfAssign(_ *types.Package, _ *types.Info, node ast.Node) []m
 
 	var mutations []mutator.Mutation
 	for i, stmt := range l {
-		assign, ok := stmt.(*ast.AssignStmt)
-		if !ok || assign.Tok != token.ASSIGN || len(assign.Lhs) != len(assign.Rhs) {
-			continue
-		}
-
-		allSelf := true
-		for j := range assign.Lhs {
-			if !stmtExprEqual(assign.Lhs[j], assign.Rhs[j]) {
-				allSelf = false
-			}
-		}
-		if !allSelf {
+		if !isSelfAssign(stmt) {
 			continue
 		}
 
@@ -53,15 +42,28 @@ func MutatorRemoveSelfAssign(_ *types.Package, _ *types.Info, node ast.Node) []m
 	return mutations
 }
 
+// isSelfAssign reports whether stmt is a plain assignment whose left- and
+// right-hand sides are pairwise identical (e.g. `a = a` or `a, b = a, b`).
+func isSelfAssign(stmt ast.Stmt) bool {
+	assign, ok := stmt.(*ast.AssignStmt)
+	if !ok || assign.Tok != token.ASSIGN || len(assign.Lhs) != len(assign.Rhs) {
+		return false
+	}
+	for j := range assign.Lhs {
+		if !stmtExprEqual(assign.Lhs[j], assign.Rhs[j]) {
+			return false
+		}
+	}
+	return true
+}
+
 // stmtExprEqual reports whether two expressions are syntactically identical.
 func stmtExprEqual(a, b ast.Expr) bool {
 	switch x := a.(type) {
 	case *ast.Ident:
-		y, ok := b.(*ast.Ident)
-		return ok && x.Name == y.Name
+		return identExprEqual(x, b)
 	case *ast.BasicLit:
-		y, ok := b.(*ast.BasicLit)
-		return ok && x.Kind == y.Kind && x.Value == y.Value
+		return basicLitEqual(x, b)
 	case *ast.BinaryExpr:
 		return binaryExprEqual(x, b)
 	case *ast.UnaryExpr:
@@ -71,10 +73,24 @@ func stmtExprEqual(a, b ast.Expr) bool {
 	case *ast.IndexExpr:
 		return indexExprEqual(x, b)
 	case *ast.StarExpr:
-		y, ok := b.(*ast.StarExpr)
-		return ok && stmtExprEqual(x.X, y.X)
+		return starExprEqual(x, b)
 	}
 	return false
+}
+
+func identExprEqual(x *ast.Ident, b ast.Expr) bool {
+	y, ok := b.(*ast.Ident)
+	return ok && x.Name == y.Name
+}
+
+func basicLitEqual(x *ast.BasicLit, b ast.Expr) bool {
+	y, ok := b.(*ast.BasicLit)
+	return ok && x.Kind == y.Kind && x.Value == y.Value
+}
+
+func starExprEqual(x *ast.StarExpr, b ast.Expr) bool {
+	y, ok := b.(*ast.StarExpr)
+	return ok && stmtExprEqual(x.X, y.X)
 }
 
 func binaryExprEqual(x *ast.BinaryExpr, b ast.Expr) bool {

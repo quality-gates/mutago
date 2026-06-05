@@ -68,14 +68,18 @@ func resolveFileList(args []string) []string {
 			for _, dirname := range allPackagesInFS(arg) {
 				filenames = append(filenames, checkDir(dirname)...)
 			}
-		} else if isDir(arg) {
+			continue
+		}
+		if isDir(arg) {
 			filenames = append(filenames, checkDir(arg)...)
-		} else if exists(arg) {
+			continue
+		}
+		if exists(arg) {
 			filenames = append(filenames, arg)
-		} else {
-			for _, pkgname := range importPaths([]string{arg}) {
-				filenames = append(filenames, checkPackage(pkgname)...)
-			}
+			continue
+		}
+		for _, pkgname := range importPaths([]string{arg}) {
+			filenames = append(filenames, checkPackage(pkgname)...)
 		}
 	}
 	return filenames
@@ -91,20 +95,25 @@ func shouldSkipFile(filename string, opts *models.Options) bool {
 			return true
 		}
 	}
-	if opts.Config.SkipFileWithoutTest || opts.Config.SkipFileWithBuildTag {
-		nameSize := len(filename)
-		if nameSize <= 3 {
-			return true
-		}
-		testName := filename[:nameSize-3] + testFileSuffix
-		if !exists(testName) {
-			return true
-		}
-		if opts.Config.SkipFileWithBuildTag && regexpSearchInFile(testName, buildTagRegex) {
-			return true
-		}
+	return skipForMissingOrTaggedTest(filename, opts)
+}
+
+// skipForMissingOrTaggedTest reports whether filename should be skipped under
+// the "skip files without a test" and "skip files whose test has a build tag"
+// policies.
+func skipForMissingOrTaggedTest(filename string, opts *models.Options) bool {
+	if !opts.Config.SkipFileWithoutTest && !opts.Config.SkipFileWithBuildTag {
+		return false
 	}
-	return false
+	nameSize := len(filename)
+	if nameSize <= 3 {
+		return true
+	}
+	testName := filename[:nameSize-3] + testFileSuffix
+	if !exists(testName) {
+		return true
+	}
+	return opts.Config.SkipFileWithBuildTag && regexpSearchInFile(testName, buildTagRegex)
 }
 
 func regexpSearchInFile(file string, re *regexp.Regexp) bool {

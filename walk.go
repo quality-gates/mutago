@@ -102,13 +102,15 @@ type printWalk struct {
 
 // Visit implements the Visit method of the ast.Visitor interface
 func (w *printWalk) Visit(node ast.Node) ast.Visitor {
-	if node != nil {
-		w.level++
-
-		fmt.Printf("%s(%p)%#v\n", strings.Repeat("\t", w.level), node, node)
-	} else {
+	if node == nil {
 		w.level--
+
+		return w
 	}
+
+	w.level++
+
+	fmt.Printf("%s(%p)%#v\n", strings.Repeat("\t", w.level), node, node)
 
 	return w
 }

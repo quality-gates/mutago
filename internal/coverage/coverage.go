@@ -66,17 +66,9 @@ func (p *Profile) parseLine(line, modulePfx string) error {
 	if colonIdx < 0 {
 		return nil
 	}
-	rawFile := line[:colonIdx]
-	rest := line[colonIdx+1:]
+	relFile := relativeCoverageFile(line[:colonIdx], modulePfx)
 
-	relFile := strings.TrimPrefix(rawFile, modulePfx)
-	if relFile == rawFile {
-		// Module prefix not present — use the raw path as-is.
-		relFile = rawFile
-	}
-	relFile = filepath.ToSlash(relFile)
-
-	fields := strings.Fields(rest)
+	fields := strings.Fields(line[colonIdx+1:])
 	if len(fields) != 3 {
 		return nil
 	}
@@ -89,26 +81,53 @@ func (p *Profile) parseLine(line, modulePfx string) error {
 		return nil
 	}
 
-	rangeParts := strings.SplitN(fields[0], ",", 2)
-	if len(rangeParts) != 2 {
-		return nil
-	}
-	startLine, err := parseLineNum(rangeParts[0])
-	if err != nil {
-		return err
-	}
-	endLine, err := parseLineNum(rangeParts[1])
-	if err != nil {
+	startLine, endLine, ok, err := parseCoverageRange(fields[0])
+	if err != nil || !ok {
 		return err
 	}
 
+	p.recordCoveredLines(relFile, startLine, endLine)
+	return nil
+}
+
+// relativeCoverageFile strips modulePfx from a coverage file path, falling back
+// to the raw path when the prefix is absent, and normalises separators.
+func relativeCoverageFile(rawFile, modulePfx string) string {
+	relFile := strings.TrimPrefix(rawFile, modulePfx)
+	if relFile == rawFile {
+		// Module prefix not present — use the raw path as-is.
+		relFile = rawFile
+	}
+	return filepath.ToSlash(relFile)
+}
+
+// parseCoverageRange parses the "startLine.startCol,endLine.endCol" range field.
+// ok is false (with a nil error) when the field is malformed and should be
+// skipped rather than treated as an error.
+func parseCoverageRange(field string) (startLine, endLine int, ok bool, err error) {
+	rangeParts := strings.SplitN(field, ",", 2)
+	if len(rangeParts) != 2 {
+		return 0, 0, false, nil
+	}
+	startLine, err = parseLineNum(rangeParts[0])
+	if err != nil {
+		return 0, 0, false, err
+	}
+	endLine, err = parseLineNum(rangeParts[1])
+	if err != nil {
+		return 0, 0, false, err
+	}
+	return startLine, endLine, true, nil
+}
+
+// recordCoveredLines marks lines [startLine, endLine] of relFile as covered.
+func (p *Profile) recordCoveredLines(relFile string, startLine, endLine int) {
 	if _, ok := p.coveredLines[relFile]; !ok {
 		p.coveredLines[relFile] = make(map[int]bool)
 	}
 	for l := startLine; l <= endLine; l++ {
 		p.coveredLines[relFile][l] = true
 	}
-	return nil
 }
 
 // parseLineNum extracts the line number from "line.col" notation.
@@ -144,18 +163,36 @@ func (p *PerTestProfile) CoveringTests(absFile string, lineNum int) []string {
 // CountTests returns the number of test functions (Test*, Benchmark*, Fuzz*)
 // in pkgPath. Returns 0 on any error or when the package has no tests.
 func CountTests(pkgPath string) int {
-	out, err := exec.Command("go", "test", "-list", ".*", pkgPath).Output()
+	names, err := listTestNames(pkgPath)
 	if err != nil {
 		return 0
 	}
-	count := 0
+	return len(names)
+}
+
+// isTestFuncName reports whether name is a top-level test entry point
+// (Test*, Benchmark*, or Fuzz*).
+func isTestFuncName(name string) bool {
+	return strings.HasPrefix(name, "Test") ||
+		strings.HasPrefix(name, "Benchmark") ||
+		strings.HasPrefix(name, "Fuzz")
+}
+
+// listTestNames returns the top-level test function names declared in pkgPath,
+// as reported by `go test -list`.
+func listTestNames(pkgPath string) ([]string, error) {
+	out, err := exec.Command("go", "test", "-list", ".*", pkgPath).Output()
+	if err != nil {
+		return nil, err
+	}
+	var names []string
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Test") || strings.HasPrefix(line, "Benchmark") || strings.HasPrefix(line, "Fuzz") {
-			count++
+		if isTestFuncName(line) {
+			names = append(names, line)
 		}
 	}
-	return count
+	return names, nil
 }
 
 // BuildPerTestProfile runs each test function in pkgPath individually with
@@ -179,17 +216,9 @@ type perTestResult struct {
 
 func BuildPerTestProfile(pkgPath, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags []string) (*PerTestProfile, error) {
 	// List test functions (not subtests).
-	listOut, err := exec.Command("go", "test", "-list", ".*", pkgPath).Output()
+	testNames, err := listTestNames(pkgPath)
 	if err != nil {
 		return nil, fmt.Errorf("go test -list: %w", err)
-	}
-
-	var testNames []string
-	for _, line := range strings.Split(strings.TrimSpace(string(listOut)), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Test") || strings.HasPrefix(line, "Benchmark") || strings.HasPrefix(line, "Fuzz") {
-			testNames = append(testNames, line)
-		}
 	}
 	if len(testNames) == 0 {
 		return nil, nil

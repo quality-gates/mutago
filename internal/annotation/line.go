@@ -6,12 +6,6 @@ import (
 	"strings"
 )
 
-// LineAnnotation represents a collection of exclusions based on lines in the file.
-type LineAnnotation struct {
-	Exclusions map[int]map[token.Pos]mutatorInfo
-	Name       string
-}
-
 // parseLineAnnotation parses a comment line containing a next-line annotation.
 func (l *LineAnnotation) parseLineAnnotation(comment string) mutatorInfo {
 	content := strings.TrimSpace(strings.TrimPrefix(comment, l.Name))

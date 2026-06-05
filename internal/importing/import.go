@@ -43,14 +43,7 @@ func importPathsNoDotExpansion(args []string) []string {
 		}
 
 		// Put argument in canonical form, but preserve leading ./.
-		if strings.HasPrefix(a, "./") {
-			a = "./" + path.Clean(a)
-			if a == "./." {
-				a = "."
-			}
-		} else {
-			a = path.Clean(a)
-		}
+		a = canonicalArg(a)
 		if a == "all" || a == "std" {
 			out = append(out, allPackages(a)...)
 			continue
@@ -58,6 +51,19 @@ func importPathsNoDotExpansion(args []string) []string {
 		out = append(out, a)
 	}
 	return out
+}
+
+// canonicalArg puts a command-line import argument in canonical form while
+// preserving a leading "./".
+func canonicalArg(a string) string {
+	if !strings.HasPrefix(a, "./") {
+		return path.Clean(a)
+	}
+	a = "./" + path.Clean(a)
+	if a == "./." {
+		return "."
+	}
+	return a
 }
 
 // importPaths returns the import paths to use for the given command line.
@@ -68,9 +74,9 @@ func importPaths(args []string) []string {
 		if strings.Contains(a, "...") {
 			if build.IsLocalImport(a) {
 				out = append(out, allPackagesInFS(a)...)
-			} else {
-				out = append(out, allPackages(a)...)
+				continue
 			}
+			out = append(out, allPackages(a)...)
 			continue
 		}
 		out = append(out, a)
@@ -190,16 +196,26 @@ func walkCmdPackages(cmd string, treeCanMatch, match func(string) bool, have map
 		if !match(name) {
 			return nil
 		}
-		if _, err = buildContext.ImportDir(path, 0); err != nil {
-			if _, noGo := err.(*build.NoGoError); !noGo {
-				log.Print(err)
-			}
+		if !importablePkg(path) {
 			return nil
 		}
 		pkgs = append(pkgs, name)
 		return nil
 	})
 	return pkgs, err
+}
+
+// importablePkg reports whether path contains a buildable Go package. A "no Go
+// files" result is treated as not importable without logging; any other error
+// is logged.
+func importablePkg(path string) bool {
+	if _, err := buildContext.ImportDir(path, 0); err != nil {
+		if _, noGo := err.(*build.NoGoError); !noGo {
+			log.Print(err)
+		}
+		return false
+	}
+	return true
 }
 
 func walkSrcPackages(pattern string, treeCanMatch, match func(string) bool, have map[string]bool) ([]string, error) {
@@ -225,14 +241,8 @@ func walkSrcDir(src, pattern string, treeCanMatch, match func(string) bool, have
 			return nil
 		}
 		_, elem := filepath.Split(path)
-		if isSkippableDir(elem) {
-			return filepath.SkipDir
-		}
 		name := filepath.ToSlash(path[len(src):])
-		if pattern == "std" && strings.Contains(name, ".") {
-			return filepath.SkipDir
-		}
-		if !treeCanMatch(name) {
+		if skipSrcDir(elem, name, pattern, treeCanMatch) {
 			return filepath.SkipDir
 		}
 		if have[name] {
@@ -242,10 +252,7 @@ func walkSrcDir(src, pattern string, treeCanMatch, match func(string) bool, have
 		if !match(name) {
 			return nil
 		}
-		if _, err = buildContext.ImportDir(path, 0); err != nil {
-			if _, noGo := err.(*build.NoGoError); !noGo {
-				log.Print(err)
-			}
+		if !importablePkg(path) {
 			return nil
 		}
 		pkgs = append(pkgs, name)
@@ -254,7 +261,30 @@ func walkSrcDir(src, pattern string, treeCanMatch, match func(string) bool, have
 	return pkgs, err
 }
 
+// skipSrcDir reports whether a source directory tree should be skipped: hidden
+// or testdata directories, "std"-only paths containing a dot, or trees that
+// cannot match the pattern.
+func skipSrcDir(elem, name, pattern string, treeCanMatch func(string) bool) bool {
+	if isSkippableDir(elem) {
+		return true
+	}
+	if pattern == "std" && strings.Contains(name, ".") {
+		return true
+	}
+	return !treeCanMatch(name)
+}
+
 func isSkippableDir(elem string) bool {
+	return strings.HasPrefix(elem, ".") || strings.HasPrefix(elem, "_") || elem == "testdata"
+}
+
+// skipFSDir reports whether the directory named elem should be skipped while
+// scanning the filesystem for packages: .foo, _foo, and testdata trees, but
+// never "." or "..".
+func skipFSDir(elem string) bool {
+	if elem == "." || elem == ".." {
+		return false
+	}
 	return strings.HasPrefix(elem, ".") || strings.HasPrefix(elem, "_") || elem == "testdata"
 }
 
@@ -306,8 +336,7 @@ func matchPackagesInFS(pattern string) []string {
 
 		// Avoid .foo, _foo, and testdata directory trees, but do not avoid "." or "..".
 		_, elem := filepath.Split(path)
-		dot := strings.HasPrefix(elem, ".") && elem != "." && elem != ".."
-		if dot || strings.HasPrefix(elem, "_") || elem == "testdata" {
+		if skipFSDir(elem) {
 			return filepath.SkipDir
 		}
 
@@ -315,10 +344,7 @@ func matchPackagesInFS(pattern string) []string {
 		if !match(name) {
 			return nil
 		}
-		if _, err = build.ImportDir(path, 0); err != nil {
-			if _, noGo := err.(*build.NoGoError); !noGo {
-				log.Print(err)
-			}
+		if !importablePkg(path) {
 			return nil
 		}
 		pkgs = append(pkgs, name)

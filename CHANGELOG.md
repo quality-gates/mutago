@@ -6,11 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
-### Fixed
-- The `--git-diff-lines` hunk-header parser (`internal/gitdiff`) no longer ignores `strconv.Atoi` errors when reading a hunk's start line and count. An out-of-range numeric field (more digits than fit in an `int64`) previously made `Atoi` return `MaxInt64` while the error was discarded; the subsequent `Start + count - 1` then overflowed to a negative number, producing an inverted `LineRange` that silently corrupted the diff-line filter. Malformed or out-of-range hunk headers are now skipped cleanly. Found by coverage-guided fuzzing.
-
 ### Added
 - Coverage-guided fuzz tests (`FuzzParse`, `FuzzParseDiffOutput`, `FuzzParseProfile`, `FuzzMutantID`, `FuzzLoad`) with seed corpora for the input-parsing surface in `internal/gitdiff`, `internal/parser`, `internal/coverage`, and `internal/baseline`, plus a saved regression seed for the overflow above.
+- [messgo](https://github.com/quality-gates/messgo) (a PHPMD-style mess detector for Go) as a CI quality gate. A new `messgo` workflow runs the recommended `go,codesize` rulesets over the source with `--ignore-tests` (test fixtures excluded) and fails the build on any violation.
+
+### Changed
+- Refactored the codebase to pass the new messgo gate without lowering any threshold. High-complexity functions were split into focused helpers, `else` branches were flattened into early returns, the long `mutate` / `processMutationFile` / `mutateAllPackages` parameter lists were grouped into `mutationRun` and `fileContext` types, and the not-covered branch of `recordMutantResult` was lifted into its own helper to drop a boolean flag argument. Behaviour is unchanged; all tests and the self-mutation quality gates (MSI ≥ 75%, covered-code MSI ≥ 80%) still pass.
+
+### Fixed
+- The `--git-diff-lines` hunk-header parser (`internal/gitdiff`) no longer ignores `strconv.Atoi` errors when reading a hunk's start line and count. An out-of-range numeric field (more digits than fit in an `int64`) previously made `Atoi` return `MaxInt64` while the error was discarded; the subsequent `Start + count - 1` then overflowed to a negative number, producing an inverted `LineRange` that silently corrupted the diff-line filter. Malformed or out-of-range hunk headers are now skipped cleanly. Found by coverage-guided fuzzing.
 
 ---
 

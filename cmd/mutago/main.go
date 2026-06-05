@@ -103,26 +103,18 @@ func checkArguments(args []string, opts *models.Options) (bool, int) {
 		return true, exitError(err.Error())
 	}
 
-	completion := len(os.Getenv("GO_FLAGS_COMPLETION")) > 0
-
 	_, err := p.ParseArgs(args)
-	if (opts.General.Help || len(args) == 0) && !completion {
-		p.WriteHelp(os.Stdout)
 
-		return true, returnOk // exit 0 is conventional for --help
-	} else if opts.Mutator.ListMutators {
-		for _, name := range mutator.List() {
-			fmt.Println(name)
-		}
-
-		return true, returnOk
+	// --help and --list-mutators print and exit before any parse error is reported.
+	if handled, code := handleEarlyExitFlags(opts, p, args); handled {
+		return true, code
 	}
 
 	if err != nil {
 		return true, exitError(err.Error())
 	}
 
-	if completion {
+	if isCompletion() {
 		return true, returnBashCompletion
 	}
 
@@ -130,18 +122,51 @@ func checkArguments(args []string, opts *models.Options) (bool, int) {
 		opts.General.Verbose = true
 	}
 
-	if opts.General.Config != "" {
-		yamlFile, err := os.ReadFile(opts.General.Config)
-		if err != nil {
-			return true, exitError("Could not read config file: %q", opts.General.Config)
-		}
-		dec := yaml.NewDecoder(bytes.NewReader(yamlFile))
-		dec.KnownFields(true)
-		if err = dec.Decode(&opts.Config); err != nil {
-			return true, exitError("Could not parse config file %q: %v", opts.General.Config, err)
-		}
+	if handled, code := loadConfigFile(opts); handled {
+		return true, code
 	}
 
+	return false, 0
+}
+
+// isCompletion reports whether mutago was invoked for shell completion.
+func isCompletion() bool {
+	return len(os.Getenv("GO_FLAGS_COMPLETION")) > 0
+}
+
+// handleEarlyExitFlags handles --help and --list-mutators, which print and exit
+// before any mutation work. Returns (true, exitCode) when one applied.
+func handleEarlyExitFlags(opts *models.Options, p *flags.Parser, args []string) (bool, int) {
+	if (opts.General.Help || len(args) == 0) && !isCompletion() {
+		p.WriteHelp(os.Stdout)
+
+		return true, returnOk // exit 0 is conventional for --help
+	}
+	if opts.Mutator.ListMutators {
+		for _, name := range mutator.List() {
+			fmt.Println(name)
+		}
+
+		return true, returnOk
+	}
+	return false, 0
+}
+
+// loadConfigFile merges a YAML config file into opts when --config is set.
+// Returns (true, exitCode) on failure, (false, 0) otherwise.
+func loadConfigFile(opts *models.Options) (bool, int) {
+	if opts.General.Config == "" {
+		return false, 0
+	}
+	yamlFile, err := os.ReadFile(opts.General.Config)
+	if err != nil {
+		return true, exitError("Could not read config file: %q", opts.General.Config)
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(yamlFile))
+	dec.KnownFields(true)
+	if err := dec.Decode(&opts.Config); err != nil {
+		return true, exitError("Could not parse config file %q: %v", opts.General.Config, err)
+	}
 	return false, 0
 }
 
@@ -173,8 +198,41 @@ type execJob struct {
 	moduleRoot      string // used to compute relative file path for ID matching
 }
 
+// mutationRun holds the run-wide configuration shared across every package and
+// file mutated in a single mutago invocation.
+type mutationRun struct {
+	opts            *models.Options
+	mutators        []mutatorItem
+	blacklist       map[string]struct{}
+	tmpDir          string
+	numWorkers      int
+	execs           []string
+	extraTestFlags  []string
+	report          *models.Report
+	mu              *sync.Mutex
+	modulePath      string
+	moduleRoot      string
+	gitChangedLines gitdiff.ChangedLines
+	jobs            chan<- execJob
+}
+
+// fileContext holds the parsed state and per-file derived values for the file
+// currently being mutated.
+type fileContext struct {
+	pkg          *types.Package
+	info         *types.Info
+	fset         *token.FileSet
+	src          ast.Node
+	sourceFile   string
+	mutatedFile  string
+	absFile      string
+	coverProfile *coverage.Profile
+	perTestProf  *coverage.PerTestProfile
+	filters      []filter.NodeFilter
+}
+
 func mainCmd(args []string) int {
-	var opts = &models.Options{}
+	opts := &models.Options{}
 
 	if exit, exitCode := checkArguments(args, opts); exit {
 		return exitCode
@@ -194,13 +252,16 @@ func mainCmd(args []string) int {
 		return code
 	}
 
+	return runMutationTesting(opts, bl)
+}
+
+// runMutationTesting performs the full mutation run: setup, worker pool,
+// mutation dispatch, shutdown, and result finalization.
+func runMutationTesting(opts *models.Options, bl *baseline.File) int {
 	mutationBlackList, err := loadBlacklist(opts.Files.Blacklist)
 	if err != nil {
 		return exitError(err.Error())
 	}
-
-	mutators := buildActiveMutators(opts)
-	execs, extraTestFlags := parseExecFlags(opts)
 
 	tmpDir, err := os.MkdirTemp("", "mutago-")
 	if err != nil {
@@ -210,8 +271,6 @@ func mainCmd(args []string) int {
 
 	report := &models.Report{}
 	var reportMu sync.Mutex
-
-	modulePath := detectModulePath()
 	moduleRoot := detectModuleRoot()
 
 	gitChangedLines, err := loadGitDiffLines(opts)
@@ -219,6 +278,7 @@ func mainCmd(args []string) int {
 		return exitError("Cannot load git diff: %v", err)
 	}
 
+	execs, extraTestFlags := parseExecFlags(opts)
 	pkgs := importing.PackagesWithFilesOfArgs(opts.Remaining.Targets, opts)
 
 	if exitCode := runNoopChecks(opts, pkgs, execs, extraTestFlags); exitCode != 0 {
@@ -233,10 +293,23 @@ func mainCmd(args []string) int {
 	jobs, jobWg := startWorkerPool(opts, numWorkers, report, &reportMu)
 	stopProgress, progressWg := startProgressMonitor(opts, report, &reportMu)
 
-	dryRunTotal, dryRunMutatorTotals, loopCode := mutateAllPackages(
-		opts, pkgs, mutators, mutationBlackList, tmpDir, numWorkers, execs, extraTestFlags,
-		report, &reportMu, modulePath, moduleRoot, gitChangedLines, jobs,
-	)
+	run := &mutationRun{
+		opts:            opts,
+		mutators:        buildActiveMutators(opts),
+		blacklist:       mutationBlackList,
+		tmpDir:          tmpDir,
+		numWorkers:      numWorkers,
+		execs:           execs,
+		extraTestFlags:  extraTestFlags,
+		report:          report,
+		mu:              &reportMu,
+		modulePath:      detectModulePath(),
+		moduleRoot:      moduleRoot,
+		gitChangedLines: gitChangedLines,
+		jobs:            jobs,
+	}
+
+	dryRunTotal, dryRunMutatorTotals, loopCode := run.mutateAll(pkgs)
 
 	shutdownAndCleanup(opts, jobs, jobWg, stopProgress, progressWg, tmpDir)
 
@@ -250,7 +323,12 @@ func mainCmd(args []string) int {
 	}
 
 	report.Calculate()
+	return finalizeResults(opts, report, bl, moduleRoot)
+}
 
+// finalizeResults writes reports, prints the summary, and evaluates the quality
+// gates after a completed (non-dry) mutation run.
+func finalizeResults(opts *models.Options, report *models.Report, bl *baseline.File, moduleRoot string) int {
 	if handled, code := handleBaselineUpdate(opts, report, moduleRoot); handled {
 		return code
 	}
@@ -512,10 +590,18 @@ func startWorkerPool(opts *models.Options, numWorkers int, report *models.Report
 	return jobs, &wg
 }
 
+// progressMonitorEnabled reports whether the live progress monitor should run:
+// only on an interactive terminal and outside verbose, debug, silent, no-exec,
+// and dry-run modes.
+func progressMonitorEnabled(opts *models.Options) bool {
+	return isTerminal() && !opts.General.Verbose && !opts.General.Debug &&
+		!opts.Config.SilentMode && !opts.Exec.NoExec && !opts.General.DryRun
+}
+
 // startProgressMonitor launches a goroutine printing live kill/escape/skip counts.
 // Returns nil, nil when conditions are not met (non-terminal, verbose, silent, etc.).
 func startProgressMonitor(opts *models.Options, report *models.Report, mu *sync.Mutex) (chan struct{}, *sync.WaitGroup) {
-	if !isTerminal() || opts.General.Verbose || opts.General.Debug || opts.Config.SilentMode || opts.Exec.NoExec || opts.General.DryRun {
+	if !progressMonitorEnabled(opts) {
 		return nil, nil
 	}
 	stop := make(chan struct{})
@@ -545,41 +631,17 @@ func startProgressMonitor(opts *models.Options, report *models.Report, mu *sync.
 	return stop, &wg
 }
 
-// mutateAllPackages iterates all packages and files, dispatching mutation jobs.
+// mutateAll iterates all packages and files, dispatching mutation jobs.
 // Returns dry-run totals and any file-parse error exit code.
-func mutateAllPackages(
-	opts *models.Options,
-	pkgs []importing.Package,
-	mutators []mutatorItem,
-	blacklist map[string]struct{},
-	tmpDir string,
-	numWorkers int,
-	execs []string,
-	extraTestFlags []string,
-	report *models.Report,
-	mu *sync.Mutex,
-	modulePath string,
-	moduleRoot string,
-	gitChangedLines gitdiff.ChangedLines,
-	jobs chan<- execJob,
-) (dryRunTotal int, dryRunMutatorTotals map[string]int, exitCode int) {
-	if opts.General.DryRun {
+func (r *mutationRun) mutateAll(pkgs []importing.Package) (dryRunTotal int, dryRunMutatorTotals map[string]int, exitCode int) {
+	if r.opts.General.DryRun {
 		dryRunMutatorTotals = make(map[string]int)
 	}
 	for _, importPkg := range pkgs {
-		var coverProfile *coverage.Profile
-		if !opts.General.DryRun {
-			coverProfile = buildCoverageProfile(opts, importPkg.Files, tmpDir, modulePath)
-			if coverProfile != nil {
-				report.HasCoverage = true
-			}
-		}
-		var perTestProf *coverage.PerTestProfile
-		if opts.Exec.PerTest && !opts.Exec.NoExec && !opts.General.DryRun && len(execs) == 0 {
-			perTestProf = buildPerTestCoverageProfile(opts, importPkg.Files, modulePath, tmpDir, numWorkers, extraTestFlags)
-		}
+		coverProfile := r.coverageForPackage(importPkg)
+		perTestProf := r.perTestForPackage(importPkg)
 		for _, file := range importPkg.Files {
-			count, code := processMutationFile(opts, file, mutators, blacklist, tmpDir, execs, extraTestFlags, report, mu, moduleRoot, gitChangedLines, jobs, coverProfile, perTestProf, dryRunMutatorTotals)
+			count, code := r.processFile(file, coverProfile, perTestProf, dryRunMutatorTotals)
 			if code != returnOk {
 				return dryRunTotal, dryRunMutatorTotals, code
 			}
@@ -589,30 +651,36 @@ func mutateAllPackages(
 	return dryRunTotal, dryRunMutatorTotals, returnOk
 }
 
-// processMutationFile parses one source file, applies all mutators, and enqueues jobs.
+// coverageForPackage builds the coverage profile for a package, marking the
+// report as having coverage. It returns nil during dry runs.
+func (r *mutationRun) coverageForPackage(importPkg importing.Package) *coverage.Profile {
+	if r.opts.General.DryRun {
+		return nil
+	}
+	coverProfile := buildCoverageProfile(r.opts, importPkg.Files, r.tmpDir, r.modulePath)
+	if coverProfile != nil {
+		r.report.HasCoverage = true
+	}
+	return coverProfile
+}
+
+// perTestForPackage builds the per-test coverage profile for a package, or nil
+// when per-test coverage is not applicable.
+func (r *mutationRun) perTestForPackage(importPkg importing.Package) *coverage.PerTestProfile {
+	if !r.opts.Exec.PerTest || r.opts.Exec.NoExec || r.opts.General.DryRun || len(r.execs) != 0 {
+		return nil
+	}
+	return buildPerTestCoverageProfile(r.opts, importPkg.Files, r.modulePath, r.tmpDir, r.numWorkers, r.extraTestFlags)
+}
+
+// processFile parses one source file, applies all mutators, and enqueues jobs.
 // Returns the mutation count for this file and an exit code.
-func processMutationFile(
-	opts *models.Options,
-	file string,
-	mutators []mutatorItem,
-	blacklist map[string]struct{},
-	tmpDir string,
-	execs []string,
-	extraTestFlags []string,
-	report *models.Report,
-	mu *sync.Mutex,
-	moduleRoot string,
-	gitChangedLines gitdiff.ChangedLines,
-	jobs chan<- execJob,
-	coverProfile *coverage.Profile,
-	perTestProf *coverage.PerTestProfile,
-	dryRunMutatorTotals map[string]int,
-) (int, int) {
-	console.Verbose(opts, "Mutate %q", file)
+func (r *mutationRun) processFile(file string, coverProfile *coverage.Profile, perTestProf *coverage.PerTestProfile, dryRunMutatorTotals map[string]int) (int, int) {
+	console.Verbose(r.opts, "Mutate %q", file)
 
 	annotationProcessor := annotation.NewProcessor()
 	skipFilterProcessor := filter.NewSkipMakeArgsFilter()
-	sourceLineFilter := filter.NewSourceLineRegexFilter(opts.Config.IgnoreSourceLines)
+	sourceLineFilter := filter.NewSourceLineRegexFilter(r.opts.Config.IgnoreSourceLines)
 
 	collectors := []filter.NodeCollector{annotationProcessor, skipFilterProcessor, sourceLineFilter}
 	nodeFilters := []filter.NodeFilter{annotationProcessor, skipFilterProcessor, sourceLineFilter}
@@ -622,32 +690,53 @@ func processMutationFile(
 		return 0, exitError(err.Error())
 	}
 
-	if err = os.MkdirAll(tmpDir+"/"+filepath.Dir(file), 0755); err != nil {
+	if err := os.MkdirAll(r.tmpDir+"/"+filepath.Dir(file), 0755); err != nil {
 		return 0, exitError("Cannot create mutation directory: %v", err)
 	}
 
-	tmpFile := tmpDir + "/" + file
+	tmpFile := r.tmpDir + "/" + file
 	originalFile := fmt.Sprintf("%s.original", tmpFile)
-	if err = osutil.CopyFile(file, originalFile); err != nil {
+	if err := osutil.CopyFile(file, originalFile); err != nil {
 		return 0, exitError("Cannot copy original file: %v", err)
 	}
-	console.Debug(opts, "Save original into %q", originalFile)
+	console.Debug(r.opts, "Save original into %q", originalFile)
 
 	absFile, _ := filepath.Abs(file)
+
+	fc := &fileContext{
+		pkg:          pkg,
+		info:         info,
+		fset:         fset,
+		src:          src,
+		sourceFile:   file,
+		mutatedFile:  tmpFile,
+		absFile:      absFile,
+		coverProfile: coverProfile,
+		perTestProf:  perTestProf,
+		filters:      nodeFilters,
+	}
+
+	return r.mutateFile(fc, dryRunMutatorTotals)
+}
+
+// mutateFile applies the configured mutators to one parsed file, honoring the
+// --match function filter. Returns the mutation count and an exit code.
+func (r *mutationRun) mutateFile(fc *fileContext, dryRunMutatorTotals map[string]int) (int, int) {
 	mutationID := 0
 
-	if opts.Filter.Match != "" {
-		m, err := regexp.Compile(opts.Filter.Match)
-		if err != nil {
-			return 0, exitError("Match regex is not valid: %v", err)
+	if r.opts.Filter.Match == "" {
+		mutationID = r.mutate(fc, fc.src, mutationID, dryRunMutatorTotals)
+		return mutationID, returnOk
+	}
+
+	m, err := regexp.Compile(r.opts.Filter.Match)
+	if err != nil {
+		return 0, exitError("Match regex is not valid: %v", err)
+	}
+	for _, f := range astutil.Functions(fc.src) {
+		if m.MatchString(f.Name.Name) {
+			mutationID = r.mutate(fc, f, mutationID, dryRunMutatorTotals)
 		}
-		for _, f := range astutil.Functions(src) {
-			if m.MatchString(f.Name.Name) {
-				mutationID = mutate(opts, mutators, blacklist, mutationID, pkg, info, file, fset, src, f, tmpFile, execs, report, mu, nodeFilters, absFile, coverProfile, gitChangedLines, jobs, perTestProf, extraTestFlags, dryRunMutatorTotals, opts.Exec.RunMutantID, moduleRoot)
-			}
-		}
-	} else {
-		mutationID = mutate(opts, mutators, blacklist, mutationID, pkg, info, file, fset, src, src, tmpFile, execs, report, mu, nodeFilters, absFile, coverProfile, gitChangedLines, jobs, perTestProf, extraTestFlags, dryRunMutatorTotals, opts.Exec.RunMutantID, moduleRoot)
 	}
 	return mutationID, returnOk
 }
@@ -662,13 +751,14 @@ func shutdownAndCleanup(opts *models.Options, jobs chan execJob, jobWg *sync.Wai
 		close(stopProgress)
 		progressWg.Wait()
 	}
-	if !opts.General.DoNotRemoveTmpFolder {
-		if err := os.RemoveAll(tmpDir); err != nil {
-			fmt.Fprintf(os.Stderr, "mutago: cannot remove %s: %v\n", tmpDir, err)
-		} else {
-			console.Debug(opts, "Remove %q", tmpDir)
-		}
+	if opts.General.DoNotRemoveTmpFolder {
+		return
 	}
+	if err := os.RemoveAll(tmpDir); err != nil {
+		fmt.Fprintf(os.Stderr, "mutago: cannot remove %s: %v\n", tmpDir, err)
+		return
+	}
+	console.Debug(opts, "Remove %q", tmpDir)
 }
 
 // printDryRunReport prints per-mutator counts and total for a dry run.
@@ -704,50 +794,73 @@ func handleBaselineUpdate(opts *models.Options, report *models.Report, moduleRoo
 
 // printResultsIfNeeded prints the summary line and GitHub annotations when appropriate.
 func printResultsIfNeeded(opts *models.Options, report *models.Report) {
-	if !opts.Exec.NoExec {
-		if opts.Exec.RunMutantID == "" {
-			printSummary(report)
-		}
-		if opts.Logger.GitHub {
-			printGitHubAnnotations(report)
-		}
-	} else {
+	if opts.Exec.NoExec {
 		fmt.Println("Cannot do a mutation testing summary since no exec command was executed.")
+		return
+	}
+	if opts.Exec.RunMutantID == "" {
+		printSummary(report)
+	}
+	if opts.Logger.GitHub {
+		printGitHubAnnotations(report)
 	}
 }
 
 // writeAllReports writes every enabled report format; returns first error exit code.
 func writeAllReports(opts *models.Options, report *models.Report, moduleRoot string) int {
-	if opts.General.Config == "" || opts.Config.JSONOutput {
-		if err := reportmaker.MakeJSONReport(*report); err != nil {
-			return exitError(err.Error())
-		}
-		console.Verbose(opts, "Save report into %q", models.ReportFileName)
+	specs := []reportSpec{
+		{
+			enabled:  opts.General.Config == "" || opts.Config.JSONOutput,
+			write:    func() error { return reportmaker.MakeJSONReport(*report) },
+			savedMsg: "Save report into %q", fileName: models.ReportFileName,
+		},
+		{
+			enabled:  opts.Logger.SummaryJSON,
+			write:    func() error { return reportmaker.MakeSummaryJSONReport(report.Stats) },
+			savedMsg: "Save summary into %q", fileName: models.ReportSummaryJSONFileName,
+		},
+		{
+			enabled:  opts.Logger.AgenticJSON,
+			write:    func() error { return reportmaker.MakeAgenticJSONReport(*report, moduleRoot) },
+			savedMsg: "Save agentic report into %q", fileName: models.ReportAgenticJSONFileName,
+		},
+		{
+			enabled:  opts.Logger.GitLab,
+			write:    func() error { return reportmaker.MakeGitLabReport(*report, moduleRoot) },
+			savedMsg: "Save GitLab report into %q", fileName: models.ReportGitLabJSONFileName,
+		},
+		{
+			enabled:  opts.Config.HTMLOutput || opts.General.HTMLOutput,
+			write:    func() error { return reportmaker.MakeHTMLReport(*report) },
+			savedMsg: "Save report into %q", fileName: models.ReportHTMLFileName,
+		},
 	}
-	if opts.Logger.SummaryJSON {
-		if err := reportmaker.MakeSummaryJSONReport(report.Stats); err != nil {
-			return exitError(err.Error())
+	for _, s := range specs {
+		if code := writeReport(opts, s); code != returnOk {
+			return code
 		}
-		console.Verbose(opts, "Save summary into %q", models.ReportSummaryJSONFileName)
 	}
-	if opts.Logger.AgenticJSON {
-		if err := reportmaker.MakeAgenticJSONReport(*report, moduleRoot); err != nil {
-			return exitError(err.Error())
-		}
-		console.Verbose(opts, "Save agentic report into %q", models.ReportAgenticJSONFileName)
+	return returnOk
+}
+
+// reportSpec describes one optional report format and how to write it.
+type reportSpec struct {
+	enabled  bool
+	write    func() error
+	savedMsg string
+	fileName string
+}
+
+// writeReport writes one report when it is enabled, returning an error exit code
+// on failure and logging a verbose confirmation on success.
+func writeReport(opts *models.Options, s reportSpec) int {
+	if !s.enabled {
+		return returnOk
 	}
-	if opts.Logger.GitLab {
-		if err := reportmaker.MakeGitLabReport(*report, moduleRoot); err != nil {
-			return exitError(err.Error())
-		}
-		console.Verbose(opts, "Save GitLab report into %q", models.ReportGitLabJSONFileName)
+	if err := s.write(); err != nil {
+		return exitError(err.Error())
 	}
-	if opts.Config.HTMLOutput || opts.General.HTMLOutput {
-		if err := reportmaker.MakeHTMLReport(*report); err != nil {
-			return exitError(err.Error())
-		}
-		console.Verbose(opts, "Save report into %q", models.ReportHTMLFileName)
-	}
+	console.Verbose(opts, s.savedMsg, s.fileName)
 	return returnOk
 }
 
@@ -822,77 +935,80 @@ func checkQualityGates(opts *models.Options, report *models.Report, bl *baseline
 
 	// CLI flag is -1 when not provided; config file defaults to 0 when not set.
 	// CLI always wins when explicitly set (>= 0); fall back to config otherwise.
-	minMsi := opts.Score.MinMsi
-	if minMsi < 0 {
-		minMsi = opts.Config.MinMsi
-	}
-	minCoveredMsi := opts.Score.MinCoveredMsi
-	if minCoveredMsi < 0 {
-		minCoveredMsi = opts.Config.MinCoveredMsi
-	}
+	minMsi := resolveThreshold(opts.Score.MinMsi, opts.Config.MinMsi)
+	minCoveredMsi := resolveThreshold(opts.Score.MinCoveredMsi, opts.Config.MinCoveredMsi)
 
-	failed := false
-	if opts.Score.FailOnEscaped {
-		// With a baseline active, only new escapes (not in baseline) trigger failure.
-		newEscapes := bl.NewEscapes(report.Escaped, moduleRoot)
-		if len(newEscapes) > 0 {
-			qualifier := ""
-			if bl != nil {
-				qualifier = "new "
-			}
-			fmt.Fprintf(os.Stderr, "%d %smutant(s) escaped — kill them or run --update-baseline to accept\n", len(newEscapes), qualifier)
-			failed = true
-		}
-	}
-	msiPct := report.Stats.Msi * 100
-	covMsiPct := report.Stats.CoveredCodeMsi * 100
-	if minMsi >= 0 && msiPct < minMsi {
-		fmt.Fprintf(os.Stderr, "MSI %.2f%% is below minimum required %.2f%%\n", msiPct, minMsi)
-		failed = true
-	}
-	if minCoveredMsi > 0 {
-		if !report.HasCoverage {
-			fmt.Fprintf(os.Stderr, "Covered MSI cannot be checked: --coverage was not enabled (score is always 0 without a profile)\n")
-			failed = true
-		} else if covMsiPct < minCoveredMsi {
-			fmt.Fprintf(os.Stderr, "Covered MSI %.2f%% is below minimum required %.2f%%\n", covMsiPct, minCoveredMsi)
-			failed = true
-		}
-	}
-	if failed {
+	// Evaluate every gate so all failures are reported, not just the first.
+	escapedFail := checkEscapedGate(opts, report, bl, moduleRoot)
+	msiFail := checkMsiGate(report, minMsi)
+	coveredFail := checkCoveredMsiGate(report, minCoveredMsi)
+
+	if escapedFail || msiFail || coveredFail {
 		return returnMsiThresholdNotMet
 	}
 	return returnOk
 }
 
-func mutate(
-	opts *models.Options,
-	mutators []mutatorItem,
-	mutationBlackList map[string]struct{},
-	mutationID int,
-	pkg *types.Package,
-	info *types.Info,
-	originalFile string,
-	fset *token.FileSet,
-	src ast.Node,
-	node ast.Node,
-	mutatedFile string,
-	execs []string,
-	stats *models.Report,
-	mu *sync.Mutex,
-	filters []filter.NodeFilter,
-	absFile string,
-	coverProfile *coverage.Profile,
-	gitChangedLines gitdiff.ChangedLines,
-	jobs chan<- execJob,
-	perTestProf *coverage.PerTestProfile,
-	extraTestFlags []string,
-	dryRunGlobalTotals map[string]int,
-	runMutantID string,
-	moduleRoot string,
-) int {
+// resolveThreshold returns the CLI value when it was explicitly set (>= 0),
+// otherwise the config fallback.
+func resolveThreshold(cliValue, configValue float64) float64 {
+	if cliValue < 0 {
+		return configValue
+	}
+	return cliValue
+}
+
+// checkEscapedGate reports whether --fail-on-escaped should fail the run. With a
+// baseline active, only escapes not already in the baseline count.
+func checkEscapedGate(opts *models.Options, report *models.Report, bl *baseline.File, moduleRoot string) bool {
+	if !opts.Score.FailOnEscaped {
+		return false
+	}
+	newEscapes := bl.NewEscapes(report.Escaped, moduleRoot)
+	if len(newEscapes) == 0 {
+		return false
+	}
+	qualifier := ""
+	if bl != nil {
+		qualifier = "new "
+	}
+	fmt.Fprintf(os.Stderr, "%d %smutant(s) escaped — kill them or run --update-baseline to accept\n", len(newEscapes), qualifier)
+	return true
+}
+
+// checkMsiGate reports whether the overall MSI is below the required minimum.
+func checkMsiGate(report *models.Report, minMsi float64) bool {
+	msiPct := report.Stats.Msi * 100
+	if minMsi >= 0 && msiPct < minMsi {
+		fmt.Fprintf(os.Stderr, "MSI %.2f%% is below minimum required %.2f%%\n", msiPct, minMsi)
+		return true
+	}
+	return false
+}
+
+// checkCoveredMsiGate reports whether the covered-code MSI gate fails, treating
+// a missing coverage profile as a failure when the gate is active.
+func checkCoveredMsiGate(report *models.Report, minCoveredMsi float64) bool {
+	if minCoveredMsi <= 0 {
+		return false
+	}
+	if !report.HasCoverage {
+		fmt.Fprintf(os.Stderr, "Covered MSI cannot be checked: --coverage was not enabled (score is always 0 without a profile)\n")
+		return true
+	}
+	covMsiPct := report.Stats.CoveredCodeMsi * 100
+	if covMsiPct < minCoveredMsi {
+		fmt.Fprintf(os.Stderr, "Covered MSI %.2f%% is below minimum required %.2f%%\n", covMsiPct, minCoveredMsi)
+		return true
+	}
+	return false
+}
+
+// mutate applies every active mutator to node, writing mutations and enqueuing
+// exec jobs (or counting them in dry-run mode). Returns the next mutation ID.
+func (r *mutationRun) mutate(fc *fileContext, node ast.Node, mutationID int, dryRunGlobalTotals map[string]int) int {
 	// Read the original source once per file — it never changes during mutation.
-	originalSourceCode, err := os.ReadFile(originalFile)
+	originalSourceCode, err := os.ReadFile(fc.sourceFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -905,89 +1021,111 @@ func mutate(
 
 	// In dry-run mode collect per-mutator counts and print after the file is done.
 	var dryRunCounts map[string]int
-	if opts.General.DryRun {
+	if r.opts.General.DryRun {
 		dryRunCounts = make(map[string]int)
 	}
 
-	for _, m := range mutators {
-		console.Debug(opts, "Mutator %s", m.Name)
-
-		mutatorAnnotated := annotation.DecoratorFilter(m.Mutator, m.Name, filters...)
-
-		changed := mutago.MutateWalk(pkg, info, node, mutatorAnnotated)
-
-		for {
-			_, ok := <-changed
-			if !ok {
-				break
-			}
-
-			if opts.General.DryRun {
-				// Count only — no file writes, no job submission.
-				dryRunCounts[m.Name]++
-				if dryRunGlobalTotals != nil {
-					dryRunGlobalTotals[m.Name]++
-				}
-				changed <- true
-				<-changed
-				changed <- true
-				mutationID++
-				continue
-			}
-
-			mutant := models.Mutant{}
-			mutant.Mutator.MutatorName = m.Name
-			mutant.Mutator.OriginalFilePath = originalFile
-			mutant.Mutator.OriginalSourceCode = string(originalSourceCode)
-
-			mutationFile := fmt.Sprintf("%s.%d", mutatedFile, mutationID)
-			checksum, duplicate, err := saveAST(mutationBlackList, mutationFile, fset, src, fmtOriginal)
-			if err != nil {
-				out := fmt.Sprintf("INTERNAL ERROR %s\n", err.Error())
-				fmt.Printf("%s", out)
-				mutant.ProcessOutput = out
-				mu.Lock()
-				stats.Errored = append(stats.Errored, mutant)
-				stats.Stats.ErrorCount++
-				mu.Unlock()
-			} else if duplicate {
-				console.Debug(opts, "%q is a duplicate, we ignore it", mutationFile)
-				mu.Lock()
-				stats.Stats.DuplicatedCount++
-				mu.Unlock()
-			} else {
-				console.Debug(opts, "Save mutation into %q with checksum %s", mutationFile, checksum)
-				if jobs != nil {
-					jobs <- execJob{
-						opts:            opts,
-						pkg:             pkg,
-						originalFile:    originalFile,
-						mutationFile:    mutationFile,
-						mutant:          mutant,
-						absFile:         absFile,
-						coverProfile:    coverProfile,
-						gitChangedLines: gitChangedLines,
-						execs:           execs,
-						perTestProf:     perTestProf,
-						extraTestFlags:  extraTestFlags,
-						runMutantID:     runMutantID,
-						moduleRoot:      moduleRoot,
-					}
-				}
-			}
-
-			// Release the MutateWalk goroutine to reset the AST and advance.
-			changed <- true
-			<-changed
-			changed <- true
-
-			mutationID++
-		}
+	for _, m := range r.mutators {
+		mutationID = r.applyMutator(m, fc, node, mutationID, originalSourceCode, fmtOriginal, dryRunCounts, dryRunGlobalTotals)
 	}
 
-	printDryRunFileSummary(originalFile, dryRunCounts)
+	printDryRunFileSummary(fc.sourceFile, dryRunCounts)
 
 	return mutationID
+}
+
+// applyMutator drives a single mutator over node, processing each generated
+// mutation and advancing the MutateWalk goroutine. Returns the next mutation ID.
+func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node, mutationID int, originalSourceCode, fmtOriginal []byte, dryRunCounts, dryRunGlobalTotals map[string]int) int {
+	console.Debug(r.opts, "Mutator %s", m.Name)
+
+	mutatorAnnotated := annotation.DecoratorFilter(m.Mutator, m.Name, fc.filters...)
+	changed := mutago.MutateWalk(fc.pkg, fc.info, node, mutatorAnnotated)
+
+	for {
+		_, ok := <-changed
+		if !ok {
+			break
+		}
+
+		r.recordOneMutation(m, fc, mutationID, originalSourceCode, fmtOriginal, dryRunCounts, dryRunGlobalTotals)
+
+		// Release the MutateWalk goroutine to reset the AST and advance.
+		changed <- true
+		<-changed
+		changed <- true
+
+		mutationID++
+	}
+	return mutationID
+}
+
+// recordOneMutation tallies (dry run) or writes and enqueues a single generated
+// mutation.
+func (r *mutationRun) recordOneMutation(m mutatorItem, fc *fileContext, mutationID int, originalSourceCode, fmtOriginal []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
+	if r.opts.General.DryRun {
+		countDryRunMutation(m.Name, dryRunCounts, dryRunGlobalTotals)
+		return
+	}
+	r.processMutation(m, fc, mutationID, originalSourceCode, fmtOriginal)
+}
+
+// countDryRunMutation records a would-be mutation in the per-file and global
+// dry-run tallies.
+func countDryRunMutation(name string, dryRunCounts, dryRunGlobalTotals map[string]int) {
+	dryRunCounts[name]++
+	if dryRunGlobalTotals != nil {
+		dryRunGlobalTotals[name]++
+	}
+}
+
+// processMutation writes one mutation to disk and either records a duplicate, an
+// internal error, or enqueues an exec job. Must not be called in dry-run mode.
+func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutationID int, originalSourceCode, fmtOriginal []byte) {
+	mutant := models.Mutant{}
+	mutant.Mutator.MutatorName = m.Name
+	mutant.Mutator.OriginalFilePath = fc.sourceFile
+	mutant.Mutator.OriginalSourceCode = string(originalSourceCode)
+
+	mutationFile := fmt.Sprintf("%s.%d", fc.mutatedFile, mutationID)
+	checksum, duplicate, err := saveAST(r.blacklist, mutationFile, fc.fset, fc.src, fmtOriginal)
+	if err != nil {
+		out := fmt.Sprintf("INTERNAL ERROR %s\n", err.Error())
+		fmt.Printf("%s", out)
+		mutant.ProcessOutput = out
+		r.mu.Lock()
+		r.report.Errored = append(r.report.Errored, mutant)
+		r.report.Stats.ErrorCount++
+		r.mu.Unlock()
+		return
+	}
+	if duplicate {
+		console.Debug(r.opts, "%q is a duplicate, we ignore it", mutationFile)
+		r.mu.Lock()
+		r.report.Stats.DuplicatedCount++
+		r.mu.Unlock()
+		return
+	}
+	if r.jobs == nil {
+		return
+	}
+
+	console.Debug(r.opts, "Save mutation into %q with checksum %s", mutationFile, checksum)
+	r.jobs <- execJob{
+		opts:            r.opts,
+		pkg:             fc.pkg,
+		originalFile:    fc.sourceFile,
+		mutationFile:    mutationFile,
+		mutant:          mutant,
+		absFile:         fc.absFile,
+		coverProfile:    fc.coverProfile,
+		gitChangedLines: r.gitChangedLines,
+		execs:           r.execs,
+		perTestProf:     fc.perTestProf,
+		extraTestFlags:  r.extraTestFlags,
+		runMutantID:     r.opts.Exec.RunMutantID,
+		moduleRoot:      r.moduleRoot,
+	}
 }
 
 // printDryRunFileSummary prints per-mutator dry-run counts for a single file.
@@ -995,11 +1133,11 @@ func printDryRunFileSummary(originalFile string, counts map[string]int) {
 	if len(counts) == 0 {
 		return
 	}
+	display := originalFile
 	if rel, err := filepath.Rel(".", originalFile); err == nil {
-		fmt.Printf("%s\n", filepath.ToSlash(rel))
-	} else {
-		fmt.Printf("%s\n", originalFile)
+		display = filepath.ToSlash(rel)
 	}
+	fmt.Printf("%s\n", display)
 	mutatorNames := make([]string, 0, len(counts))
 	for name := range counts {
 		mutatorNames = append(mutatorNames, name)
@@ -1010,6 +1148,38 @@ func printDryRunFileSummary(originalFile string, counts map[string]int) {
 	}
 }
 
+// skipForGitDiff reports whether the mutation falls outside the --git-diff-lines
+// filter and should not be tested.
+func skipForGitDiff(job execJob) bool {
+	if job.gitChangedLines == nil {
+		return false
+	}
+	diffOut, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", job.originalFile, job.mutationFile).CombinedOutput()
+	lineNum := int(parser.FindOriginalStartLine(diffOut))
+	if gitdiff.IsLineChanged(job.gitChangedLines, job.absFile, lineNum) {
+		return false
+	}
+	console.Debug(job.opts, "Skip %q at line %d (not in git diff)", job.mutationFile, lineNum)
+	return true
+}
+
+// skipForMutantID reports whether the job's computed mutant ID does not match
+// the requested --run-mutant-id value.
+func skipForMutantID(job execJob) bool {
+	if job.runMutantID == "" {
+		return false
+	}
+	diffOut, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", job.originalFile, job.mutationFile).CombinedOutput()
+	relFile := job.absFile
+	if job.moduleRoot != "" {
+		if rel, err := filepath.Rel(job.moduleRoot, job.absFile); err == nil {
+			relFile = filepath.ToSlash(rel)
+		}
+	}
+	id := baseline.MutantID(relFile, job.mutant.Mutator.MutatorName, string(diffOut))
+	return id != job.runMutantID
+}
+
 // runExecJob executes a single mutation job in a worker goroutine.
 // It applies the git-diff filter, runs go test via overlay (or --exec),
 // checks coverage, and records the result under mu.
@@ -1017,27 +1187,8 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex) {
 	opts := job.opts
 	mutant := job.mutant
 
-	if job.gitChangedLines != nil {
-		diffOut, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", job.originalFile, job.mutationFile).CombinedOutput()
-		lineNum := int(parser.FindOriginalStartLine(diffOut))
-		if !gitdiff.IsLineChanged(job.gitChangedLines, job.absFile, lineNum) {
-			console.Debug(opts, "Skip %q at line %d (not in git diff)", job.mutationFile, lineNum)
-			return
-		}
-	}
-
-	if job.runMutantID != "" {
-		diffOut, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", job.originalFile, job.mutationFile).CombinedOutput()
-		relFile := job.absFile
-		if job.moduleRoot != "" {
-			if rel, err := filepath.Rel(job.moduleRoot, job.absFile); err == nil {
-				relFile = filepath.ToSlash(rel)
-			}
-		}
-		id := baseline.MutantID(relFile, mutant.Mutator.MutatorName, string(diffOut))
-		if id != job.runMutantID {
-			return
-		}
+	if skipForGitDiff(job) || skipForMutantID(job) {
+		return
 	}
 
 	execExitCode := mutateExec(opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
@@ -1063,71 +1214,97 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	recordMutantResult(opts, stats, mutant, execExitCode, notCovered, msg)
+	if notCovered {
+		recordNotCovered(opts, stats, mutant, msg)
+		return
+	}
+	recordMutantResult(opts, stats, mutant, execExitCode, msg)
 }
 
 // recordMutantResult appends the mutant to the appropriate stats bucket and prints status.
 // Must be called with mu held.
-func recordMutantResult(opts *models.Options, stats *models.Report, mutant models.Mutant, execExitCode int, notCovered bool, msg string) {
-	if notCovered {
-		out := fmt.Sprintf("NOT COVERED %s\n", msg)
-		if statusVisible(opts, 'n') {
-			console.PrintSkip(out)
-		}
-		mutant.ProcessOutput = out
-		stats.NotCovered = append(stats.NotCovered, mutant)
-		stats.Stats.NotCoveredCount++
-		return
-	}
+func recordMutantResult(opts *models.Options, stats *models.Report, mutant models.Mutant, execExitCode int, msg string) {
 	switch execExitCode {
 	case 0: // Tests failed → mutation killed
-		out := fmt.Sprintf("%s %s\n", console.KILLED, msg)
-		if statusVisible(opts, 'k') {
-			console.PrintKilled(out)
-		}
-		if opts.General.Debug && !opts.General.NoDiffs && mutant.Diff != "" {
-			console.PrintDiff([]byte(mutant.Diff))
-		}
-		mutant.ProcessOutput = out
-		stats.Killed = append(stats.Killed, mutant)
-		stats.Stats.KilledCount++
+		recordKilled(opts, stats, mutant, msg)
 	case 1: // Tests passed → mutation escaped
-		out := fmt.Sprintf("%s %s\n", console.ESCAPED, msg)
-		if statusVisible(opts, 'e') {
-			console.PrintEscaped(out)
-		}
-		if !opts.General.NoDiffs && statusVisible(opts, 'e') && mutant.Diff != "" {
-			console.PrintDiff([]byte(mutant.Diff))
-		}
-		mutant.ProcessOutput = out
-		stats.Escaped = append(stats.Escaped, mutant)
-		stats.Stats.EscapedCount++
+		recordEscaped(opts, stats, mutant, msg)
 	case 2: // Did not compile → skip
-		out := fmt.Sprintf("SKIP %s\n", msg)
-		if statusVisible(opts, 's') {
-			console.PrintSkip(out)
-		}
-		if opts.General.Verbose {
-			fmt.Println("Mutation did not compile")
-		}
-		if opts.General.Debug && !opts.General.NoDiffs && mutant.Diff != "" {
+		recordSkipped(opts, stats, mutant, msg)
+	default:
+		recordErrored(opts, stats, mutant, msg)
+	}
+}
+
+// recordNotCovered records a mutant on a line not reached by any test.
+// Must be called with mu held.
+func recordNotCovered(opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+	out := fmt.Sprintf("NOT COVERED %s\n", msg)
+	if statusVisible(opts, 'n') {
+		console.PrintSkip(out)
+	}
+	mutant.ProcessOutput = out
+	stats.NotCovered = append(stats.NotCovered, mutant)
+	stats.Stats.NotCoveredCount++
+}
+
+// recordKilled records a mutant whose tests failed. Must be called with mu held.
+func recordKilled(opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+	out := fmt.Sprintf("%s %s\n", console.KILLED, msg)
+	if statusVisible(opts, 'k') {
+		console.PrintKilled(out)
+	}
+	if opts.General.Debug && !opts.General.NoDiffs && mutant.Diff != "" {
+		console.PrintDiff([]byte(mutant.Diff))
+	}
+	mutant.ProcessOutput = out
+	stats.Killed = append(stats.Killed, mutant)
+	stats.Stats.KilledCount++
+}
+
+// recordEscaped records a mutant whose tests passed. Must be called with mu held.
+func recordEscaped(opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+	out := fmt.Sprintf("%s %s\n", console.ESCAPED, msg)
+	if statusVisible(opts, 'e') {
+		console.PrintEscaped(out)
+	}
+	if !opts.General.NoDiffs && statusVisible(opts, 'e') && mutant.Diff != "" {
+		console.PrintDiff([]byte(mutant.Diff))
+	}
+	mutant.ProcessOutput = out
+	stats.Escaped = append(stats.Escaped, mutant)
+	stats.Stats.EscapedCount++
+}
+
+// recordSkipped records a mutant that did not compile. Must be called with mu held.
+func recordSkipped(opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+	out := fmt.Sprintf("SKIP %s\n", msg)
+	if statusVisible(opts, 's') {
+		console.PrintSkip(out)
+	}
+	if opts.General.Verbose {
+		fmt.Println("Mutation did not compile")
+	}
+	if opts.General.Debug && !opts.General.NoDiffs && mutant.Diff != "" {
+		console.PrintDiff([]byte(mutant.Diff))
+	}
+	mutant.ProcessOutput = out
+	stats.Skipped = append(stats.Skipped, mutant)
+	stats.Stats.SkippedCount++
+}
+
+// recordErrored records a mutant with an unexpected exit code. Must be called with mu held.
+func recordErrored(opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+	out := fmt.Sprintf("UNKNOWN exit code for %s\n", msg)
+	if statusVisible(opts, 'x') {
+		console.PrintUnknown(out)
+		if !opts.General.NoDiffs && mutant.Diff != "" {
 			console.PrintDiff([]byte(mutant.Diff))
 		}
-		mutant.ProcessOutput = out
-		stats.Skipped = append(stats.Skipped, mutant)
-		stats.Stats.SkippedCount++
-	default:
-		out := fmt.Sprintf("UNKNOWN exit code for %s\n", msg)
-		if statusVisible(opts, 'x') {
-			console.PrintUnknown(out)
-			if !opts.General.NoDiffs && mutant.Diff != "" {
-				console.PrintDiff([]byte(mutant.Diff))
-			}
-		}
-		mutant.ProcessOutput = out
-		stats.Errored = append(stats.Errored, mutant)
-		stats.Stats.ErrorCount++
 	}
+	mutant.ProcessOutput = out
+	stats.Errored = append(stats.Errored, mutant)
+	stats.Stats.ErrorCount++
 }
 
 func mutateExec(
@@ -1164,12 +1341,8 @@ func runBuiltinExec(
 	startLine := parser.FindOriginalStartLine(diff)
 	mutant.Mutator.OriginalStartLine = startLine
 
-	var diffExitCode int
-	if err == nil {
-		diffExitCode = 0
-	} else if e, ok := err.(*exec.ExitError); ok {
-		diffExitCode = e.Sys().(syscall.WaitStatus).ExitStatus()
-	} else {
+	diffExitCode, ok := commandExitCode(err)
+	if !ok {
 		fmt.Fprintf(os.Stderr, "mutago: diff error: %v\n", err)
 		return 3
 	}
@@ -1180,37 +1353,21 @@ func runBuiltinExec(
 
 	absOrig, _ := filepath.Abs(file)
 	absMut, _ := filepath.Abs(mutationFile)
-	overlayData, _ := json.Marshal(struct {
-		Replace map[string]string `json:"Replace"`
-	}{Replace: map[string]string{absOrig: absMut}})
-
-	overlayFile, err := os.CreateTemp("", "mutago-overlay-*.json")
+	overlayName, err := writeOverlayFile(absOrig, absMut)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mutago: cannot create overlay file: %v\n", err)
 		return 3
 	}
-	if _, err := overlayFile.Write(overlayData); err != nil {
-		overlayFile.Close()
-		os.Remove(overlayFile.Name())
-		fmt.Fprintf(os.Stderr, "mutago: cannot write overlay file: %v\n", err)
-		return 3
-	}
-	overlayFile.Close()
-	defer os.Remove(overlayFile.Name())
+	defer os.Remove(overlayName)
 
 	pkgName := pkg.Path()
 	if opts.Test.Recursive {
 		pkgName += "/..."
 	}
 
-	var runFilter string
-	if perTestProf != nil && startLine > 0 {
-		if tests := perTestProf.CoveringTests(absFile, int(startLine)); len(tests) > 0 {
-			runFilter = "^(" + strings.Join(tests, "|") + ")$"
-		}
-	}
+	runFilter := perTestRunFilter(perTestProf, absFile, int(startLine))
 
-	goTestArgs := []string{"test", "-overlay=" + overlayFile.Name(), "-timeout", fmt.Sprintf("%ds", opts.Exec.Timeout)}
+	goTestArgs := []string{"test", "-overlay=" + overlayName, "-timeout", fmt.Sprintf("%ds", opts.Exec.Timeout)}
 	goTestArgs = append(goTestArgs, extraTestFlags...)
 	if runFilter != "" {
 		goTestArgs = append(goTestArgs, "-run", runFilter)
@@ -1221,12 +1378,8 @@ func runBuiltinExec(
 	goTestCmd.Env = os.Environ()
 	test, err := goTestCmd.CombinedOutput()
 
-	var execExitCode int
-	if err == nil {
-		execExitCode = 0
-	} else if e, ok := err.(*exec.ExitError); ok {
-		execExitCode = e.Sys().(syscall.WaitStatus).ExitStatus()
-	} else {
+	execExitCode, ok := commandExitCode(err)
+	if !ok {
 		fmt.Fprintf(os.Stderr, "mutago: go test error: %v\n", err)
 		return 3
 	}
@@ -1236,11 +1389,65 @@ func runBuiltinExec(
 	}
 
 	mutant.Diff = string(diff)
-	// Map go test exit codes: 0 (tests passed) means the mutation escaped; 1 (tests failed) means killed.
-	if execExitCode == 0 {
-		return 1
+	return mapTestExitToResult(execExitCode)
+}
+
+// commandExitCode maps an exec error to a process exit code. ok is false when
+// the command could not be run at all, as opposed to running and exiting
+// non-zero.
+func commandExitCode(err error) (code int, ok bool) {
+	if err == nil {
+		return 0, true
 	}
-	if execExitCode == 1 {
+	if e, isExit := err.(*exec.ExitError); isExit {
+		return e.Sys().(syscall.WaitStatus).ExitStatus(), true
+	}
+	return 0, false
+}
+
+// writeOverlayFile writes a `go build` overlay mapping absOrig→absMut and
+// returns the overlay file path. The caller is responsible for removing it.
+func writeOverlayFile(absOrig, absMut string) (string, error) {
+	overlayData, err := json.Marshal(struct {
+		Replace map[string]string `json:"Replace"`
+	}{Replace: map[string]string{absOrig: absMut}})
+	if err != nil {
+		return "", err
+	}
+
+	f, err := os.CreateTemp("", "mutago-overlay-*.json")
+	if err != nil {
+		return "", err
+	}
+	if _, err := f.Write(overlayData); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), f.Close()
+}
+
+// perTestRunFilter returns a -run regexp restricting the run to the tests that
+// cover absFile at startLine, or "" when per-test data is unavailable.
+func perTestRunFilter(perTestProf *coverage.PerTestProfile, absFile string, startLine int) string {
+	if perTestProf == nil || startLine <= 0 {
+		return ""
+	}
+	tests := perTestProf.CoveringTests(absFile, startLine)
+	if len(tests) == 0 {
+		return ""
+	}
+	return "^(" + strings.Join(tests, "|") + ")$"
+}
+
+// mapTestExitToResult maps a go test exit code to mutago's result code: 0 (tests
+// passed → mutation escaped) becomes 1, 1 (tests failed → killed) becomes 0,
+// and any other code is passed through unchanged.
+func mapTestExitToResult(execExitCode int) int {
+	switch execExitCode {
+	case 0:
+		return 1
+	case 1:
 		return 0
 	}
 	return execExitCode
@@ -1275,12 +1482,8 @@ func runCustomExec(opts *models.Options, pkg *types.Package, file string, mutati
 	}
 	err := execCommand.Wait()
 
-	var execExitCode int
-	if err == nil {
-		execExitCode = 0
-	} else if e, ok := err.(*exec.ExitError); ok {
-		execExitCode = e.Sys().(syscall.WaitStatus).ExitStatus()
-	} else {
+	execExitCode, ok := commandExitCode(err)
+	if !ok {
 		fmt.Fprintf(os.Stderr, "mutago: exec wait error: %v\n", err)
 		return 3
 	}

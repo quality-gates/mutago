@@ -2,15 +2,8 @@ package annotation
 
 import (
 	"go/ast"
-	"go/token"
 	"strings"
 )
-
-// FunctionAnnotation represents a collection of exclusions of function declarations.
-type FunctionAnnotation struct {
-	Exclusions map[token.Pos]struct{}
-	Name       string
-}
 
 // collectFunctions records all nodes within a function declaration to be excluded from mutation.
 // It collects both the function declaration itself and all its child nodes.
