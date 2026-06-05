@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.7.2] — 2026-06-05
 
 ### Added
 - Coverage-guided fuzz tests (`FuzzParse`, `FuzzParseDiffOutput`, `FuzzParseProfile`, `FuzzMutantID`, `FuzzLoad`) with seed corpora for the input-parsing surface in `internal/gitdiff`, `internal/parser`, `internal/coverage`, and `internal/baseline`, plus a saved regression seed for the overflow above.
@@ -366,3 +366,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.6.16]: https://github.com/quality-gates/mutago/compare/v2.6.15...v2.6.16
 [v2.7.0]: https://github.com/quality-gates/mutago/compare/v2.6.16...v2.7.0
 [v2.7.1]: https://github.com/quality-gates/mutago/compare/v2.7.0...v2.7.1
+[v2.7.2]: https://github.com/quality-gates/mutago/compare/v2.7.1...v2.7.2
