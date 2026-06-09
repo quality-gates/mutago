@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- `FindOriginalStartLine` now reports the line after a zero-length original range for pure additions, including line 1 for additions to an empty file. It also validates hunk ranges and body prefixes, returning the fallback line instead of accepting malformed diffs or overflowing `int64` line coordinates.
+
 ### Changed
 - Bumped the `messgo` CI quality gate from `v0.1.1` to `v0.1.9`. The newer release was verified locally with the workflow's `go,codesize` rules and the LCOM rule; both are clean for production Go code.
 
@@ -386,3 +389,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.7.1]: https://github.com/quality-gates/mutago/compare/v2.7.0...v2.7.1
 [v2.7.2]: https://github.com/quality-gates/mutago/compare/v2.7.1...v2.7.2
 [v2.7.3]: https://github.com/quality-gates/mutago/compare/v2.7.2...v2.7.3
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.7.3...HEAD
