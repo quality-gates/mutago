@@ -16,7 +16,6 @@ func foo() int {
 			n++
 		} else if i == 1 {
 			_ = n
-
 		} else {
 			n += 3
 		}

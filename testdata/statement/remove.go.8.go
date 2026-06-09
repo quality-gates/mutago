@@ -18,7 +18,6 @@ func foo() int {
 			n += 2
 		} else {
 			_ = n
-
 		}
 
 		n++

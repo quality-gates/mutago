@@ -28,6 +28,7 @@ func foo() int {
 	}
 
 	n++
+
 	_ = n
 
 	bar()
