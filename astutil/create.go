@@ -26,9 +26,9 @@ func CreateNoopOfStatements(pkg *types.Package, info *types.Info, stmts []ast.St
 		pos = anchorPos(stmts[0])
 	}
 
-	var ids []ast.Expr
-	for _, stmt := range stmts {
-		ids = append(ids, IdentifiersInStatement(pkg, info, stmt)...)
+	ids := identifiersInStatements(pkg, info, stmts)
+	for _, id := range ids {
+		anchorExpression(id, pos)
 	}
 
 	if len(ids) == 0 {
@@ -47,6 +47,18 @@ func CreateNoopOfStatements(pkg *types.Package, info *types.Info, stmts []ast.St
 		Rhs:    ids,
 		Tok:    token.ASSIGN,
 		TokPos: pos,
+	}
+}
+
+func anchorExpression(expr ast.Expr, pos token.Pos) {
+	switch n := expr.(type) {
+	case *ast.Ident:
+		n.NamePos = pos
+	case *ast.SelectorExpr:
+		anchorExpression(n.X, pos)
+		anchorExpression(n.Sel, pos)
+	case *ast.CompositeLit:
+		anchorExpression(n.Type, pos)
 	}
 }
 

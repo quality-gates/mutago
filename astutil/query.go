@@ -8,12 +8,19 @@ import (
 
 // IdentifiersInStatement returns all identifiers with their found in a statement.
 func IdentifiersInStatement(pkg *types.Package, info *types.Info, stmt ast.Stmt) []ast.Expr {
+	return identifiersInStatements(pkg, info, []ast.Stmt{stmt})
+}
+
+func identifiersInStatements(pkg *types.Package, info *types.Info, stmts []ast.Stmt) []ast.Expr {
 	w := &identifierWalker{
-		pkg:  pkg,
-		info: info,
+		pkg:      pkg,
+		info:     info,
+		excluded: variableDefinitions(info, stmts),
 	}
 
-	ast.Walk(w, stmt)
+	for _, stmt := range stmts {
+		ast.Walk(w, stmt)
+	}
 
 	return w.identifiers
 }
@@ -22,6 +29,31 @@ type identifierWalker struct {
 	identifiers []ast.Expr
 	pkg         *types.Package
 	info        *types.Info
+	excluded    map[types.Object]struct{}
+}
+
+func variableDefinitions(info *types.Info, stmts []ast.Stmt) map[types.Object]struct{} {
+	definitions := make(map[types.Object]struct{})
+	for _, stmt := range stmts {
+		ast.Inspect(stmt, func(node ast.Node) bool {
+			ident, ok := node.(*ast.Ident)
+			if !ok {
+				return true
+			}
+
+			object, ok := info.Defs[ident]
+			if !ok {
+				return true
+			}
+			if _, ok := object.(*types.Var); ok {
+				definitions[object] = struct{}{}
+			}
+
+			return true
+		})
+	}
+
+	return definitions
 }
 
 func checkForSelectorExpr(node ast.Expr) bool {
@@ -57,13 +89,22 @@ func (w *identifierWalker) visitIdent(n *ast.Ident) ast.Visitor {
 		return nil
 	}
 
-	if obj, ok := w.info.Uses[n]; ok {
-		if _, ok := obj.(*types.Var); !ok {
-			return nil
-		}
+	if _, ok := w.info.Defs[n]; ok {
+		return nil
 	}
 
-	// FIXME instead of manually creating a new node, clone it and trim the node from its comments and position https://github.com/zimmski/go-mutesting/issues/49
+	obj, ok := w.info.Uses[n]
+	if !ok {
+		return nil
+	}
+	variable, ok := obj.(*types.Var)
+	if !ok || variable.IsField() {
+		return nil
+	}
+	if _, ok := w.excluded[obj]; ok {
+		return nil
+	}
+
 	w.identifiers = append(w.identifiers, &ast.Ident{
 		Name: n.Name,
 	})
@@ -74,22 +115,54 @@ func (w *identifierWalker) visitIdent(n *ast.Ident) ast.Visitor {
 // visitSelector records selector expressions, wrapping composite types in a
 // composite literal so they can be instantiated.
 func (w *identifierWalker) visitSelector(n *ast.SelectorExpr) ast.Visitor {
-	if !checkForSelectorExpr(n) {
-		return nil
+	if n.Sel == nil || !checkForSelectorExpr(n) {
+		return w
+	}
+	if root := selectorRoot(n); root != nil {
+		if obj, ok := w.info.Uses[root]; ok {
+			if _, excluded := w.excluded[obj]; excluded {
+				return nil
+			}
+		}
 	}
 
-	// FIXME we need to clone the node and trim comments and position recursively https://github.com/zimmski/go-mutesting/issues/49
+	selector := cloneSelector(n)
 	if w.shouldInitialize(n) {
 		w.identifiers = append(w.identifiers, &ast.CompositeLit{
-			Type: n,
+			Type: selector,
 		})
 
 		return nil
 	}
 
-	w.identifiers = append(w.identifiers, n)
+	w.identifiers = append(w.identifiers, selector)
 
 	return nil
+}
+
+func selectorRoot(expr ast.Expr) *ast.Ident {
+	switch n := expr.(type) {
+	case *ast.Ident:
+		return n
+	case *ast.SelectorExpr:
+		return selectorRoot(n.X)
+	default:
+		return nil
+	}
+}
+
+func cloneSelector(n *ast.SelectorExpr) *ast.SelectorExpr {
+	cloned := &ast.SelectorExpr{
+		Sel: &ast.Ident{Name: n.Sel.Name},
+	}
+	switch x := n.X.(type) {
+	case *ast.Ident:
+		cloned.X = &ast.Ident{Name: x.Name}
+	case *ast.SelectorExpr:
+		cloned.X = cloneSelector(x)
+	}
+
+	return cloned
 }
 
 // shouldInitialize reports whether the selector refers to a composite type
