@@ -18,12 +18,12 @@ func MutatorCase(pkg *types.Package, info *types.Info, node ast.Node) []mutator.
 	if !ok {
 		return nil
 	}
+	if len(n.Body) == 0 {
+		return nil
+	}
 
 	old := n.Body
-	position := n.Pos()
-	if len(n.Body) > 0 {
-		position = statementPosition(n.Body[0])
-	}
+	position := statementPosition(n.Body[0])
 
 	return []mutator.Mutation{
 		{
