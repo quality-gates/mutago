@@ -46,8 +46,9 @@ func notMutations(exprPtr *ast.Expr) []mutator.Mutation {
 	inner := unary.X
 	return []mutator.Mutation{
 		{
-			Change: func() { *exprPtr = inner },
-			Reset:  func() { *exprPtr = original },
+			Position: unary.OpPos,
+			Change:   func() { *exprPtr = inner },
+			Reset:    func() { *exprPtr = original },
 		},
 	}
 }

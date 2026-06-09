@@ -1,0 +1,3 @@
+json_output: true
+enable_mutators:
+  - statement/remove-self-assign

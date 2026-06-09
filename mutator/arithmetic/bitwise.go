@@ -47,6 +47,7 @@ func MutatorArithmeticBitwise(_ *types.Package, info *types.Info, node ast.Node)
 
 	return []mutator.Mutation{
 		{
+			Position: n.OpPos,
 			Change: func() {
 				n.Op = mutated
 			},

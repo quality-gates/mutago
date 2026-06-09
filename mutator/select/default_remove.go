@@ -32,6 +32,7 @@ func MutatorSelectDefaultRemove(_ *types.Package, _ *types.Info, node ast.Node) 
 
 		return []mutator.Mutation{
 			{
+				Position: comm.Case,
 				Change: func() {
 					n.Body.List = append(n.Body.List[:li], n.Body.List[li+1:]...)
 				},

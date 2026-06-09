@@ -43,8 +43,9 @@ func MutatorErrorfWrap(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 		// pos indexes the '%'; the 'w' sits one byte later.
 		mutated := lit.Value[:pos+1] + "v" + lit.Value[pos+2:]
 		mutations = append(mutations, mutator.Mutation{
-			Change: func() { lit.Value = mutated },
-			Reset:  func() { lit.Value = original },
+			Position: lit.ValuePos,
+			Change:   func() { lit.Value = mutated },
+			Reset:    func() { lit.Value = original },
 		})
 	}
 

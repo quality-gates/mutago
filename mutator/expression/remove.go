@@ -36,6 +36,7 @@ func MutatorRemoveTerm(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 
 	return []mutator.Mutation{
 		{
+			Position: x.Pos(),
 			Change: func() {
 				n.X = r
 			},
@@ -44,6 +45,7 @@ func MutatorRemoveTerm(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 			},
 		},
 		{
+			Position: y.Pos(),
 			Change: func() {
 				n.Y = r
 			},

@@ -46,10 +46,12 @@ func Mutator(t *testing.T, m mutator.Mutator, testFile string, count int) {
 	assert.Equal(t, count, n)
 
 	// Mutate all relevant nodes -> test whole mutation process
-	changed := mutago.MutateWalk(pkg, info, src, m)
+	changed := mutago.MutateWalkWithPositions(pkg, info, src, m)
 
 	for i := 0; i < count; i++ {
-		assert.True(t, <-changed)
+		mutation, ok := <-changed
+		assert.True(t, ok)
+		assert.True(t, mutation.Position.IsValid())
 
 		buf := new(bytes.Buffer)
 		err = printer.Fprint(buf, fset, src)
@@ -64,9 +66,10 @@ func Mutator(t *testing.T, m mutator.Mutator, testFile string, count int) {
 			assert.Nil(t, err)
 		}
 
-		changed <- true
+		changed <- mutago.PositionedMutation{}
 
-		assert.True(t, <-changed)
+		_, ok = <-changed
+		assert.True(t, ok)
 
 		buf = new(bytes.Buffer)
 		err = printer.Fprint(buf, fset, src)
@@ -74,7 +77,7 @@ func Mutator(t *testing.T, m mutator.Mutator, testFile string, count int) {
 
 		assert.Equal(t, string(data), buf.String())
 
-		changed <- true
+		changed <- mutago.PositionedMutation{}
 	}
 
 	_, ok := <-changed

@@ -41,6 +41,7 @@ func MutatorArithmeticAssignInvert(_ *types.Package, _ *types.Info, node ast.Nod
 
 	return []mutator.Mutation{
 		{
+			Position: n.TokPos,
 			Change: func() {
 				n.Tok = mutated
 			},

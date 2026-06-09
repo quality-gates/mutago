@@ -54,8 +54,9 @@ func boolLiteralMutation(exprPtr *ast.Expr) []mutator.Mutation {
 	mutated := ast.NewIdent(replacement)
 	return []mutator.Mutation{
 		{
-			Change: func() { *exprPtr = mutated },
-			Reset:  func() { *exprPtr = original },
+			Position: ident.Pos(),
+			Change:   func() { *exprPtr = mutated },
+			Reset:    func() { *exprPtr = original },
 		},
 	}
 }

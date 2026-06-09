@@ -3,6 +3,7 @@ package mutago
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
 	"strings"
 
@@ -61,8 +62,41 @@ func MutateWalk(pkg *types.Package, info *types.Info, node ast.Node, m mutator.M
 	return w.changed
 }
 
+// PositionedMutation identifies the original source position of a mutation.
+// The channel also carries zero values for the reset/advance handshake.
+type PositionedMutation struct {
+	Position token.Pos
+}
+
+// MutateWalkWithPositions behaves like MutateWalk but reports the source
+// position of each changed node. It is used by the CLI so filtering and report
+// locations come from the parsed source instead of printer-generated diffs.
+func MutateWalkWithPositions(pkg *types.Package, info *types.Info, node ast.Node, m mutator.Mutator) chan PositionedMutation {
+	w := &positionedMutateWalk{
+		changed: make(chan PositionedMutation),
+		mutator: m,
+		pkg:     pkg,
+		info:    info,
+	}
+
+	go func() {
+		ast.Walk(w, node)
+
+		close(w.changed)
+	}()
+
+	return w.changed
+}
+
 type mutateWalk struct {
 	changed chan bool
+	mutator mutator.Mutator
+	pkg     *types.Package
+	info    *types.Info
+}
+
+type positionedMutateWalk struct {
+	changed chan PositionedMutation
 	mutator mutator.Mutator
 	pkg     *types.Package
 	info    *types.Info
@@ -81,6 +115,31 @@ func (w *mutateWalk) Visit(node ast.Node) ast.Visitor {
 
 		m.Reset()
 		w.changed <- true
+		<-w.changed
+	}
+
+	return w
+}
+
+// Visit implements ast.Visitor while preserving the same two-phase handshake
+// as MutateWalk.
+func (w *positionedMutateWalk) Visit(node ast.Node) ast.Visitor {
+	if node == nil {
+		return w
+	}
+
+	for _, m := range w.mutator(w.pkg, w.info, node) {
+		position := m.Position
+		if !position.IsValid() {
+			position = node.Pos()
+		}
+
+		m.Change()
+		w.changed <- PositionedMutation{Position: position}
+		<-w.changed
+
+		m.Reset()
+		w.changed <- PositionedMutation{}
 		<-w.changed
 	}
 

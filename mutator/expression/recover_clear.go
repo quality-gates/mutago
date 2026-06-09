@@ -37,6 +37,7 @@ func MutatorRecoverClear(_ *types.Package, _ *types.Info, node ast.Node) []mutat
 	originalArgs := call.Args
 	return []mutator.Mutation{
 		{
+			Position: call.Pos(),
 			Change: func() {
 				call.Fun = ast.NewIdent("any")
 				call.Args = []ast.Expr{ast.NewIdent("nil")}

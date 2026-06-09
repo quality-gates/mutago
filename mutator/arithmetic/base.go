@@ -35,6 +35,7 @@ func MutatorArithmeticBase(_ *types.Package, _ *types.Info, node ast.Node) []mut
 
 	return []mutator.Mutation{
 		{
+			Position: n.OpPos,
 			Change: func() {
 				n.Op = mutated
 			},

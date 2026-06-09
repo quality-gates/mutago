@@ -32,6 +32,7 @@ func MutatorNumbersIncrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 
 		return []mutator.Mutation{
 			{
+				Position: n.ValuePos,
 				Change: func() {
 					n.Value = mutated
 				},
@@ -54,6 +55,7 @@ func MutatorNumbersIncrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 
 		return []mutator.Mutation{
 			{
+				Position: n.ValuePos,
 				Change: func() {
 					n.Value = mutated
 				},

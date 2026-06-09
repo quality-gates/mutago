@@ -34,6 +34,7 @@ func MutatorComparison(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 
 	return []mutator.Mutation{
 		{
+			Position: n.OpPos,
 			Change: func() {
 				n.Op = r
 			},
