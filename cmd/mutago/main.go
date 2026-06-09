@@ -1040,20 +1040,21 @@ func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node
 	console.Debug(r.opts, "Mutator %s", m.Name)
 
 	mutatorAnnotated := annotation.DecoratorFilter(m.Mutator, m.Name, fc.filters...)
-	changed := mutago.MutateWalk(fc.pkg, fc.info, node, mutatorAnnotated)
+	changed := mutago.MutateWalkWithPositions(fc.pkg, fc.info, node, mutatorAnnotated)
 
 	for {
-		_, ok := <-changed
+		mutation, ok := <-changed
 		if !ok {
 			break
 		}
 
-		r.recordOneMutation(m, fc, mutationID, originalSourceCode, fmtOriginal, dryRunCounts, dryRunGlobalTotals)
+		originalStartLine := int64(fc.fset.Position(mutation.Position).Line)
+		r.recordOneMutation(m, fc, mutationID, originalStartLine, originalSourceCode, fmtOriginal, dryRunCounts, dryRunGlobalTotals)
 
 		// Release the MutateWalk goroutine to reset the AST and advance.
-		changed <- true
+		changed <- mutago.PositionedMutation{}
 		<-changed
-		changed <- true
+		changed <- mutago.PositionedMutation{}
 
 		mutationID++
 	}
@@ -1062,12 +1063,12 @@ func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node
 
 // recordOneMutation tallies (dry run) or writes and enqueues a single generated
 // mutation.
-func (r *mutationRun) recordOneMutation(m mutatorItem, fc *fileContext, mutationID int, originalSourceCode, fmtOriginal []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
+func (r *mutationRun) recordOneMutation(m mutatorItem, fc *fileContext, mutationID int, originalStartLine int64, originalSourceCode, fmtOriginal []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
 	if r.opts.General.DryRun {
 		countDryRunMutation(m.Name, dryRunCounts, dryRunGlobalTotals)
 		return
 	}
-	r.processMutation(m, fc, mutationID, originalSourceCode, fmtOriginal)
+	r.processMutation(m, fc, mutationID, originalStartLine, originalSourceCode, fmtOriginal)
 }
 
 // countDryRunMutation records a would-be mutation in the per-file and global
@@ -1081,11 +1082,12 @@ func countDryRunMutation(name string, dryRunCounts, dryRunGlobalTotals map[strin
 
 // processMutation writes one mutation to disk and either records a duplicate, an
 // internal error, or enqueues an exec job. Must not be called in dry-run mode.
-func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutationID int, originalSourceCode, fmtOriginal []byte) {
+func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutationID int, originalStartLine int64, originalSourceCode, fmtOriginal []byte) {
 	mutant := models.Mutant{}
 	mutant.Mutator.MutatorName = m.Name
 	mutant.Mutator.OriginalFilePath = fc.sourceFile
 	mutant.Mutator.OriginalSourceCode = string(originalSourceCode)
+	mutant.Mutator.OriginalStartLine = originalStartLine
 
 	mutationFile := fmt.Sprintf("%s.%d", fc.mutatedFile, mutationID)
 	checksum, duplicate, err := saveAST(r.blacklist, mutationFile, fc.fset, fc.src, fmtOriginal)
@@ -1154,8 +1156,7 @@ func skipForGitDiff(job execJob) bool {
 	if job.gitChangedLines == nil {
 		return false
 	}
-	diffOut, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", job.originalFile, job.mutationFile).CombinedOutput()
-	lineNum := int(parser.FindOriginalStartLine(diffOut))
+	lineNum := int(job.mutant.Mutator.OriginalStartLine)
 	if gitdiff.IsLineChanged(job.gitChangedLines, job.absFile, lineNum) {
 		return false
 	}
@@ -1338,8 +1339,11 @@ func runBuiltinExec(
 	console.Debug(opts, "Execute built-in exec command for mutation")
 
 	diff, err := exec.Command("diff", "--label=Original", "--label=New", "-u", file, mutationFile).CombinedOutput()
-	startLine := parser.FindOriginalStartLine(diff)
-	mutant.Mutator.OriginalStartLine = startLine
+	startLine := mutant.Mutator.OriginalStartLine
+	if startLine <= 0 {
+		startLine = parser.FindOriginalStartLine(diff)
+		mutant.Mutator.OriginalStartLine = startLine
+	}
 
 	diffExitCode, ok := commandExitCode(err)
 	if !ok {
@@ -1458,7 +1462,9 @@ func runCustomExec(opts *models.Options, pkg *types.Package, file string, mutati
 	console.Debug(opts, "Execute %q for mutation", opts.Exec.Exec)
 
 	extDiff, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", file, mutationFile).CombinedOutput()
-	mutant.Mutator.OriginalStartLine = parser.FindOriginalStartLine(extDiff)
+	if mutant.Mutator.OriginalStartLine <= 0 {
+		mutant.Mutator.OriginalStartLine = parser.FindOriginalStartLine(extDiff)
+	}
 	mutant.Diff = string(extDiff)
 
 	execCommand := exec.Command(execs[0], execs[1:]...)

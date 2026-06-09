@@ -30,6 +30,7 @@ func MutatorLoopRangeBreak(_ *types.Package, _ *types.Info, node ast.Node) []mut
 
 	return []mutator.Mutation{
 		{
+			Position: n.For,
 			Change: func() {
 				n.Body = newBody
 			},

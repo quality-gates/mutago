@@ -39,8 +39,9 @@ func MutatorErrorGuard(_ *types.Package, info *types.Info, node ast.Node) []muta
 	original := ifStmt.Cond
 	return []mutator.Mutation{
 		{
-			Change: func() { ifStmt.Cond = replacement },
-			Reset:  func() { ifStmt.Cond = original },
+			Position: bin.Pos(),
+			Change:   func() { ifStmt.Cond = replacement },
+			Reset:    func() { ifStmt.Cond = original },
 		},
 	}
 }

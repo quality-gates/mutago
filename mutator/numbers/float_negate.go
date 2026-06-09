@@ -30,8 +30,9 @@ func MutatorFloatNegate(_ *types.Package, _ *types.Info, node ast.Node) []mutato
 	original := n.Value
 	return []mutator.Mutation{
 		{
-			Change: func() { n.Value = "0.0" },
-			Reset:  func() { n.Value = original },
+			Position: n.ValuePos,
+			Change:   func() { n.Value = "0.0" },
+			Reset:    func() { n.Value = original },
 		},
 	}
 }

@@ -35,8 +35,9 @@ func MutatorRemoveSelfAssign(_ *types.Package, _ *types.Info, node ast.Node) []m
 		li := i
 		old := l[li]
 		mutations = append(mutations, mutator.Mutation{
-			Change: func() { l[li] = &ast.EmptyStmt{Semicolon: token.NoPos} },
-			Reset:  func() { l[li] = old },
+			Position: old.Pos(),
+			Change:   func() { l[li] = &ast.EmptyStmt{Semicolon: old.Pos()} },
+			Reset:    func() { l[li] = old },
 		})
 	}
 	return mutations

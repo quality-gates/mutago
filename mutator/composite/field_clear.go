@@ -47,8 +47,9 @@ func MutatorFieldClear(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 
 		idx := i
 		mutations = append(mutations, mutator.Mutation{
-			Change: func() { lit.Elts = without(original, idx) },
-			Reset:  func() { lit.Elts = original },
+			Position: kv.Pos(),
+			Change:   func() { lit.Elts = without(original, idx) },
+			Reset:    func() { lit.Elts = original },
 		})
 	}
 

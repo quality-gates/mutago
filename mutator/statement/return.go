@@ -41,8 +41,9 @@ func MutatorReturnValue(pkg *types.Package, info *types.Info, node ast.Node) []m
 		original := n.Results[idx]
 
 		mutations = append(mutations, mutator.Mutation{
-			Change: func() { n.Results[idx] = zero },
-			Reset:  func() { n.Results[idx] = original },
+			Position: original.Pos(),
+			Change:   func() { n.Results[idx] = zero },
+			Reset:    func() { n.Results[idx] = original },
 		})
 	}
 

@@ -38,6 +38,7 @@ func MutatorGoroutineRemove(_ *types.Package, _ *types.Info, node ast.Node) []mu
 		original := stmt
 
 		mutations = append(mutations, mutator.Mutation{
+			Position: goStmt.Go,
 			Change: func() {
 				l[li] = &ast.ExprStmt{X: goStmt.Call}
 			},

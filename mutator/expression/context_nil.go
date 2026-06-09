@@ -34,8 +34,9 @@ func MutatorContextNil(_ *types.Package, info *types.Info, node ast.Node) []muta
 		idx := i
 		original := call.Args[idx]
 		mutations = append(mutations, mutator.Mutation{
-			Change: func() { call.Args[idx] = ast.NewIdent("nil") },
-			Reset:  func() { call.Args[idx] = original },
+			Position: original.Pos(),
+			Change:   func() { call.Args[idx] = ast.NewIdent("nil") },
+			Reset:    func() { call.Args[idx] = original },
 		})
 	}
 	return mutations

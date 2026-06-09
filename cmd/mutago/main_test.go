@@ -6,12 +6,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/quality-gates/mutago/v2/internal/gitdiff"
 	"github.com/quality-gates/mutago/v2/internal/models"
 	"github.com/quality-gates/mutago/v2/internal/parser"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMainSimple(t *testing.T) {
@@ -22,6 +27,21 @@ func TestMainSimple(t *testing.T) {
 		returnOk,
 		"mutation score",
 	)
+}
+
+func TestSkipForGitDiffUsesOriginalASTLine(t *testing.T) {
+	job := execJob{
+		absFile: "/repo/fixture.go",
+		opts:    &models.Options{},
+		gitChangedLines: gitdiff.ChangedLines{
+			"fixture.go": {{Start: 4, End: 4}},
+		},
+	}
+	job.mutant.Mutator.OriginalStartLine = 4
+	assert.False(t, skipForGitDiff(job))
+
+	job.mutant.Mutator.OriginalStartLine = 3
+	assert.True(t, skipForGitDiff(job))
 }
 
 func TestMainRecursive(t *testing.T) {
@@ -165,6 +185,131 @@ func TestMainJSONReport(t *testing.T) {
 	for i := 0; i < len(mutationReport.Killed); i++ {
 		assert.Contains(t, mutationReport.Killed[i].ProcessOutput, "KILLED")
 	}
+}
+
+func TestMainReportsOriginalASTLines(t *testing.T) {
+	tmpDir := t.TempDir()
+	reportPath := tmpDir + "/line-position-report.json"
+	previousReportFileName := models.ReportFileName
+	models.ReportFileName = reportPath
+	t.Cleanup(func() { models.ReportFileName = previousReportFileName })
+
+	testMain(
+		t,
+		"../../testdata/lineposition",
+		[]string{"--exec-timeout", "5", "--config", "../configs/configLinePosition.yml.test"},
+		returnOk,
+		"mutation score",
+	)
+
+	jsonData, err := os.ReadFile(reportPath)
+	assert.NoError(t, err)
+	var report models.Report
+	assert.NoError(t, json.Unmarshal(jsonData, &report))
+
+	sourceData, err := os.ReadFile("../../testdata/lineposition/lineposition.go")
+	assert.NoError(t, err)
+	sourceLines := strings.Split(string(sourceData), "\n")
+	expectedLines := make(map[int64]bool)
+	for i, line := range sourceLines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "x = x" || trimmed == "y = y" {
+			expectedLines[int64(i+1)] = true
+		}
+	}
+
+	mutants := append([]models.Mutant{}, report.Escaped...)
+	mutants = append(mutants, report.Killed...)
+	mutants = append(mutants, report.Skipped...)
+	mutants = append(mutants, report.Errored...)
+	mutants = append(mutants, report.NotCovered...)
+	actualLines := make(map[int64]bool)
+	for _, mutant := range mutants {
+		assert.Equal(t, "statement/remove-self-assign", mutant.Mutator.MutatorName)
+		line := mutant.Mutator.OriginalStartLine
+		actualLines[line] = true
+		if assert.Greater(t, line, int64(0)) && assert.LessOrEqual(t, line, int64(len(sourceLines))) {
+			trimmed := strings.TrimSpace(sourceLines[line-1])
+			assert.Contains(t, []string{"x = x", "y = y"}, trimmed)
+		}
+	}
+	assert.Equal(t, expectedLines, actualLines)
+}
+
+func TestMainGitDiffUsesOriginalASTLines(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/lineposition\n\ngo 1.26.3\n")
+	writeFixtureFile(t, filepath.Join(root, "lineposition_test.go"), `package lineposition
+
+import "testing"
+
+func TestFunctionsReturnInput(t *testing.T) {
+	for _, fn := range []func(int) int{NearTop, BelowComment} {
+		if got := fn(7); got != 7 {
+			t.Fatalf("function returned %d, want 7", got)
+		}
+	}
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "json_output: true\nenable_mutators:\n  - statement/remove-self-assign\n")
+
+	baseSource := `package lineposition
+
+func NearTop(x int) int {
+	x = x + 0
+	return x
+}
+
+func BelowComment(y int) int {
+	// This comment must not become the reported mutation line.
+	y = y + 0
+	return y
+}
+`
+	changedSource := strings.ReplaceAll(baseSource, " = x + 0", " = x")
+	changedSource = strings.ReplaceAll(changedSource, " = y + 0", " = y")
+	writeFixtureFile(t, filepath.Join(root, "lineposition.go"), baseSource)
+	runGit(t, root, "init", "-q")
+	runGit(t, root, "config", "user.email", "mutago@example.com")
+	runGit(t, root, "config", "user.name", "mutago test")
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-q", "-m", "base")
+	writeFixtureFile(t, filepath.Join(root, "lineposition.go"), changedSource)
+
+	reportPath := filepath.Join(root, "report.json")
+	previousReportFileName := models.ReportFileName
+	models.ReportFileName = reportPath
+	t.Cleanup(func() { models.ReportFileName = previousReportFileName })
+
+	testMain(
+		t,
+		root,
+		[]string{"--exec-timeout", "5", "--git-diff-lines", "--git-diff-base", "HEAD", "--config", "mutago.yml"},
+		returnOk,
+		"mutation score",
+	)
+
+	jsonData, err := os.ReadFile(reportPath)
+	require.NoError(t, err)
+	var report models.Report
+	require.NoError(t, json.Unmarshal(jsonData, &report))
+	actualLines := make(map[int64]bool)
+	for _, mutant := range append(report.Escaped, report.Killed...) {
+		actualLines[mutant.Mutator.OriginalStartLine] = true
+	}
+	assert.Equal(t, map[int64]bool{4: true, 10: true}, actualLines)
+}
+
+func writeFixtureFile(t *testing.T, path, contents string) {
+	t.Helper()
+	require.NoError(t, os.WriteFile(path, []byte(contents), 0644))
+}
+
+func runGit(t *testing.T, root string, args ...string) {
+	t.Helper()
+	cmdArgs := append([]string{"-C", root}, args...)
+	out, err := exec.Command("git", cmdArgs...).CombinedOutput()
+	require.NoError(t, err, string(out))
 }
 
 func TestMainTestFlagsPassthrough(t *testing.T) {

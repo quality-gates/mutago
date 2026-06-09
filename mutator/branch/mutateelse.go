@@ -18,9 +18,9 @@ func MutatorElse(pkg *types.Package, info *types.Info, node ast.Node) []mutator.
 	if !ok {
 		return nil
 	}
-	// We ignore else ifs and nil blocks
-	_, ok = n.Else.(*ast.IfStmt)
-	if ok || n.Else == nil {
+	// We ignore else ifs, nil blocks, and already-empty else bodies.
+	block, ok := n.Else.(*ast.BlockStmt)
+	if !ok || len(block.List) == 0 {
 		return nil
 	}
 
@@ -28,6 +28,7 @@ func MutatorElse(pkg *types.Package, info *types.Info, node ast.Node) []mutator.
 
 	return []mutator.Mutation{
 		{
+			Position: statementPosition(old),
 			Change: func() {
 				n.Else = astutil.CreateNoopOfStatement(pkg, info, old)
 			},
