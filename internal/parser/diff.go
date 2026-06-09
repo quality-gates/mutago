@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -8,9 +9,17 @@ import (
 
 const fallbackLine int64 = 0
 
-// hunkHeaderRegex matches a unified-diff hunk header and captures the original
-// start line, e.g. "@@ -12,7 +12,6 @@" or "@@ -1 +1 @@".
-var hunkHeaderRegex = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@`)
+// hunkHeaderRegex captures both ranges in a unified-diff hunk header.
+var hunkHeaderRegex = regexp.MustCompile(
+	`^@@ -([0-9]+)(?:,([0-9]+))? \+([0-9]+)(?:,([0-9]+))? @@(?: .*)?$`,
+)
+
+type hunkHeader struct {
+	originalStart int64
+	originalCount int64
+	newStart      int64
+	newCount      int64
+}
 
 // FindOriginalStartLine returns the original-file line number of the first changed
 // line in a unified (`diff -u`) diff. It walks the body of the first hunk rather than
@@ -22,47 +31,138 @@ func FindOriginalStartLine(diff []byte) int64 {
 	lines := strings.Split(string(diff), "\n")
 
 	for i, line := range lines {
-		match := hunkHeaderRegex.FindStringSubmatch(line)
+		match := hunkHeaderRegex.FindStringSubmatch(strings.TrimSuffix(line, "\r"))
 		if match == nil {
 			continue
 		}
 
-		start, err := strconv.ParseInt(match[1], 10, 64)
-		if err != nil {
+		header, ok := parseHunkHeader(match)
+		if !ok {
 			return fallbackLine
 		}
 
-		return firstChangedLine(lines[i+1:], start)
+		line, ok := firstChangedLine(lines[i+1:], header)
+		if !ok {
+			return fallbackLine
+		}
+		return line
 	}
 
 	return fallbackLine
 }
 
-// firstChangedLine walks a hunk body, tracking the original-file line number, and
-// returns the line number of the first added or removed line. body holds the diff
-// lines following the hunk header; start is the hunk's original start line. Context
-// and removed lines advance the original line counter; added lines do not. If the
-// hunk contains no change (which should not happen for a real mutation) the running
-// line number is returned as a safe fallback.
-func firstChangedLine(body []string, start int64) int64 {
-	cur := start
+func parseHunkHeader(match []string) (hunkHeader, bool) {
+	originalStart, originalCount, ok := parseHunkRange(match[1], match[2])
+	if !ok {
+		return hunkHeader{}, false
+	}
+	newStart, newCount, ok := parseHunkRange(match[3], match[4])
+	if !ok {
+		return hunkHeader{}, false
+	}
 
-	for _, line := range body {
-		switch {
-		case strings.HasPrefix(line, "@@"):
-			// Reached the next hunk without finding a change in this one.
-			return cur
-		case strings.HasPrefix(line, "+"), strings.HasPrefix(line, "-"):
-			// First changed line: an addition sits at the current original line
-			// (the insertion point); a removal is that original line itself.
-			return cur
-		case strings.HasPrefix(line, `\`):
-			// "\ No newline at end of file" is metadata, not a source line.
-		default:
-			// Context line (prefixed with a space, or empty for a blank line).
-			cur++
+	return hunkHeader{
+		originalStart: originalStart,
+		originalCount: originalCount,
+		newStart:      newStart,
+		newCount:      newCount,
+	}, true
+}
+
+func parseHunkRange(startText, countText string) (int64, int64, bool) {
+	start, err := strconv.ParseInt(startText, 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	count := int64(1)
+	if countText != "" {
+		count, err = strconv.ParseInt(countText, 10, 64)
+		if err != nil {
+			return 0, 0, false
 		}
 	}
 
-	return cur
+	if count == 0 {
+		return start, count, start < math.MaxInt64
+	}
+	if start == 0 || count-1 > math.MaxInt64-start {
+		return 0, 0, false
+	}
+	return start, count, true
+}
+
+// firstChangedLine validates the first hunk body against its declared ranges and
+// returns its first changed original-file line.
+func firstChangedLine(body []string, header hunkHeader) (int64, bool) {
+	var originalConsumed, newConsumed int64
+	var firstChange int64
+	foundChange := false
+
+	for _, rawLine := range body {
+		if originalConsumed == header.originalCount && newConsumed == header.newCount {
+			break
+		}
+
+		line := strings.TrimSuffix(rawLine, "\r")
+		if line == `\ No newline at end of file` {
+			continue
+		}
+		if line == "" {
+			return 0, false
+		}
+
+		switch line[0] {
+		case ' ':
+			if originalConsumed >= header.originalCount || newConsumed >= header.newCount {
+				return 0, false
+			}
+			originalConsumed++
+			newConsumed++
+		case '-':
+			if originalConsumed >= header.originalCount {
+				return 0, false
+			}
+			if !foundChange {
+				var ok bool
+				firstChange, ok = addLine(header.originalStart, originalConsumed)
+				if !ok {
+					return 0, false
+				}
+				foundChange = true
+			}
+			originalConsumed++
+		case '+':
+			if newConsumed >= header.newCount {
+				return 0, false
+			}
+			if !foundChange {
+				offset := originalConsumed
+				if header.originalCount == 0 {
+					offset = 1
+				}
+				var ok bool
+				firstChange, ok = addLine(header.originalStart, offset)
+				if !ok {
+					return 0, false
+				}
+				foundChange = true
+			}
+			newConsumed++
+		default:
+			return 0, false
+		}
+	}
+
+	if originalConsumed != header.originalCount || newConsumed != header.newCount {
+		return 0, false
+	}
+	return firstChange, foundChange
+}
+
+func addLine(start, offset int64) (int64, bool) {
+	if offset > math.MaxInt64-start {
+		return 0, false
+	}
+	return start + offset, true
 }

@@ -4,6 +4,13 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `FindOriginalStartLine` now reports the line after a zero-length original range for pure additions, including line 1 for additions to an empty file. It also validates hunk ranges and body prefixes, returning the fallback line instead of accepting malformed diffs or overflowing `int64` line coordinates.
+
+---
+
 ## [v2.7.3] — 2026-06-09
 
 ### Fixed
@@ -379,3 +386,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.7.1]: https://github.com/quality-gates/mutago/compare/v2.7.0...v2.7.1
 [v2.7.2]: https://github.com/quality-gates/mutago/compare/v2.7.1...v2.7.2
 [v2.7.3]: https://github.com/quality-gates/mutago/compare/v2.7.2...v2.7.3
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.7.3...HEAD
