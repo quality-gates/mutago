@@ -66,6 +66,7 @@ func statementRemoveStructInitialization() (a http.Header, b error) {
 func statementRemoveStringArrayMap() map[string][]string {
 	hash := "ok"
 	var hdr = make(map[string][]string)
+
 	_, _ = hdr, hash
 
 	return hdr

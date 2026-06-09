@@ -4,6 +4,17 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [v2.7.3] — 2026-06-09
+
+### Fixed
+- `statement/remove` (and the other noop-based mutators) no longer mangle a comment that sits directly above the mutated code. The synthesized noop (`_, _ = a, b`) carried no source position, so `go/printer` floated the leading comment into the middle of the assignment (e.g. `_, _ =\n// comment\na, b`) and the resulting diff's first hunk line pointed at the comment instead of the code. The noop is now anchored at the original line of code, so the comment stays above it and the diff reports the correct line. For branch mutators the anchor descends into the replaced block so the noop still renders on the code line rather than at the opening brace.
+- `FindOriginalStartLine` (`internal/parser`) now walks the first hunk body to find the first changed line instead of assuming a fixed three lines of context (`header + 3`). The old heuristic reported the wrong line whenever a hunk carried fewer than three context lines — for example a change near the top of a function, or one preceded by a comment.
+
+### Changed
+- Renamed the diff fuzz target `FuzzParseDiffOutput` to `FuzzFindOriginalStartLine` and removed the now-unused `ParseDiffOutput` helper, which the new line-walking logic replaces.
+
+---
+
 ## [v2.7.2] — 2026-06-05
 
 ### Added
@@ -367,3 +378,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.7.0]: https://github.com/quality-gates/mutago/compare/v2.6.16...v2.7.0
 [v2.7.1]: https://github.com/quality-gates/mutago/compare/v2.7.0...v2.7.1
 [v2.7.2]: https://github.com/quality-gates/mutago/compare/v2.7.1...v2.7.2
+[v2.7.3]: https://github.com/quality-gates/mutago/compare/v2.7.2...v2.7.3

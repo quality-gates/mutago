@@ -19,8 +19,8 @@ func foo() int {
 		} else {
 			n += 3
 		}
-		_ = n
 
+		_ = n
 	}
 
 	if n < 0 {

@@ -1,58 +1,68 @@
 package parser
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
-const (
-	fallbackLine     int64 = 0
-	diffContextLines       = 3
-)
+const fallbackLine int64 = 0
 
-var (
-	diffRegex *regexp.Regexp
-)
+// hunkHeaderRegex matches a unified-diff hunk header and captures the original
+// start line, e.g. "@@ -12,7 +12,6 @@" or "@@ -1 +1 @@".
+var hunkHeaderRegex = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@`)
 
-func init() {
-	var err error
-	diffRegex, err = regexp.Compile(`@@ -(\d+),?\d* \+(\d+),?\d* @@`)
-	if err != nil {
-		panic(fmt.Sprintf("failed to compile diff regex: %v", err))
-	}
-}
+// FindOriginalStartLine returns the original-file line number of the first changed
+// line in a unified (`diff -u`) diff. It walks the body of the first hunk rather than
+// assuming a fixed amount of leading context, so it stays correct when the change is
+// near the top of the file (fewer than three context lines) or when a leading comment
+// sits above the changed code — in both cases a fixed "header + 3" offset would point
+// at the wrong line (often the comment). Returns 0 when no hunk header is found.
+func FindOriginalStartLine(diff []byte) int64 {
+	lines := strings.Split(string(diff), "\n")
 
-// ParseDiffOutput parses the unified diff (-u) output to extract the line numbers where changes occurred.
-// The `-u` flag provides exactly 3 lines of context around changes, so the actual changed line
-// can be derived by adjusting the reported line number from the diff header.
-func ParseDiffOutput(diff string) []int64 {
-	lines := make([]int64, 0)
-
-	matches := diffRegex.FindAllStringSubmatch(diff, -1)
-	for _, match := range matches {
-		line, err := strconv.ParseInt(match[1], 10, 64)
-		if err != nil {
-			lines = append(lines, fallbackLine)
+	for i, line := range lines {
+		match := hunkHeaderRegex.FindStringSubmatch(line)
+		if match == nil {
 			continue
 		}
 
-		actualLine := line + diffContextLines
-		lines = append(lines, actualLine)
+		start, err := strconv.ParseInt(match[1], 10, 64)
+		if err != nil {
+			return fallbackLine
+		}
+
+		return firstChangedLine(lines[i+1:], start)
 	}
 
-	return lines
+	return fallbackLine
 }
 
-// FindOriginalStartLine attempts to find the original line number where a mutation occurred.
-// For multi-hunk diffs the first hunk's start line is returned — it is the earliest affected
-// line in the original file and the most representative location for coverage and diff-filter checks.
-func FindOriginalStartLine(diff []byte) int64 {
-	changedLines := ParseDiffOutput(string(diff))
+// firstChangedLine walks a hunk body, tracking the original-file line number, and
+// returns the line number of the first added or removed line. body holds the diff
+// lines following the hunk header; start is the hunk's original start line. Context
+// and removed lines advance the original line counter; added lines do not. If the
+// hunk contains no change (which should not happen for a real mutation) the running
+// line number is returned as a safe fallback.
+func firstChangedLine(body []string, start int64) int64 {
+	cur := start
 
-	if len(changedLines) == 0 {
-		return fallbackLine
+	for _, line := range body {
+		switch {
+		case strings.HasPrefix(line, "@@"):
+			// Reached the next hunk without finding a change in this one.
+			return cur
+		case strings.HasPrefix(line, "+"), strings.HasPrefix(line, "-"):
+			// First changed line: an addition sits at the current original line
+			// (the insertion point); a removal is that original line itself.
+			return cur
+		case strings.HasPrefix(line, `\`):
+			// "\ No newline at end of file" is metadata, not a source line.
+		default:
+			// Context line (prefixed with a space, or empty for a blank line).
+			cur++
+		}
 	}
 
-	return changedLines[0]
+	return cur
 }
