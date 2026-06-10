@@ -19,7 +19,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Install messgo
-        run: go install github.com/quality-gates/messgo/cmd/messgo@v0.1.1
+        run: go install github.com/quality-gates/messgo/cmd/messgo@v0.1.9
 
       - name: Run messgo
         # Recommended Go settings: the `go` ruleset (with `codesize` thresholds)

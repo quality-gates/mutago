@@ -4,6 +4,13 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Bumped the `messgo` CI quality gate from `v0.1.1` to `v0.1.9`. The newer release was verified locally with the workflow's `go,codesize` rules and the LCOM rule; both are clean for production Go code.
+
+---
+
 ## [v2.7.3] — 2026-06-09
 
 ### Fixed
