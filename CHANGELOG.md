@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Bumped the `messgo` CI quality gate from `v0.1.1` to `v0.1.9`. The newer messgo applies the `go,codesize` complexity rules more strictly, which surfaced two functions over threshold. `runBuiltinExec` (`cmd/mutago`) was split into `computeMutationDiff` and `buildGoTestArgs` helpers, and `firstChangedLine` (`internal/parser`) was refactored into a `hunkScanner` type whose per-line-prefix logic is now separate methods. Behaviour is unchanged; all tests, the `go,codesize` gate, and the self-mutation quality gates (MSI ≥ 75%, covered-code MSI ≥ 80%) still pass.
+
 ### Fixed
 - Mutation locations used by reports, coverage, per-test selection, and `--git-diff-lines` now come from the original AST token position instead of the first line changed by `go/printer`. This keeps PR filtering and reported lines accurate for leading comments, multiline syntax, and insertion-style mutators. `statement/remove-self-assign` also anchors its empty replacement at the removed statement so comments remain in place.
 - `FindOriginalStartLine` now reports the line after a zero-length original range for pure additions, including line 1 for additions to an empty file. It also validates hunk ranges and body prefixes, returning the fallback line instead of accepting malformed diffs or overflowing `int64` line coordinates.

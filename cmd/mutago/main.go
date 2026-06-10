@@ -1338,21 +1338,9 @@ func runBuiltinExec(
 ) int {
 	console.Debug(opts, "Execute built-in exec command for mutation")
 
-	diff, err := exec.Command("diff", "--label=Original", "--label=New", "-u", file, mutationFile).CombinedOutput()
-	startLine := mutant.Mutator.OriginalStartLine
-	if startLine <= 0 {
-		startLine = parser.FindOriginalStartLine(diff)
-		mutant.Mutator.OriginalStartLine = startLine
-	}
-
-	diffExitCode, ok := commandExitCode(err)
-	if !ok {
-		fmt.Fprintf(os.Stderr, "mutago: diff error: %v\n", err)
-		return 3
-	}
-	if diffExitCode != 0 && diffExitCode != 1 {
-		fmt.Fprintf(os.Stderr, "mutago: diff exited with code %d\n", diffExitCode)
-		return 3
+	diff, startLine, code := computeMutationDiff(file, mutationFile, mutant)
+	if code != 0 {
+		return code
 	}
 
 	absOrig, _ := filepath.Abs(file)
@@ -1364,19 +1352,8 @@ func runBuiltinExec(
 	}
 	defer os.Remove(overlayName)
 
-	pkgName := pkg.Path()
-	if opts.Test.Recursive {
-		pkgName += "/..."
-	}
-
 	runFilter := perTestRunFilter(perTestProf, absFile, int(startLine))
-
-	goTestArgs := []string{"test", "-overlay=" + overlayName, "-timeout", fmt.Sprintf("%ds", opts.Exec.Timeout)}
-	goTestArgs = append(goTestArgs, extraTestFlags...)
-	if runFilter != "" {
-		goTestArgs = append(goTestArgs, "-run", runFilter)
-	}
-	goTestArgs = append(goTestArgs, pkgName)
+	goTestArgs := buildGoTestArgs(opts, pkg, overlayName, runFilter, extraTestFlags)
 
 	goTestCmd := exec.Command("go", goTestArgs...)
 	goTestCmd.Env = os.Environ()
@@ -1394,6 +1371,50 @@ func runBuiltinExec(
 
 	mutant.Diff = string(diff)
 	return mapTestExitToResult(execExitCode)
+}
+
+// computeMutationDiff diffs the original against the mutated file and resolves
+// the mutant's original start line. It returns the diff output, the start line,
+// and a non-zero process exit code when diff itself fails.
+func computeMutationDiff(file, mutationFile string, mutant *models.Mutant) ([]byte, int64, int) {
+	diff, err := exec.Command("diff", "--label=Original", "--label=New", "-u", file, mutationFile).CombinedOutput()
+	startLine := mutant.Mutator.OriginalStartLine
+	if startLine <= 0 {
+		startLine = parser.FindOriginalStartLine(diff)
+		mutant.Mutator.OriginalStartLine = startLine
+	}
+
+	diffExitCode, ok := commandExitCode(err)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "mutago: diff error: %v\n", err)
+		return nil, 0, 3
+	}
+	if diffExitCode != 0 && diffExitCode != 1 {
+		fmt.Fprintf(os.Stderr, "mutago: diff exited with code %d\n", diffExitCode)
+		return nil, 0, 3
+	}
+	return diff, startLine, 0
+}
+
+// buildGoTestArgs assembles the argument list for the overlay-based go test run.
+func buildGoTestArgs(
+	opts *models.Options,
+	pkg *types.Package,
+	overlayName string,
+	runFilter string,
+	extraTestFlags []string,
+) []string {
+	pkgName := pkg.Path()
+	if opts.Test.Recursive {
+		pkgName += "/..."
+	}
+
+	args := []string{"test", "-overlay=" + overlayName, "-timeout", fmt.Sprintf("%ds", opts.Exec.Timeout)}
+	args = append(args, extraTestFlags...)
+	if runFilter != "" {
+		args = append(args, "-run", runFilter)
+	}
+	return append(args, pkgName)
 }
 
 // commandExitCode maps an exec error to a process exit code. ok is false when
