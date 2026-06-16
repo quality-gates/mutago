@@ -18,13 +18,29 @@ type LineRange struct{ Start, End int }
 // A nil ChangedLines means "no filter" — all mutations are run.
 type ChangedLines map[string][]LineRange
 
-// ParseChangedLines runs `git diff --unified=0 <base>` and returns each
-// modified file's changed line ranges. Deleted-only hunks (count == 0) are
-// excluded — there is nothing to mutate on a removed line.
+// ParseChangedLines diffs the working tree against the merge-base of <base> and
+// HEAD, and returns each modified file's changed line ranges. Deleted-only hunks
+// (count == 0) are excluded — there is nothing to mutate on a removed line.
+//
+// Diffing against the merge-base (rather than the tip of <base>) reports only
+// the changes introduced on the current branch — exactly what a pull request
+// shows — while still including uncommitted working-tree changes. A plain
+// two-dot `git diff <base>` would also report commits that landed on <base>
+// after the branch point, wrongly attributing those unrelated changes to the
+// feature branch when it is behind its target.
+//
+// If no merge-base can be found (e.g. unrelated histories), it falls back to
+// diffing against <base> directly.
 func ParseChangedLines(base string) (ChangedLines, error) {
-	out, err := exec.Command("git", "diff", "--unified=0", base).Output()
+	diffBase := base
+	if mb, err := exec.Command("git", "merge-base", base, "HEAD").Output(); err == nil {
+		if s := strings.TrimSpace(string(mb)); s != "" {
+			diffBase = s
+		}
+	}
+	out, err := exec.Command("git", "diff", "--unified=0", diffBase).Output()
 	if err != nil {
-		return nil, fmt.Errorf("git diff --unified=0 %s: %w", base, err)
+		return nil, fmt.Errorf("git diff --unified=0 %s: %w", diffBase, err)
 	}
 	return parse(string(out)), nil
 }
