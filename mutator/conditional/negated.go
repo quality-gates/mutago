@@ -36,6 +36,7 @@ func MutatorConditionalNegated(_ *types.Package, _ *types.Info, node ast.Node) [
 
 	return []mutator.Mutation{
 		{
+			Position: n.OpPos,
 			Change: func() {
 				n.Op = mutated
 			},

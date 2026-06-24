@@ -39,6 +39,7 @@ func MutatorSelectCaseRemove(_ *types.Package, _ *types.Info, node ast.Node) []m
 		copy(original, n.Body.List)
 
 		mutations = append(mutations, mutator.Mutation{
+			Position: comm.Case,
 			Change: func() {
 				n.Body.List = append(n.Body.List[:li], n.Body.List[li+1:]...)
 			},

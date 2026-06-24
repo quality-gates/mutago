@@ -22,8 +22,9 @@ func MutatorArithmeticNegate(_ *types.Package, _ *types.Info, node ast.Node) []m
 
 	return []mutator.Mutation{
 		{
-			Change: func() { n.Op = token.ADD },
-			Reset:  func() { n.Op = token.SUB },
+			Position: n.OpPos,
+			Change:   func() { n.Op = token.ADD },
+			Reset:    func() { n.Op = token.SUB },
 		},
 	}
 }

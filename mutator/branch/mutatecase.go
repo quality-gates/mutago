@@ -18,11 +18,16 @@ func MutatorCase(pkg *types.Package, info *types.Info, node ast.Node) []mutator.
 	if !ok {
 		return nil
 	}
+	if len(n.Body) == 0 {
+		return nil
+	}
 
 	old := n.Body
+	position := statementPosition(n.Body[0])
 
 	return []mutator.Mutation{
 		{
+			Position: position,
 			Change: func() {
 				n.Body = []ast.Stmt{
 					astutil.CreateNoopOfStatements(pkg, info, n.Body),

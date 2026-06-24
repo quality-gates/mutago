@@ -39,6 +39,7 @@ func MutatorDeferRemove(_ *types.Package, _ *types.Info, node ast.Node) []mutato
 		original := stmt
 
 		mutations = append(mutations, mutator.Mutation{
+			Position: deferStmt.Defer,
 			Change: func() {
 				l[li] = &ast.ExprStmt{X: deferStmt.Call}
 			},

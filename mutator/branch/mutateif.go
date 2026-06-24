@@ -18,11 +18,15 @@ func MutatorIf(pkg *types.Package, info *types.Info, node ast.Node) []mutator.Mu
 	if !ok {
 		return nil
 	}
+	if len(n.Body.List) == 0 {
+		return nil
+	}
 
 	old := n.Body.List
 
 	return []mutator.Mutation{
 		{
+			Position: statementPosition(n.Body),
 			Change: func() {
 				n.Body.List = []ast.Stmt{
 					astutil.CreateNoopOfStatement(pkg, info, n.Body),

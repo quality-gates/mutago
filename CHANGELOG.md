@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Reduced the `mutationRun` struct's CouplingBetweenObjects (CBO) metric from 13 to 12 types by threading the `gitdiff.ChangedLines` parameter through the call chain instead of storing it as a field. This passes the messgo CBO quality gate (< 13) without changing external behavior or API surface.
+
+### Fixed
+- Mutation locations used by reports, coverage, per-test selection, and `--git-diff-lines` now come from the original AST token position instead of the first line changed by `go/printer`. This keeps PR filtering and reported lines accurate for leading comments, multiline syntax, and insertion-style mutators. `statement/remove-self-assign` also anchors its empty replacement at the removed statement so comments remain in place.
+- `FindOriginalStartLine` now reports the line after a zero-length original range for pure additions, including line 1 for additions to an empty file. It also validates hunk ranges and body prefixes, returning the fallback line instead of accepting malformed diffs or overflowing `int64` line coordinates.
+- Noop-based statement and branch mutators no longer emit invalid Go when removed code declares local variables, uses struct field keys, or contains selectors rooted in calls. Generated references are position-normalized so interior comments stay outside noop assignments, and empty branch bodies are skipped instead of producing identical mutants.
+
 ---
 
 ## [v2.7.5] — 2026-06-16
@@ -19,7 +27,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Changed
 - Bumped the `messgo` CI quality gate from `v0.1.1` to `v0.1.9`. The newer release was verified locally with the workflow's `go,codesize` rules and the LCOM rule; both are clean for production Go code.
-
 ---
 
 ## [v2.7.3] — 2026-06-09
@@ -399,3 +406,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.7.3]: https://github.com/quality-gates/mutago/compare/v2.7.2...v2.7.3
 [v2.7.4]: https://github.com/quality-gates/mutago/compare/v2.7.3...v2.7.4
 [v2.7.5]: https://github.com/quality-gates/mutago/compare/v2.7.4...v2.7.5
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.7.5...HEAD

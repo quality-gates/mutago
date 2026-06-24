@@ -69,6 +69,7 @@ func MutatorRemoveStatement(pkg *types.Package, info *types.Info, node ast.Node)
 			old := l[li]
 
 			mutations = append(mutations, mutator.Mutation{
+				Position: old.Pos(),
 				Change: func() {
 					l[li] = astutil.CreateNoopOfStatement(pkg, info, old)
 				},

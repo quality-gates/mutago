@@ -32,6 +32,7 @@ func MutatorLoopBreak(_ *types.Package, _ *types.Info, node ast.Node) []mutator.
 
 	return []mutator.Mutation{
 		{
+			Position: n.TokPos,
 			Change: func() {
 				n.Tok = mutated
 			},

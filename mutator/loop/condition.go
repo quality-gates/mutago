@@ -30,6 +30,7 @@ func MutatorLoopCondition(_ *types.Package, _ *types.Info, node ast.Node) []muta
 
 	return []mutator.Mutation{
 		{
+			Position: condition.Pos(),
 			Change: func() {
 				condition.X = ast.NewIdent("1")
 				condition.Op = token.LSS

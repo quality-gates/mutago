@@ -46,8 +46,9 @@ func stringLiteralMutation(exprPtr *ast.Expr) []mutator.Mutation {
 	mutated := &ast.BasicLit{Kind: token.STRING, Value: `""`}
 	return []mutator.Mutation{
 		{
-			Change: func() { *exprPtr = mutated },
-			Reset:  func() { *exprPtr = original },
+			Position: lit.ValuePos,
+			Change:   func() { *exprPtr = mutated },
+			Reset:    func() { *exprPtr = original },
 		},
 	}
 }

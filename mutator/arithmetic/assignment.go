@@ -41,6 +41,7 @@ func MutatorArithmeticAssignment(_ *types.Package, _ *types.Info, node ast.Node)
 
 	return []mutator.Mutation{
 		{
+			Position: n.TokPos,
 			Change: func() {
 				n.Tok = mutated
 			},

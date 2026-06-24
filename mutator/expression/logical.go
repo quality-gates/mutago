@@ -32,8 +32,9 @@ func MutatorLogical(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mu
 	original := n.Op
 	return []mutator.Mutation{
 		{
-			Change: func() { n.Op = mutated },
-			Reset:  func() { n.Op = original },
+			Position: n.OpPos,
+			Change:   func() { n.Op = mutated },
+			Reset:    func() { n.Op = original },
 		},
 	}
 }
