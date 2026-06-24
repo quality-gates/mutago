@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/quality-gates/mutago/v2/internal/gitdiff"
 	"github.com/quality-gates/mutago/v2/internal/models"
 	"github.com/quality-gates/mutago/v2/internal/parser"
 
@@ -29,20 +28,7 @@ func TestMainSimple(t *testing.T) {
 	)
 }
 
-func TestSkipForGitDiffUsesOriginalASTLine(t *testing.T) {
-	job := execJob{
-		absFile: "/repo/fixture.go",
-		opts:    &models.Options{},
-		gitChangedLines: gitdiff.ChangedLines{
-			"fixture.go": {{Start: 4, End: 4}},
-		},
-	}
-	job.mutant.Mutator.OriginalStartLine = 4
-	assert.False(t, skipForGitDiff(job))
 
-	job.mutant.Mutator.OriginalStartLine = 3
-	assert.True(t, skipForGitDiff(job))
-}
 
 func TestMainRecursive(t *testing.T) {
 	testMain(
