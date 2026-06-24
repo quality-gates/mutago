@@ -13,6 +13,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
+## [v2.7.5] — 2026-06-16
+
+### Fixed
+- `--git-diff-lines` now diffs against the **merge-base** of the diff base and the current branch instead of the tip of the base branch. Previously, when a feature branch was behind its target, a plain two-dot `git diff <base>` attributed commits that had landed on the base after the branch point to the feature branch, so mutago mutated lines the developer never touched. The filter now matches exactly what the pull request shows, while still including uncommitted working-tree changes.
+
+---
+
+## [v2.7.4] — 2026-06-10
+
+### Changed
+- Bumped the `messgo` CI quality gate from `v0.1.1` to `v0.1.9`. The newer release was verified locally with the workflow's `go,codesize` rules and the LCOM rule; both are clean for production Go code.
+---
+
 ## [v2.7.3] — 2026-06-09
 
 ### Fixed
@@ -388,4 +401,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.7.1]: https://github.com/quality-gates/mutago/compare/v2.7.0...v2.7.1
 [v2.7.2]: https://github.com/quality-gates/mutago/compare/v2.7.1...v2.7.2
 [v2.7.3]: https://github.com/quality-gates/mutago/compare/v2.7.2...v2.7.3
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.7.3...HEAD
+[v2.7.4]: https://github.com/quality-gates/mutago/compare/v2.7.3...v2.7.4
+[v2.7.5]: https://github.com/quality-gates/mutago/compare/v2.7.4...v2.7.5
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.7.5...HEAD

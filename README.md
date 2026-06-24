@@ -259,7 +259,7 @@ Use `--timeout-coefficient` to scale the per-mutation timeout relative to the ba
 
 ### <a name="git-diff"></a>Git diff filtering (CI mode)
 
-`--git-diff-lines` limits mutation to lines changed since a given git ref. Combine it with `--ignore-msi-with-no-mutations` so the gate passes cleanly on PRs that touch no mutable code.
+`--git-diff-lines` limits mutation to lines changed since a given git ref. The comparison is made against the **merge-base** of that ref and your current branch, so it mutates exactly the lines a pull request shows — even when your branch is behind the target. Commits that landed on the target branch after you branched off are not attributed to your work. Combine it with `--ignore-msi-with-no-mutations` so the gate passes cleanly on PRs that touch no mutable code.
 
 ```bash
 mutago \
