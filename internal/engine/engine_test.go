@@ -105,17 +105,17 @@ func TestSkipForGitDiffUsesOriginalASTLine(t *testing.T) {
 	job := execJob{
 		absFile: "/repo/fixture.go",
 		opts:    &models.Options{},
-		gitChangedLines: gitdiff.ChangedLines{
-			"fixture.go": {{Start: 4, End: 4}},
-		},
+	}
+	gitChangedLines := gitdiff.ChangedLines{
+		"fixture.go": {{Start: 4, End: 4}},
 	}
 	job.mutant.Mutator.OriginalStartLine = 4
-	if skipForGitDiff(job) {
+	if skipForGitDiff(job, gitChangedLines) {
 		t.Error("expected skipForGitDiff to be false, got true")
 	}
 
 	job.mutant.Mutator.OriginalStartLine = 3
-	if !skipForGitDiff(job) {
+	if !skipForGitDiff(job, gitChangedLines) {
 		t.Error("expected skipForGitDiff to be true, got false")
 	}
 }

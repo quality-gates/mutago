@@ -97,67 +97,97 @@ func parseHunkRange(startText, countText string) (int64, int64, bool) {
 func firstChangedLine(body []string, header hunkHeader) (int64, bool) {
 	var originalConsumed, newConsumed int64
 	var firstChange int64
-	foundChange := false
 
 	for _, rawLine := range body {
 		if originalConsumed == header.originalCount && newConsumed == header.newCount {
 			break
 		}
 
-		line := strings.TrimSuffix(rawLine, "\r")
-		if line == `\ No newline at end of file` {
+		action, ok := classifyBodyLine(rawLine, header, originalConsumed, newConsumed)
+		if !ok {
+			return 0, false
+		}
+		if action.skip {
 			continue
 		}
-		if line == "" {
-			return 0, false
-		}
 
-		switch line[0] {
-		case ' ':
-			if originalConsumed >= header.originalCount || newConsumed >= header.newCount {
-				return 0, false
-			}
-			originalConsumed++
-			newConsumed++
-		case '-':
-			if originalConsumed >= header.originalCount {
-				return 0, false
-			}
-			if !foundChange {
-				var ok bool
-				firstChange, ok = addLine(header.originalStart, originalConsumed)
-				if !ok {
-					return 0, false
-				}
-				foundChange = true
-			}
-			originalConsumed++
-		case '+':
-			if newConsumed >= header.newCount {
-				return 0, false
-			}
-			if !foundChange {
-				offset := originalConsumed
-				if header.originalCount == 0 {
-					offset = 1
-				}
-				var ok bool
-				firstChange, ok = addLine(header.originalStart, offset)
-				if !ok {
-					return 0, false
-				}
-				foundChange = true
-			}
-			newConsumed++
-		default:
-			return 0, false
+		if firstChange == 0 && action.changedLine > 0 {
+			firstChange = action.changedLine
 		}
+		originalConsumed += action.origDelta
+		newConsumed += action.newDelta
 	}
 
+	return validateHunkCounts(header, originalConsumed, newConsumed, firstChange)
+}
+
+func validateHunkCounts(header hunkHeader, originalConsumed, newConsumed, firstChange int64) (int64, bool) {
 	if originalConsumed != header.originalCount || newConsumed != header.newCount {
 		return 0, false
 	}
-	return firstChange, foundChange
+	return firstChange, firstChange > 0
+}
+
+// lineAction describes how a single body line affects the hunk counters.
+type lineAction struct {
+	skip        bool  // true for lines like "\ No newline at end of file"
+	origDelta   int64 // how much to advance originalConsumed
+	newDelta    int64 // how much to advance newConsumed
+	changedLine int64 // non-zero when this line is the first change
+}
+
+func classifyBodyLine(rawLine string, header hunkHeader, origConsumed, newConsumed int64) (lineAction, bool) {
+	line := strings.TrimSuffix(rawLine, "\r")
+	if line == `\ No newline at end of file` {
+		return lineAction{skip: true}, true
+	}
+	if line == "" {
+		return lineAction{}, false
+	}
+
+	switch line[0] {
+	case ' ':
+		return processContext(header, origConsumed, newConsumed)
+	case '-':
+		return processDeletion(header, origConsumed, newConsumed)
+	case '+':
+		return processAddition(header, origConsumed, newConsumed)
+	default:
+		return lineAction{}, false
+	}
+}
+
+func processContext(header hunkHeader, origConsumed, newConsumed int64) (lineAction, bool) {
+	if origConsumed >= header.originalCount || newConsumed >= header.newCount {
+		return lineAction{}, false
+	}
+	return lineAction{origDelta: 1, newDelta: 1}, true
+}
+
+func processDeletion(header hunkHeader, origConsumed, newConsumed int64) (lineAction, bool) {
+	if origConsumed >= header.originalCount {
+		return lineAction{}, false
+	}
+	changed, ok := addLine(header.originalStart, origConsumed)
+	if !ok {
+		return lineAction{}, false
+	}
+	return lineAction{origDelta: 1, changedLine: changed}, true
+}
+
+func processAddition(header hunkHeader, origConsumed, newConsumed int64) (lineAction, bool) {
+	if newConsumed >= header.newCount {
+		return lineAction{}, false
+	}
+	offset := origConsumed
+	if header.originalCount == 0 {
+		offset = 1
+	}
+	changed, ok := addLine(header.originalStart, offset)
+	if !ok {
+		return lineAction{}, false
+	}
+	return lineAction{newDelta: 1, changedLine: changed}, true
 }
 
 func addLine(start, offset int64) (int64, bool) {
