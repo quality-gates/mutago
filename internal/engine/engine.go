@@ -65,34 +65,34 @@ type mutatorItem struct {
 }
 
 type mutationRun struct {
-	opts            *models.Options
-	mutators        []mutatorItem
-	blacklist       map[string]struct{}
-	tmpDir          string
-	numWorkers      int
-	execs           []string
-	extraTestFlags  []string
-	report          *models.Report
-	mu              *sync.Mutex
-	modulePath      string
-	moduleRoot      string
-	jobs            chan<- execJob
-	stdout          io.Writer
+	opts           *models.Options
+	mutators       []mutatorItem
+	blacklist      map[string]struct{}
+	tmpDir         string
+	numWorkers     int
+	execs          []string
+	extraTestFlags []string
+	report         *models.Report
+	mu             *sync.Mutex
+	modulePath     string
+	moduleRoot     string
+	jobs           chan<- execJob
+	stdout         io.Writer
 }
 
 type execJob struct {
-	opts            *models.Options
-	pkg             *types.Package
-	originalFile    string
-	mutationFile    string
-	mutant          models.Mutant
-	absFile         string
-	coverProfile    *coverage.Profile
-	execs           []string
-	perTestProf     *coverage.PerTestProfile
-	extraTestFlags  []string
-	runMutantID     string
-	moduleRoot      string
+	opts           *models.Options
+	pkg            *types.Package
+	originalFile   string
+	mutationFile   string
+	mutant         models.Mutant
+	absFile        string
+	coverProfile   *coverage.Profile
+	execs          []string
+	perTestProf    *coverage.PerTestProfile
+	extraTestFlags []string
+	runMutantID    string
+	moduleRoot     string
 }
 
 type fileContext struct {
@@ -202,19 +202,19 @@ func (e *Engine) initRun(opts *models.Options) (*mutationRun, []importing.Packag
 	}
 
 	run := &mutationRun{
-		opts:            opts,
-		mutators:        buildActiveMutators(opts),
-		blacklist:       mutationBlackList,
-		tmpDir:          tmpDir,
-		numWorkers:      numWorkers,
-		execs:           execs,
-		extraTestFlags:  extraTestFlags,
-		report:          report,
-		mu:              &reportMu,
-		modulePath:      detectModulePath(),
-		moduleRoot:      detectModuleRoot(),
-		jobs:            jobs,
-		stdout:          e.Stdout,
+		opts:           opts,
+		mutators:       buildActiveMutators(opts),
+		blacklist:      mutationBlackList,
+		tmpDir:         tmpDir,
+		numWorkers:     numWorkers,
+		execs:          execs,
+		extraTestFlags: extraTestFlags,
+		report:         report,
+		mu:             &reportMu,
+		modulePath:     detectModulePath(),
+		moduleRoot:     detectModuleRoot(),
+		jobs:           jobs,
+		stdout:         e.Stdout,
 	}
 
 	return run, pkgs, jobs, jobWg, stopProgress, progressWg, gitChangedLines, nil
@@ -505,18 +505,18 @@ func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutationID
 	}
 
 	job := execJob{
-		opts:            r.opts,
-		pkg:             fc.pkg,
-		originalFile:    fc.sourceFile,
-		mutationFile:    mutationFile,
-		mutant:          mutant,
-		absFile:         fc.absFile,
-		coverProfile:    fc.coverProfile,
-		execs:           r.execs,
-		perTestProf:     fc.perTestProf,
-		extraTestFlags:  r.extraTestFlags,
-		runMutantID:     r.opts.Exec.RunMutantID,
-		moduleRoot:      r.moduleRoot,
+		opts:           r.opts,
+		pkg:            fc.pkg,
+		originalFile:   fc.sourceFile,
+		mutationFile:   mutationFile,
+		mutant:         mutant,
+		absFile:        fc.absFile,
+		coverProfile:   fc.coverProfile,
+		execs:          r.execs,
+		perTestProf:    fc.perTestProf,
+		extraTestFlags: r.extraTestFlags,
+		runMutantID:    r.opts.Exec.RunMutantID,
+		moduleRoot:     r.moduleRoot,
 	}
 
 	if r.jobs != nil {

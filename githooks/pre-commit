@@ -1,0 +1,140 @@
+#!/bin/sh
+# Local mirror of the fast, whole-tree CI checks (see .github/workflows/goreportcard.yml
+# and .github/workflows/messgo.yml). Every step hard-fails on any finding and on any
+# missing tool - there are no silent skips.
+#
+# Not opt-out by default. To enable this hook, run once:
+#   git config core.hooksPath githooks
+set -eu
+
+ROOT_DIR=$(git rev-parse --show-toplevel)
+cd "$ROOT_DIR"
+
+FAIL=0
+
+note() {
+	printf '\n== %s ==\n' "$1"
+}
+
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	FAIL=1
+}
+
+require_tool() {
+	tool="$1"
+	hint="$2"
+	if ! command -v "$tool" >/dev/null 2>&1; then
+		printf 'FAIL: required tool "%s" not found on PATH.\n  install with: %s\n' "$tool" "$hint" >&2
+		exit 1
+	fi
+}
+
+require_tool go "https://go.dev/doc/install"
+require_tool gofmt "bundled with the Go toolchain"
+require_tool gocyclo "go install github.com/fzipp/gocyclo/cmd/gocyclo@latest"
+require_tool ineffassign "go install github.com/gordonklaus/ineffassign@latest"
+require_tool messgo "go install github.com/quality-gates/messgo/cmd/messgo@v0.1.9"
+
+# --- license file present (goreportcard.yml, weight 0.05) ---------------------
+note "license file"
+HAS_LICENSE=0
+for f in LICENSE* COPYING* COPYRIGHT* LICENCE* UNLICENSE* COPYLEFT*; do
+	if [ -e "$f" ]; then
+		HAS_LICENSE=1
+		break
+	fi
+done
+if [ "$HAS_LICENSE" -eq 0 ]; then
+	fail "no LICENSE (or COPYING/COPYRIGHT/...) file at repo root"
+else
+	echo "ok"
+fi
+
+# --- gofmt -s (goreportcard.yml, weight 0.30) ----------------------------------
+# testdata/ holds intentionally non-idiomatic mutation fixtures (mirrors the
+# GoFiles() exclusion goreportcard itself applies) and is excluded.
+note "gofmt -s"
+GOFMT_FILES=$(git ls-files '*.go' | grep -v '/testdata/' | grep -v '^testdata/' || true)
+if [ -z "$GOFMT_FILES" ]; then
+	fail "no tracked *.go files found outside testdata/ (unexpected repo state)"
+else
+	GOFMT_OUT=$(printf '%s\n' "$GOFMT_FILES" | xargs gofmt -s -l)
+	if [ -n "$GOFMT_OUT" ]; then
+		printf '%s\n' "$GOFMT_OUT"
+		fail "gofmt -s found unformatted files (run: gofmt -s -w <file>)"
+	else
+		echo "ok"
+	fi
+fi
+
+# --- go vet (goreportcard.yml, weight 0.30) ------------------------------------
+note "go vet ./..."
+if ! go vet ./...; then
+	fail "go vet reported issues"
+else
+	echo "ok"
+fi
+
+# --- go build (mutation.yml builds mutago the same way; CLAUDE.md build step) --
+note "go build ./..."
+if ! go build ./...; then
+	fail "go build failed"
+else
+	echo "ok"
+fi
+
+# --- gocyclo -over 15 (goreportcard.yml, weight 0.10) --------------------------
+note "gocyclo -over 15"
+if ! GOCYCLO_OUT=$(gocyclo -over 15 . 2>&1); then
+	printf '%s\n' "$GOCYCLO_OUT"
+	fail "gocyclo found functions over complexity 15"
+else
+	echo "ok"
+fi
+
+# --- ineffassign (goreportcard.yml, weight 0.10) -------------------------------
+# goreportcard itself skips this check once a repo has more than 100 Go files
+# (see check/utils.go upstream); mirror that exemption exactly rather than
+# enforcing a stricter local-only gate with no CI counterpart.
+note "ineffassign"
+GO_FILE_COUNT=$(git ls-files '*.go' | grep -v '/testdata/' | grep -v '^testdata/' | wc -l | tr -d ' ')
+if [ "$GO_FILE_COUNT" -gt 100 ]; then
+	echo "skipped: $GO_FILE_COUNT Go files > 100 (goreportcard exempts ineffassign at this size)"
+else
+	if ! IA_OUT=$(ineffassign ./... 2>&1); then
+		printf '%s\n' "$IA_OUT"
+		fail "ineffassign found ineffectual assignments"
+	else
+		echo "ok"
+	fi
+fi
+
+# --- messgo (messgo.yml) -------------------------------------------------------
+note "messgo"
+if ! messgo . text go,codesize --ignore-tests --exclude testdata,example,docs; then
+	fail "messgo found violations"
+else
+	echo "ok"
+fi
+
+# --- go test ./... (CLAUDE.md build & test step) -------------------------------
+# The integration tests in cmd/mutago/main_test.go invoke the mutation binary
+# against example/example.go and can leave it mutated; always restore it.
+note "go test ./..."
+restore_example() {
+	git checkout -- example/example.go 2>/dev/null || true
+}
+trap restore_example EXIT
+if ! go test ./...; then
+	fail "go test failed"
+else
+	echo "ok"
+fi
+
+if [ "$FAIL" -ne 0 ]; then
+	printf '\npre-commit checks failed.\n' >&2
+	exit 1
+fi
+
+printf '\nall pre-commit checks passed.\n'

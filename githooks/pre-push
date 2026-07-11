@@ -1,0 +1,90 @@
+#!/bin/sh
+# Local mirror of .github/workflows/mutation.yml, scoped to the diff against
+# origin/main instead of the whole tree (mutation testing is slow; running it
+# whole-tree on every push is not viable locally). Hard-fails on escaped
+# mutants, on a gate miss, and on any missing tool - no silent skips.
+#
+# Not opt-out by default. To enable this hook, run once:
+#   git config core.hooksPath githooks
+set -eu
+
+ROOT_DIR=$(git rev-parse --show-toplevel)
+cd "$ROOT_DIR"
+
+require_tool() {
+	tool="$1"
+	hint="$2"
+	if ! command -v "$tool" >/dev/null 2>&1; then
+		printf 'FAIL: required tool "%s" not found on PATH.\n  install with: %s\n' "$tool" "$hint" >&2
+		exit 1
+	fi
+}
+
+require_tool go "https://go.dev/doc/install"
+
+# Skip only when every pushed ref is a delete (no new commits to analyze).
+# This is the one legitimate no-op case for a pre-push hook, not a silent
+# skip of a check: a deleted ref has no diff to mutate.
+ANY_UPDATE=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+	if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+		ANY_UPDATE=1
+	fi
+done
+if [ "$ANY_UPDATE" -eq 0 ]; then
+	echo "pre-push: only ref deletions pushed, nothing to mutate."
+	exit 0
+fi
+
+if ! git rev-parse --verify origin/main >/dev/null 2>&1; then
+	printf 'FAIL: origin/main not found locally. Run: git fetch origin main\n' >&2
+	exit 1
+fi
+
+MUTAGO_BIN=$(mktemp -d)/mutago
+trap 'rm -rf "$(dirname "$MUTAGO_BIN")"' EXIT
+
+echo "pre-push: building mutago..."
+if ! go build -o "$MUTAGO_BIN" ./cmd/mutago; then
+	printf 'FAIL: go build ./cmd/mutago failed\n' >&2
+	exit 1
+fi
+
+echo "pre-push: running mutation testing scoped to the diff against origin/main..."
+# Same package list, timeout, and quality gates as .github/workflows/mutation.yml
+# and CLAUDE.md, restricted to changed lines via --git-diff-lines/--git-diff-base.
+# --ignore-msi-with-no-mutations avoids failing pushes that don't touch these
+# packages at all.
+STATUS=0
+"$MUTAGO_BIN" \
+	--exec-timeout 30 \
+	--coverage \
+	--git-diff-lines \
+	--git-diff-base origin/main \
+	--ignore-msi-with-no-mutations \
+	--min-msi 75 \
+	--min-covered-msi 80 \
+	github.com/quality-gates/mutago/v2/mutator/arithmetic \
+	github.com/quality-gates/mutago/v2/mutator/branch \
+	github.com/quality-gates/mutago/v2/mutator/composite \
+	github.com/quality-gates/mutago/v2/mutator/concurrency \
+	github.com/quality-gates/mutago/v2/mutator/conditional \
+	github.com/quality-gates/mutago/v2/mutator/expression \
+	github.com/quality-gates/mutago/v2/mutator/loop \
+	github.com/quality-gates/mutago/v2/mutator/numbers \
+	github.com/quality-gates/mutago/v2/mutator/select \
+	github.com/quality-gates/mutago/v2/mutator/statement \
+	github.com/quality-gates/mutago/v2/internal/filter \
+	github.com/quality-gates/mutago/v2/internal/coverage \
+	github.com/quality-gates/mutago/v2/internal/gitdiff \
+	github.com/quality-gates/mutago/v2/internal/models || STATUS=$?
+
+if [ "$STATUS" -eq 4 ]; then
+	printf '\nFAIL: mutation quality gate not met (escaped mutants in the diff against origin/main).\n' >&2
+	exit 1
+elif [ "$STATUS" -ne 0 ]; then
+	printf '\nFAIL: mutago exited with status %s (tool error).\n' "$STATUS" >&2
+	exit 1
+fi
+
+printf '\nmutation quality gate passed.\n'

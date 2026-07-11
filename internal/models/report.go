@@ -32,15 +32,15 @@ type Report struct {
 
 // Stats holds aggregate mutation metrics.
 type Stats struct {
-	TotalMutantsCount    int64   `json:"totalMutantsCount"`
-	KilledCount          int64   `json:"killedCount"`
-	NotCoveredCount      int64   `json:"notCoveredCount"`
-	EscapedCount         int64   `json:"escapedCount"`
-	ErrorCount           int64   `json:"errorCount"`
-	SkippedCount   int64   `json:"skippedCount"`
-	Msi            float64 `json:"msi"`
-	CoveredCodeMsi float64 `json:"coveredCodeMsi"`
-	DuplicatedCount      int64   `json:"-"`
+	TotalMutantsCount int64   `json:"totalMutantsCount"`
+	KilledCount       int64   `json:"killedCount"`
+	NotCoveredCount   int64   `json:"notCoveredCount"`
+	EscapedCount      int64   `json:"escapedCount"`
+	ErrorCount        int64   `json:"errorCount"`
+	SkippedCount      int64   `json:"skippedCount"`
+	Msi               float64 `json:"msi"`
+	CoveredCodeMsi    float64 `json:"coveredCodeMsi"`
+	DuplicatedCount   int64   `json:"-"`
 }
 
 // MutatorStats holds per-mutator kill/escape counts for tested mutants only.
