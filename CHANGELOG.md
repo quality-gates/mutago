@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- Vendored 21 engineering/productivity agent skills from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT license) under `.claude/skills/`, with attribution in `.claude/skills/THIRD-PARTY-NOTICES.md`. Configured the `triage` skill's issue-tracker and label vocabulary for this repo in `docs/agents/`, documented in `CLAUDE.md` under a new "Agent skills" section.
+
 ### Changed
 - Reduced the `mutationRun` struct's CouplingBetweenObjects (CBO) metric from 13 to 12 types by threading the `gitdiff.ChangedLines` parameter through the call chain instead of storing it as a field. This passes the messgo CBO quality gate (< 13) without changing external behavior or API surface.
 

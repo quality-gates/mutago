@@ -95,3 +95,19 @@ Integration tests live in `cmd/mutago/main_test.go`. They invoke `mainCmd` direc
 **For quality gate tests that must fail**, use a threshold that is permanently out of reach (e.g. `--min-msi 101`) rather than relying on the example package having escaped mutants.
 
 **After running `go test ./cmd/mutago/`**, always run `git restore example/example.go`. The integration tests invoke the mutation binary against the example package and the file is sometimes left with mutations applied.
+
+## Agent skills
+
+21 engineering/productivity skills from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, see `.claude/skills/THIRD-PARTY-NOTICES.md`) are vendored under `.claude/skills/`.
+
+### Issue tracker
+
+Issues live as GitHub issues on `quality-gates/mutago`; external PRs are not treated as a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical role names map 1:1 to this repo's label strings (`bug`, `enhancement`, `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout — `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
