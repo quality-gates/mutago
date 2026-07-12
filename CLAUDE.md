@@ -58,6 +58,23 @@ go build -o /tmp/mutago ./cmd/mutago
 
 Exit code 4 means the gate failed (escaped mutants). Exit code 0 means all gates passed.
 
+## Definition of Ready
+
+This repo ships committed git hook scripts under `githooks/` that mirror the CI checks
+in `.github/workflows/` (see `githooks/pre-commit` and `githooks/pre-push` for exactly
+which checks map to which workflow). They are **not** activated on clone. As a one-time
+opt-in per local clone, run:
+
+```bash
+git config core.hooksPath githooks
+```
+
+`pre-commit` runs the fast, whole-tree, deterministic checks (gofmt, go vet, gocyclo,
+ineffassign, messgo, build, unit tests) and hard-fails on any finding or missing tool.
+`pre-push` runs mutation testing scoped to the diff against `origin/main` via
+`--git-diff-lines`. Vulnerability scanning (`security.yml`) depends on external advisory
+feeds and stays CI-only; it is not mirrored locally.
+
 ## Shipping workflow
 
 Follow these steps in order when landing a change:

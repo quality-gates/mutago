@@ -28,8 +28,6 @@ func TestMainSimple(t *testing.T) {
 	)
 }
 
-
-
 func TestMainRecursive(t *testing.T) {
 	testMain(
 		t,

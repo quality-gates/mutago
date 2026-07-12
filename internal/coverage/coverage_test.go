@@ -442,4 +442,3 @@ func TestBuildPerTestProfile_SingleTestPackage(t *testing.T) {
 	}
 	assert.True(t, found, "profile must contain coverage data for mutator.go")
 }
-

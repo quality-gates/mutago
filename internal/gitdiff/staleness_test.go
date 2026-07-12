@@ -26,46 +26,27 @@ import (
 func TestParseChangedLines_StaleBranchExcludesTargetChanges(t *testing.T) {
 	dir := t.TempDir()
 
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	write := func(b int, c int) {
-		t.Helper()
-		src := "package app\n\n" +
-			"func A() int { return 1 }\n" +
-			"func B() int { return " + itoa(b) + " }\n" +
-			"func C() int { return " + itoa(c) + " }\n"
-		if err := os.WriteFile(filepath.Join(dir, "app.go"), []byte(src), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	run("init", "-q")
-	run("config", "user.email", "t@t.com")
-	run("config", "user.name", "t")
+	runGit(t, dir, "init", "-q", "-b", "main")
+	runGit(t, dir, "config", "user.email", "t@t.com")
+	runGit(t, dir, "config", "user.name", "t")
 
 	// initial commit on main: B=2 C=3
-	write(2, 3)
-	run("add", "app.go")
-	run("commit", "-qm", "initial")
+	writeAppGo(t, dir, 2, 3)
+	runGit(t, dir, "add", "app.go")
+	runGit(t, dir, "commit", "-qm", "initial")
 
 	// branch off for feature work (feature's merge-base is this commit)
-	run("switch", "-qc", "feature")
+	runGit(t, dir, "switch", "-qc", "feature")
 
 	// main advances: B changes to 222 (NOT part of the feature PR)
-	run("switch", "-q", "main")
-	write(222, 3)
-	run("commit", "-qam", "main: change B")
+	runGit(t, dir, "switch", "-q", "main")
+	writeAppGo(t, dir, 222, 3)
+	runGit(t, dir, "commit", "-qam", "main: change B")
 
 	// feature changes only C (the sole change in the PR)
-	run("switch", "-q", "feature")
-	write(2, 333)
-	run("commit", "-qam", "feature: change C")
+	runGit(t, dir, "switch", "-q", "feature")
+	writeAppGo(t, dir, 2, 333)
+	runGit(t, dir, "commit", "-qam", "feature: change C")
 
 	// Run the tool's diff from the feature branch's working tree.
 	old, _ := os.Getwd()
@@ -82,17 +63,8 @@ func TestParseChangedLines_StaleBranchExcludesTargetChanges(t *testing.T) {
 	ranges := cl["app.go"]
 	t.Logf("ParseChangedLines(\"main\") => %v", ranges)
 
-	changed := func(line int) bool {
-		for _, r := range ranges {
-			if line >= r.Start && line <= r.End {
-				return true
-			}
-		}
-		return false
-	}
-
 	// The PR only touched line 5 (func C). That must be flagged.
-	if !changed(5) {
+	if !lineChanged(ranges, 5) {
 		t.Errorf("expected line 5 (func C, the real PR change) to be flagged changed")
 	}
 
@@ -100,7 +72,7 @@ func TestParseChangedLines_StaleBranchExcludesTargetChanges(t *testing.T) {
 	// PR. A correct merge-base (three-dot) comparison must NOT flag it. With the
 	// buggy two-dot `git diff main` this assertion fails, because main's own
 	// commit gets attributed to the feature branch.
-	if changed(4) {
+	if lineChanged(ranges, 4) {
 		t.Errorf("line 4 (func B) was changed on main, not in the feature PR, and "+
 			"must not be flagged as changed. ranges=%v", ranges)
 	}
@@ -108,7 +80,6 @@ func TestParseChangedLines_StaleBranchExcludesTargetChanges(t *testing.T) {
 	// Uncommitted working-tree changes must still be reported. Diffing against
 	// the merge-base commit (rather than `base...HEAD`) preserves this: edit
 	// func A on the working tree without committing and confirm line 3 appears.
-	write(2, 333) // keep C=333, now also change A below via a manual rewrite
 	src := "package app\n\n" +
 		"func A() int { return 11 }\n" + // line 3 changed, uncommitted
 		"func B() int { return 2 }\n" +
@@ -123,20 +94,41 @@ func TestParseChangedLines_StaleBranchExcludesTargetChanges(t *testing.T) {
 	}
 	ranges2 := cl2["app.go"]
 	t.Logf("after uncommitted edit, ParseChangedLines(\"main\") => %v", ranges2)
-	changed2 := func(line int) bool {
-		for _, r := range ranges2 {
-			if line >= r.Start && line <= r.End {
-				return true
-			}
-		}
-		return false
-	}
-	if !changed2(3) {
+	if !lineChanged(ranges2, 3) {
 		t.Errorf("uncommitted change to line 3 (func A) must be reported. ranges=%v", ranges2)
 	}
-	if changed2(4) {
+	if lineChanged(ranges2, 4) {
 		t.Errorf("line 4 (func B, changed on main) must still be excluded. ranges=%v", ranges2)
 	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func writeAppGo(t *testing.T, dir string, b, c int) {
+	t.Helper()
+	src := "package app\n\n" +
+		"func A() int { return 1 }\n" +
+		"func B() int { return " + itoa(b) + " }\n" +
+		"func C() int { return " + itoa(c) + " }\n"
+	if err := os.WriteFile(filepath.Join(dir, "app.go"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func lineChanged(ranges []LineRange, line int) bool {
+	for _, r := range ranges {
+		if line >= r.Start && line <= r.End {
+			return true
+		}
+	}
+	return false
 }
 
 func itoa(n int) string {
