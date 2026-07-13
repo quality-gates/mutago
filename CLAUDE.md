@@ -88,6 +88,7 @@ Follow these steps in order when landing a change:
 7. **Watch CI** — wait for the Actions run to go green before merging into main. Run `gh pr checks <number>` to confirm every workflow is passing; do not merge if any is red.
 8. **Merge to main** — then push main.
 9. **Tag and release** — pick the next semver tag. Create a GitHub release page: following prior release pages, use a very succinct style and 8th grade English.
+10. **Sync jonbaldie/go-mutesting** - bring the repo copy jonbaldie/go-mutesting (../../jonbaldie/go-mutesting) into sync with your change to quality/mutago and follow its own shipping workflow through to completion.
 
 ## Conventions
 
@@ -128,3 +129,10 @@ Canonical role names map 1:1 to this repo's label strings (`bug`, `enhancement`,
 ### Domain docs
 
 Single-context layout — `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Finally
+
+- If writing production code, then strictly use the /tdd skill
+- If attempting to diagnose a bug or issue, then strictly use the /diagnosing-bugs skill
+- Use the available Serena tools when appropriate (IDE-like symbol searches, e.g.)
+- Be extremely concise in your messages to me

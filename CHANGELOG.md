@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Added
+- Added committed Serena project configuration and onboarding memories for symbol-aware navigation, project conventions, common commands, and completion checks. Expanded the agent instructions with skill-use rules and the required downstream `jonbaldie/go-mutesting` sync step.
 - Vendored 21 engineering/productivity agent skills from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT license) under `.claude/skills/`, with attribution in `.claude/skills/THIRD-PARTY-NOTICES.md`. Configured the `triage` skill's issue-tracker and label vocabulary for this repo in `docs/agents/`, documented in `CLAUDE.md` under a new "Agent skills" section.
 - Committed git hook scripts under `githooks/` (`pre-commit`, `pre-push`) that mirror the checks in `.github/workflows/`: `pre-commit` runs the fast whole-tree checks (gofmt, go vet, gocyclo, ineffassign, messgo, build, unit tests), hard-failing on any finding or missing tool, while `pre-push` runs mutation testing scoped to the diff against `origin/main` via `--git-diff-lines`. Not activated on clone — opt in with `git config core.hooksPath githooks`. Documented under a new "Definition of Ready" section in `CLAUDE.md`.
 
