@@ -3,6 +3,12 @@ name: Mutation Testing
 on:
   push:
     branches: [main]
+    paths:
+      - "**/*.go"
+      - "**/testdata/**"
+      - go.mod
+      - go.sum
+      - .github/workflows/mutation.yml
   pull_request:
     branches: [main]
 
@@ -15,6 +21,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # --git-diff-lines needs the base branch and merge-base history.
+          fetch-depth: 0
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
@@ -28,13 +37,27 @@ jobs:
         #   cmd/               - integration tests re-invoke the binary (would recurse)
         #   internal/importing  - resolution behaviour depends on GOPATH layout; excluded from mutation targets
         #   internal/parser     - excluded from mutation targets (type-checker setup is test-infrastructure, not user logic)
+        # Pull requests mutate only lines in the PR. Pushes to main retain the full-tree
+        # gate so a faulty diff filter cannot hide a regression permanently.
         # --coverage generates a profile before mutation to compute covered-code MSI
         # and marks mutants in untested code as "not covered" rather than running them.
         # --min-msi and --min-covered-msi enforce quality gates.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          scope_args=()
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            scope_args=(
+              --git-diff-lines
+              --git-diff-base origin/main
+              --ignore-msi-with-no-mutations
+            )
+          fi
+
           mutago \
             --exec-timeout 30 \
             --coverage \
+            "${scope_args[@]}" \
             --min-msi 75 \
             --min-covered-msi 80 \
             github.com/quality-gates/mutago/v2/mutator/arithmetic \

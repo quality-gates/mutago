@@ -4,6 +4,13 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Mutation CI now tests only lines changed by a pull request, while retaining the full-tree gate for code-related pushes to `main`. Pull requests with no mutable changes pass without running mutants.
+
+---
+
 ## [v2.7.6] — 2026-07-13
 
 ### Added

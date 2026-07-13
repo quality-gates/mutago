@@ -1,8 +1,8 @@
 #!/bin/sh
-# Local mirror of .github/workflows/mutation.yml, scoped to the diff against
-# origin/main instead of the whole tree (mutation testing is slow; running it
-# whole-tree on every push is not viable locally). Hard-fails on escaped
-# mutants, on a gate miss, and on any missing tool - no silent skips.
+# Local mirror of .github/workflows/mutation.yml's pull-request mode, scoped to
+# the diff against origin/main. CI retains a full-tree gate for code pushes to
+# main. Hard-fails on escaped mutants, on a gate miss, and on any missing tool -
+# no silent skips.
 #
 # Not opt-out by default. To enable this hook, run once:
 #   git config core.hooksPath githooks
@@ -51,8 +51,8 @@ if ! go build -o "$MUTAGO_BIN" ./cmd/mutago; then
 fi
 
 echo "pre-push: running mutation testing scoped to the diff against origin/main..."
-# Same package list, timeout, and quality gates as .github/workflows/mutation.yml
-# and CLAUDE.md, restricted to changed lines via --git-diff-lines/--git-diff-base.
+# Same package list, timeout, quality gates, and changed-line scope as the
+# pull-request mode in .github/workflows/mutation.yml and CLAUDE.md.
 # --ignore-msi-with-no-mutations avoids failing pushes that don't touch these
 # packages at all.
 STATUS=0

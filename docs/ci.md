@@ -61,6 +61,11 @@ Once you've written tests to kill the known survivors, remove them from the base
 Limit mutation to lines changed in the PR to keep feedback fast and relevant:
 
 ```yaml
+- uses: actions/checkout@v6
+  with:
+    # Required so mutago can resolve the base branch and merge-base.
+    fetch-depth: 0
+
 - run: |
     /tmp/mutago \
       --git-diff-lines \
