@@ -71,9 +71,10 @@ git config core.hooksPath githooks
 
 `pre-commit` runs the fast, whole-tree, deterministic checks (gofmt, go vet, gocyclo,
 ineffassign, messgo, build, unit tests) and hard-fails on any finding or missing tool.
-`pre-push` runs mutation testing scoped to the diff against `origin/main` via
-`--git-diff-lines`. Vulnerability scanning (`security.yml`) depends on external advisory
-feeds and stays CI-only; it is not mirrored locally.
+`pre-push` mirrors the pull-request mutation gate, scoped to the diff against
+`origin/main` via `--git-diff-lines`. CI retains a full-tree mutation gate for
+code-related pushes to `main`. Vulnerability scanning (`security.yml`) depends on external
+advisory feeds and stays CI-only; it is not mirrored locally.
 
 ## Shipping workflow
 
