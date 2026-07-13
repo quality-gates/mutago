@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.7.7] — 2026-07-13
 
 ### Changed
 - Mutation CI now tests only lines changed by a pull request, while retaining the full-tree gate for code-related pushes to `main`. Pull requests with no mutable changes pass without running mutants.
@@ -422,4 +422,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.7.4]: https://github.com/quality-gates/mutago/compare/v2.7.3...v2.7.4
 [v2.7.5]: https://github.com/quality-gates/mutago/compare/v2.7.4...v2.7.5
 [v2.7.6]: https://github.com/quality-gates/mutago/compare/v2.7.5...v2.7.6
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.7.6...HEAD
+[v2.7.7]: https://github.com/quality-gates/mutago/compare/v2.7.6...v2.7.7
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.7.7...HEAD
