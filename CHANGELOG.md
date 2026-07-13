@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.7.6] — 2026-07-13
 
 ### Added
 - Added committed Serena project configuration and onboarding memories for symbol-aware navigation, project conventions, common commands, and completion checks. Expanded the agent instructions with skill-use rules and the required downstream `jonbaldie/go-mutesting` sync step.
@@ -414,4 +414,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.7.3]: https://github.com/quality-gates/mutago/compare/v2.7.2...v2.7.3
 [v2.7.4]: https://github.com/quality-gates/mutago/compare/v2.7.3...v2.7.4
 [v2.7.5]: https://github.com/quality-gates/mutago/compare/v2.7.4...v2.7.5
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.7.5...HEAD
+[v2.7.6]: https://github.com/quality-gates/mutago/compare/v2.7.5...v2.7.6
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.7.6...HEAD
