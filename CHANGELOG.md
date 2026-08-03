@@ -4,6 +4,13 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Shipping step 10 now requires a push-access check on `jonbaldie/go-mutesting` before attempting the downstream sync; skip the sync and note it when push is unavailable.
+
+---
+
 ## [v2.8.0] — 2026-08-03
 
 ### Changed
