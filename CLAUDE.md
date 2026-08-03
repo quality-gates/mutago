@@ -89,7 +89,7 @@ Follow these steps in order when landing a change:
 7. **Watch CI** — wait for the Actions run to go green before merging into main. Run `gh pr checks <number>` to confirm every workflow is passing; do not merge if any is red.
 8. **Merge to main** — then push main.
 9. **Tag and release** — pick the next semver tag. Create a GitHub release page: following prior release pages, use a very succinct style and 8th grade English.
-10. **Sync jonbaldie/go-mutesting** - bring the repo copy jonbaldie/go-mutesting (../../jonbaldie/go-mutesting) into sync with your change to quality/mutago and follow its own shipping workflow through to completion.
+10. **Sync jonbaldie/go-mutesting** — first check that you have push access to `jonbaldie/go-mutesting` (for example `gh api repos/jonbaldie/go-mutesting --jq .permissions.push`). If push is false or the check fails, skip this step and note that in your summary; do not attempt a sync PR. Only if you have push access, bring the repo copy (`../../jonbaldie/go-mutesting`) into sync with your change to quality/mutago and follow its own shipping workflow through to completion.
 
 ## Conventions
 
