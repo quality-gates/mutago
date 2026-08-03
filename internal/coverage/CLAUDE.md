@@ -16,4 +16,4 @@ These mutations can never be killed and are expected to escape:
 - `strings.TrimSpace` on `go test -list` output — output is already clean
 - Closing a buffered channel — not observable from the caller
 - Appending `nil` to `extraTestFlags` — no-op
-- `Benchmark`/`Fuzz` prefix checks — no benchmarks or fuzz tests exist in this repo
+- `Fuzz` prefix checks — fuzz entry points are intentionally included in per-test coverage
