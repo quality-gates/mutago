@@ -3,10 +3,13 @@ package engine
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
+	"github.com/quality-gates/mutago/v2/internal/coverage"
 	"github.com/quality-gates/mutago/v2/internal/gitdiff"
 	"github.com/quality-gates/mutago/v2/internal/models"
 
@@ -156,5 +159,61 @@ func TestEngineCoverageHonorsTestFlags(t *testing.T) {
 	if res.Report.Stats.KilledCount == 0 {
 		t.Fatalf("expected at least one killed mutant when coverage honors -short; notCovered=%d escaped=%d stdout=%q",
 			res.Report.Stats.NotCoveredCount, res.Report.Stats.EscapedCount, stdout.String())
+	}
+}
+
+func TestRunExecJobSkipsUncoveredMutantExecution(t *testing.T) {
+	t.Setenv("MUTAGO_EXEC_HELPER", "1")
+	marker := filepath.Join(t.TempDir(), "executed")
+	t.Setenv("MUTAGO_EXEC_MARKER", marker)
+
+	dir := t.TempDir()
+	original := filepath.Join(dir, "fixture.go")
+	mutated := filepath.Join(dir, "fixture.mutated.go")
+	profilePath := filepath.Join(dir, "coverage.out")
+	if err := os.WriteFile(original, []byte("package fixture\nvar value = true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mutated, []byte("package fixture\nvar value = false\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(profilePath, []byte("mode: set\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	prof, err := coverage.ParseProfile(profilePath, "example.com/fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	job := execJob{
+		opts:         &models.Options{},
+		originalFile: original,
+		mutationFile: mutated,
+		absFile:      original,
+		coverProfile: prof,
+		execs:        []string{os.Args[0], "-test.run=^TestRunExecJobHelper$"},
+		mutant: models.Mutant{Mutator: models.Mutator{
+			MutatorName:       "test/uncovered",
+			OriginalFilePath:  original,
+			OriginalStartLine: 2,
+		}},
+	}
+	report := &models.Report{}
+	runExecJob(job, report, &sync.Mutex{}, io.Discard, nil)
+
+	if report.Stats.NotCoveredCount != 1 {
+		t.Fatalf("expected one not-covered mutant, got %d", report.Stats.NotCoveredCount)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("uncovered mutant executed test command: %v", err)
+	}
+}
+
+func TestRunExecJobHelper(t *testing.T) {
+	if os.Getenv("MUTAGO_EXEC_HELPER") != "1" {
+		return
+	}
+	if err := os.WriteFile(os.Getenv("MUTAGO_EXEC_MARKER"), []byte("executed"), 0644); err != nil {
+		t.Fatal(err)
 	}
 }
