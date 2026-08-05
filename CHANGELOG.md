@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.8.1] — 2026-08-05
 
 ### Fixed
 - `--test-flags` now reaches the initial `--coverage` profile collection step (`runCoverageProfile`). Previously `-short` and similar flags were forwarded to per-test profiling and per-mutant runs but omitted from coverage collection, so failing non-short tests could leave an empty profile and mark all mutants NOT COVERED.
@@ -441,4 +441,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.7.6]: https://github.com/quality-gates/mutago/compare/v2.7.5...v2.7.6
 [v2.7.7]: https://github.com/quality-gates/mutago/compare/v2.7.6...v2.7.7
 [v2.8.0]: https://github.com/quality-gates/mutago/compare/v2.7.7...v2.8.0
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.8.0...HEAD
+[v2.8.1]: https://github.com/quality-gates/mutago/compare/v2.8.0...v2.8.1
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.8.1...HEAD
