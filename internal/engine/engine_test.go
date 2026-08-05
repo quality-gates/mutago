@@ -119,3 +119,42 @@ func TestSkipForGitDiffUsesOriginalASTLine(t *testing.T) {
 		t.Error("expected skipForGitDiff to be true, got false")
 	}
 }
+
+// TestEngineCoverageHonorsTestFlags ensures --test-flags reaches the initial
+// coverage collection step. Without -short, testdata/covflags fails (simulating
+// missing credentials) and mutants are incorrectly marked NOT COVERED.
+func TestEngineCoverageHonorsTestFlags(t *testing.T) {
+	opts := &models.Options{}
+	opts.Exec.Coverage = true
+	opts.Exec.Timeout = 30
+	opts.Exec.TestFlags = "-short"
+	opts.Remaining.Targets = []string{"./testdata/covflags"}
+
+	var stdout, stderr bytes.Buffer
+	e := &Engine{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+
+	res, err := e.Run(context.Background(), opts, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Report == nil {
+		t.Fatal("expected report to be populated, got nil")
+	}
+	if res.Report.Stats.TotalMutantsCount == 0 {
+		t.Fatal("expected at least one mutant in covflags fixture")
+	}
+
+	// Symptom of the bug: coverage collection omitted -short, so the profile
+	// has 0% coverage and every mutant is marked NOT COVERED.
+	if res.Report.Stats.NotCoveredCount == res.Report.Stats.TotalMutantsCount {
+		t.Fatalf("all %d mutants marked NOT COVERED despite --test-flags=-short; stdout=%q stderr=%q",
+			res.Report.Stats.TotalMutantsCount, stdout.String(), stderr.String())
+	}
+	if res.Report.Stats.KilledCount == 0 {
+		t.Fatalf("expected at least one killed mutant when coverage honors -short; notCovered=%d escaped=%d stdout=%q",
+			res.Report.Stats.NotCoveredCount, res.Report.Stats.EscapedCount, stdout.String())
+	}
+}

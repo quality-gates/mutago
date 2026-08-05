@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- `--test-flags` now reaches the initial `--coverage` profile collection step (`runCoverageProfile`). Previously `-short` and similar flags were forwarded to per-test profiling and per-mutant runs but omitted from coverage collection, so failing non-short tests could leave an empty profile and mark all mutants NOT COVERED.
+
 ### Changed
 - Shipping step 10 now requires a push-access check on `jonbaldie/go-mutesting` before attempting the downstream sync; skip the sync and note it when push is unavailable.
 

@@ -341,7 +341,7 @@ func (r *mutationRun) coverageForPackage(importPkg importing.Package) *coverage.
 	if r.opts.General.DryRun {
 		return nil
 	}
-	coverProfile := buildCoverageProfile(r.opts, importPkg.Files, r.tmpDir, r.modulePath)
+	coverProfile := buildCoverageProfile(r.opts, importPkg.Files, r.tmpDir, r.modulePath, r.extraTestFlags)
 	if coverProfile != nil {
 		r.report.HasCoverage = true
 	}
@@ -650,7 +650,7 @@ func applyAdaptiveTimeout(opts *models.Options, pkgs []importing.Package, execs 
 	}
 }
 
-func buildCoverageProfile(opts *models.Options, pkgFiles []string, tmpDir string, modulePath string) *coverage.Profile {
+func buildCoverageProfile(opts *models.Options, pkgFiles []string, tmpDir string, modulePath string, extraTestFlags []string) *coverage.Profile {
 	if opts.Exec.NoExec || !opts.Exec.Coverage {
 		return nil
 	}
@@ -664,7 +664,7 @@ func buildCoverageProfile(opts *models.Options, pkgFiles []string, tmpDir string
 		return nil
 	}
 	profilePath := filepath.Join(profileDir, "coverage.out")
-	if err := runCoverageProfile(pkgPath, profilePath); err != nil {
+	if err := runCoverageProfile(pkgPath, profilePath, extraTestFlags); err != nil {
 		console.Verbose(opts, "Coverage unavailable for %q: %v", pkgPath, err)
 		return nil
 	}
@@ -676,8 +676,11 @@ func buildCoverageProfile(opts *models.Options, pkgFiles []string, tmpDir string
 	return prof
 }
 
-func runCoverageProfile(pkg, profilePath string) error {
-	cmd := exec.Command("go", "test", "-coverprofile="+profilePath, pkg)
+func runCoverageProfile(pkg, profilePath string, extraTestFlags []string) error {
+	args := []string{"test", "-coverprofile=" + profilePath}
+	args = append(args, extraTestFlags...)
+	args = append(args, pkg)
+	cmd := exec.Command("go", args...)
 	cmd.Env = os.Environ()
 	_ = cmd.Run()
 	if _, err := os.Stat(profilePath); err != nil {
