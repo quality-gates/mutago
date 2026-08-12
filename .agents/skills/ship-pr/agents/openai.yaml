@@ -1,0 +1,6 @@
+interface:
+  display_name: "Ship PR"
+  short_description: "Merge a green PR and close its issue"
+  default_prompt: "Use $ship-pr to ship this pull request."
+policy:
+  allow_implicit_invocation: false
