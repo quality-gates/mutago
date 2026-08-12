@@ -1,6 +1,83 @@
-# mutago [![Go Reference](https://pkg.go.dev/badge/github.com/quality-gates/mutago/v2.svg)](https://pkg.go.dev/github.com/quality-gates/mutago/v2) [![Mutation Testing](https://github.com/quality-gates/mutago/actions/workflows/mutation.yml/badge.svg)](https://github.com/quality-gates/mutago/actions/workflows/mutation.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Go 1.26+](https://img.shields.io/badge/Go-1.26+-00ADD8.svg)](https://go.dev)
+# mutago
 
-mutago is a mutation testing tool for Go. It tweaks your code in small ways and checks whether your tests catch the change. If they don't, that's a gap in your test suite worth closing.
+Catch weak tests in Go before they calcify: small source changes that should
+fail the suite and do not. Mutation testing answers whether the tests would
+catch a real bug of that shape — not only whether lines executed.
+
+`mutago` is a local CLI. It mutates Go production source, runs your tests
+against each mutant, and reports kills, escapes, and scores. Go 1.26+.
+Full documentation: https://quality-gates.github.io/mutago/
+
+## Quick start
+
+```console
+go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
+mutago ./...
+```
+
+That mutates the module and prints each mutant status on stdout. Exit `0` is
+clean against any configured gates; non-zero means a gate failed or the tool
+or test run failed.
+
+Common next steps:
+
+```console
+mutago --coverage ./...
+mutago --coverage --min-msi 75 --min-covered-msi 80 ./...
+mutago --quiet --coverage --logger-github ./...
+```
+
+## Install
+
+```console
+go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
+mutago --version
+```
+
+## Tune the gate
+
+Start without score floors while you learn the escape set. Add coverage so
+uncovered lines do not drag the total score, then pin floors the suite can hold:
+
+```console
+mutago --coverage --min-msi 75 --min-covered-msi 80 ./...
+```
+
+Put the same policy in config when thresholds need to live in the repo. On a
+legacy module with accepted survivors, record a baseline and fail only on new
+escapes (`--baseline`, `--update-baseline`). Limit a PR to changed lines with
+`--git-diff-lines`.
+
+## Suppress one intentional exception
+
+Blacklist known false positives, disable mutators in config, or use source
+annotations. Details are in the full guide below (blacklist, annotations,
+config file).
+
+## Drop it into CI
+
+```yaml
+# GitHub Actions
+- uses: actions/setup-go@v6
+  with:
+    go-version-file: go.mod
+- run: go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
+- run: mutago --coverage --min-msi 75 --min-covered-msi 80 --logger-github ./...
+```
+
+```yaml
+# GitLab Code Quality
+script: mutago --coverage --logger-gitlab --min-msi 75 ./...
+```
+
+## Maintainers
+
+Site docs: https://quality-gates.github.io/mutago/  
+Fork lineage: [avito-tech/mutago](https://github.com/avito-tech/mutago) ← [zimmski/go-mutesting](https://github.com/zimmski/go-mutesting).
+
+---
+
+# Full guide
 
 ## Features
 
@@ -37,29 +114,6 @@ go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
 Full documentation: https://quality-gates.github.io/mutago/
 
 Forked from [avito-tech/mutago](https://github.com/avito-tech/mutago), itself a fork of [zimmski/go-mutesting](https://github.com/zimmski/go-mutesting).
-
-## Quick example
-
-The following command mutates the mutago project with all available mutators.
-
-```bash
-mutago github.com/quality-gates/mutago/v2/...
-```
-
-For each mutation the tool prints whether the tests caught it. If they didn't, the source code patch is printed so the mutation can be investigated. The following shows an example patch.
-
-```diff
-for _, d := range opts.Mutator.DisableMutators {
-	pattern := strings.HasSuffix(d, "*")
-
--	if (pattern && strings.HasPrefix(name, d[:len(d)-2])) || (!pattern && name == d) {
-+	if (pattern && strings.HasPrefix(name, d[:len(d)-2])) || false {
-		continue MUTATOR
-	}
-}
-```
-
-The example shows that the right term `(!pattern && name == d)` of the `||` operator is made irrelevant by substituting it with `false`. Since this source code change is not detected by the test suite (the tests did not fail), we can mark it as untested code.
 
 ## <a name="table-of-content"></a>Table of contents
 
