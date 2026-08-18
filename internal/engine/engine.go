@@ -1058,9 +1058,6 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 		return
 	}
 
-	execExitCode := mutateExec(opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
-	console.Debug(opts, "Exited with %d", execExitCode)
-
 	mutatedSourceCode, err := os.ReadFile(job.mutationFile)
 	if err != nil {
 		log.Fatal(err)
@@ -1079,12 +1076,18 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 	}
 	msg := fmt.Sprintf("%s (%s)", loc, mutant.Mutator.MutatorName)
 
-	mu.Lock()
-	defer mu.Unlock()
 	if notCovered {
+		mu.Lock()
 		recordNotCovered(opts, stats, mutant, msg)
+		mu.Unlock()
 		return
 	}
+
+	execExitCode := mutateExec(opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
+	console.Debug(opts, "Exited with %d", execExitCode)
+
+	mu.Lock()
+	defer mu.Unlock()
 	recordMutantResult(opts, stats, mutant, execExitCode, msg)
 }
 

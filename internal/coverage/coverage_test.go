@@ -290,6 +290,13 @@ func TestCountTests_NonexistentPackage(t *testing.T) {
 	assert.Zero(t, count, "nonexistent package should return 0")
 }
 
+func TestIsTestFuncNameExcludesBenchmarks(t *testing.T) {
+	assert.True(t, isTestFuncName("TestDetect"))
+	assert.True(t, isTestFuncName("FuzzDetect"))
+	assert.False(t, isTestFuncName("BenchmarkDetect"))
+	assert.False(t, isTestFuncName("ExampleDetect"))
+}
+
 // --- BuildPerTestProfile tests ---
 
 func TestBuildPerTestProfile_RealPackage(t *testing.T) {
