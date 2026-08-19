@@ -1,0 +1,6 @@
+interface:
+  display_name: "Outpost Edict"
+  short_description: "Inject standing outpost workflow rules"
+  default_prompt: "Use $outpost-edict to load outpost standing rules."
+policy:
+  allow_implicit_invocation: true
