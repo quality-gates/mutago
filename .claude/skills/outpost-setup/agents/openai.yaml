@@ -1,0 +1,6 @@
+interface:
+  display_name: "Outpost Setup"
+  short_description: "Create .outpost.json with reasonable defaults"
+  default_prompt: "Use $outpost-setup to create .outpost.json in this project."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Improve Performance"
+  short_description: "Find and prove worthwhile speedups"
+  default_prompt: "Use $seeking-performance to find and prove a performance improvement in this code."

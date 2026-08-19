@@ -1,0 +1,6 @@
+interface:
+  display_name: "Outpost Done"
+  short_description: "Signal this assignment is complete"
+  default_prompt: "Use $outpost-done — this assignment is finished."
+policy:
+  allow_implicit_invocation: true

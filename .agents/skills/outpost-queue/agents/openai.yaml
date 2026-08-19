@@ -1,0 +1,6 @@
+interface:
+  display_name: "Outpost Queue"
+  short_description: "Put the goal on the perimeter and dispatch"
+  default_prompt: "Use $outpost-queue — put the goal on the perimeter and dispatch."
+policy:
+  allow_implicit_invocation: false
