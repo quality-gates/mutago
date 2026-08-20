@@ -177,3 +177,55 @@ func TestFuncMap(t *testing.T) {
 	result = funcMap["hasPrefix"].(func(string, string) bool)("test_string", "string")
 	assert.False(t, result)
 }
+
+func TestExtractContextLines(t *testing.T) {
+	tests := []struct {
+		name       string
+		source     string
+		line       int
+		radius     int
+		wantLines  []string
+		wantStart  int
+	}{
+		{
+			name:      "empty source",
+			source:    "",
+			line:      1,
+			radius:    3,
+			wantLines: nil,
+			wantStart: 0,
+		},
+		{
+			name:      "non-positive line",
+			source:    "a\nb\nc",
+			line:      0,
+			radius:    3,
+			wantLines: nil,
+			wantStart: 0,
+		},
+		{
+			name:      "line within radius of start and end",
+			source:    "a\nb\nc",
+			line:      2,
+			radius:    1,
+			wantLines: []string{"a", "b", "c"},
+			wantStart: 1,
+		},
+		{
+			name:      "line far beyond the source's line count",
+			source:    "x",
+			line:      6,
+			radius:    3,
+			wantLines: []string{},
+			wantStart: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotLines, gotStart := extractContextLines(tt.source, tt.line, tt.radius)
+			assert.Equal(t, tt.wantLines, gotLines)
+			assert.Equal(t, tt.wantStart, gotStart)
+		})
+	}
+}
