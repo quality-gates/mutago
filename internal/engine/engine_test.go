@@ -158,3 +158,85 @@ func TestEngineCoverageHonorsTestFlags(t *testing.T) {
 			res.Report.Stats.NotCoveredCount, res.Report.Stats.EscapedCount, stdout.String())
 	}
 }
+
+// TestEngineCoverageSkipsExecForUncoveredMutants ensures --coverage does not run
+// the exec command for mutants on uncovered lines.
+func TestEngineCoverageSkipsExecForUncoveredMutants(t *testing.T) {
+	_ = os.MkdirAll("./testdata", 0755)
+	tempDir, err := os.MkdirTemp("./testdata", "covskip-*")
+	if err != nil {
+		t.Fatalf("failed to create temp package: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	src := `package covskip
+
+func Covered(a, b int) int { return a + b }
+
+func Uncovered(a, b int) int { return a - b }
+`
+	testSrc := `package covskip
+
+import "testing"
+
+func TestCovered(t *testing.T) {
+	if got := Covered(1, 2); got != 3 {
+		t.Fatalf("Covered(1, 2) = %d", got)
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(tempDir, "pkg.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("failed to write pkg.go: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "pkg_test.go"), []byte(testSrc), 0644); err != nil {
+		t.Fatalf("failed to write pkg_test.go: %v", err)
+	}
+
+	logFile := filepath.Join(tempDir, "exec.log")
+	script := filepath.Join(tempDir, "count.sh")
+	if err := os.WriteFile(script, []byte("echo x >> \"$1\"\nexit 0\n"), 0644); err != nil {
+		t.Fatalf("failed to write count.sh: %v", err)
+	}
+
+	opts := &models.Options{}
+	opts.Exec.Coverage = true
+	opts.Exec.Timeout = 10
+	opts.Exec.Exec = "/bin/sh " + script + " " + logFile
+	opts.Mutator.DisableMutators = []string{
+		"branch/*", "composite/*", "concurrency/*", "conditional/*",
+		"expression/*", "loop/*", "numbers/*", "select/*", "statement/*",
+	}
+	opts.Remaining.Targets = []string{"./" + tempDir}
+
+	var stdout, stderr bytes.Buffer
+	e := &Engine{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+	res, err := e.Run(context.Background(), opts, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Report == nil {
+		t.Fatal("expected report to be populated, got nil")
+	}
+	stats := res.Report.Stats
+	if stats.NotCoveredCount == 0 {
+		t.Fatalf("expected at least one not-covered mutant; stdout=%q stderr=%q",
+			stdout.String(), stderr.String())
+	}
+
+	execCount := 0
+	if data, readErr := os.ReadFile(logFile); readErr == nil {
+		for _, line := range bytes.Split(data, []byte("\n")) {
+			if len(line) > 0 {
+				execCount++
+			}
+		}
+	}
+	scored := stats.KilledCount + stats.EscapedCount + stats.ErrorCount + stats.SkippedCount
+	if int64(execCount) != scored {
+		t.Fatalf("exec ran for not-covered mutants: exec=%d scored=%d notCovered=%d total=%d stdout=%q stderr=%q",
+			execCount, scored, stats.NotCoveredCount, stats.TotalMutantsCount, stdout.String(), stderr.String())
+	}
+}

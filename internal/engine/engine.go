@@ -1058,9 +1058,6 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 		return
 	}
 
-	execExitCode := mutateExec(opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
-	console.Debug(opts, "Exited with %d", execExitCode)
-
 	mutatedSourceCode, err := os.ReadFile(job.mutationFile)
 	if err != nil {
 		log.Fatal(err)
@@ -1069,7 +1066,22 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 
 	startLine := mutant.Mutator.OriginalStartLine
 	notCovered := job.coverProfile != nil && startLine > 0 && !job.coverProfile.IsCovered(job.absFile, int(startLine))
+	if notCovered {
+		mu.Lock()
+		defer mu.Unlock()
+		recordNotCovered(opts, stats, mutant, mutantLocation(mutant))
+		return
+	}
 
+	execExitCode := mutateExec(opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
+	console.Debug(opts, "Exited with %d", execExitCode)
+
+	mu.Lock()
+	defer mu.Unlock()
+	recordMutantResult(opts, stats, mutant, execExitCode, mutantLocation(mutant))
+}
+
+func mutantLocation(mutant models.Mutant) string {
 	loc := mutant.Mutator.OriginalFilePath
 	if rel, err := filepath.Rel(".", loc); err == nil {
 		loc = filepath.ToSlash(rel)
@@ -1077,15 +1089,7 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 	if mutant.Mutator.OriginalStartLine > 0 {
 		loc = fmt.Sprintf("%s:%d", loc, mutant.Mutator.OriginalStartLine)
 	}
-	msg := fmt.Sprintf("%s (%s)", loc, mutant.Mutator.MutatorName)
-
-	mu.Lock()
-	defer mu.Unlock()
-	if notCovered {
-		recordNotCovered(opts, stats, mutant, msg)
-		return
-	}
-	recordMutantResult(opts, stats, mutant, execExitCode, msg)
+	return fmt.Sprintf("%s (%s)", loc, mutant.Mutator.MutatorName)
 }
 
 func skipForGitDiff(job execJob, gitChangedLines gitdiff.ChangedLines) bool {

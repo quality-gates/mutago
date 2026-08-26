@@ -299,7 +299,7 @@ Use `--min-msi` and `--min-covered-msi` to fail CI if mutation scores drop below
 mutago --min-msi 60 --min-covered-msi 80 ./...
 ```
 
-Add `--coverage` to generate a coverage profile first. Mutants on uncovered lines are marked "not covered" and excluded from the covered-MSI denominator (so you're not penalised for code your tests don't reach at all).
+Add `--coverage` to generate a coverage profile first. Mutants on uncovered lines skip test execution, are marked "not covered", and are excluded from the covered-MSI denominator (so you're not penalised for code your tests don't reach at all).
 
 ```bash
 mutago --coverage --min-msi 50 --min-covered-msi 75 ./...
