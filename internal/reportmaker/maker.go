@@ -321,7 +321,9 @@ func extractContextLines(source string, line, radius int) ([]string, int) {
 	}
 	lines := strings.Split(source, "\n")
 	start := max(line-radius-1, 0)
+	start = min(start, len(lines))
 	end := min(line+radius-1, len(lines)-1)
+	end = max(end, start-1)
 	return lines[start : end+1], start + 1
 }
 
