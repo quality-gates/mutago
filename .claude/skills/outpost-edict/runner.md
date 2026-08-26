@@ -28,8 +28,13 @@ Grill the cwd for what shipping looks like here: ticket and any user
 instructions first, then remotes (`origin` / `upstream`, default branch),
 then past releases, tags, PRs, and repo signals.
 
-Name one method from that evidence and ship once. Use `/ship-pr` when the
-method is a PR.
+Name one method from that evidence and ship once. Follow edict: shipping via a
+PR/MR follows `/ship-pr`'s SKILL.md rigorously.
+
+<if>
+  <when>Shipping via a PR/MR</when>
+  <then>Follow `/ship-pr`'s SKILL.md rigorously</then>
+</if>
 
 Done when the ship is complete on the host, or a single external blocker stops it.
 
