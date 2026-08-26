@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `--coverage` now skips test execution for mutants on uncovered lines. Previously every mutant ran `go test` (or `--exec`) before the coverage check, so uncovered mutants paid the full suite cost and then were discarded.
+
 ## [v2.8.2] — 2026-08-20
 
 ### Fixed
