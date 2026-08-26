@@ -24,8 +24,8 @@ For a ticket assignment: close or complete it on the configured tracker. Record
 what landed (branch, PR, commit, artifact path — whatever the harness and
 tracker use).
 
-For a patrol-dog patrol: leave ticket states as found; put the bark where the
-prefect will see it.
+For a patrol-dog patrol: write the bark on this patrol ticket and complete it;
+leave every other ticket as found.
 
 <if>
   <when>Assignment was a ticket</when>
@@ -34,7 +34,7 @@ prefect will see it.
 
 <if>
   <when>Assignment was a patrol-dog patrol</when>
-  <then>Leave ticket states as found; put the bark where the prefect will see it</then>
+  <then>Write the bark on this patrol ticket and complete it; leave every other ticket as found</then>
 </if>
 
 Done when the tracker (and bark) give the prefect enough to advance.

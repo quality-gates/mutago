@@ -15,6 +15,7 @@ model honours what it can through the harness's own session/subagent controls.
 | `maxSplicers` | number | unbounded | Soft cap on concurrent Splicer agents |
 | `maxRunners` | number | `1` | Soft cap on concurrent Runner agents |
 | `maxPatrolDogs` | number | `1` | Soft cap on concurrent Patrol dog agents |
+| `patrolEvery` | number | `3` | Cadence gap: completed non-patrol tickets on this spec between patrols |
 | `model` | string | harness default | Preferred model id/name when dispatching |
 | `thinking` | string | harness default | Preferred thinking/reasoning level when dispatching |
 
@@ -26,6 +27,7 @@ model honours what it can through the harness's own session/subagent controls.
   "maxSplicers": 1,
   "maxRunners": 1,
   "maxPatrolDogs": 1,
+  "patrolEvery": 3,
   "model": "default",
   "thinking": "high"
 }
