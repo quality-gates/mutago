@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.9.0] — 2026-08-27
 
 ### Changed
 - Mutation discovery now indexes annotation, coverage, git-diff, package, and identifier lookups; defers source rendering until a mutant is executed; and reuses scratch storage in high-cardinality mutators.
@@ -484,4 +484,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.8.4]: https://github.com/quality-gates/mutago/compare/v2.8.3...v2.8.4
 [v2.8.5]: https://github.com/quality-gates/mutago/compare/v2.8.4...v2.8.5
 [v2.8.6]: https://github.com/quality-gates/mutago/compare/v2.8.5...v2.8.6
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.8.6...HEAD
+[v2.9.0]: https://github.com/quality-gates/mutago/compare/v2.8.6...v2.9.0
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.9.0...HEAD
