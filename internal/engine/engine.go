@@ -185,6 +185,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 	}
 
 	pkgs := targets.Packages
+	astutil.ClearIdentifierCache()
 	parser.ClearPackageCache()
 	if err := parser.PreparePackages(files); err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Cannot load target packages: %w", err)
