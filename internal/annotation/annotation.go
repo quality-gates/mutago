@@ -31,12 +31,14 @@ func NewProcessor() *Processor {
 			Exclusions: make(map[token.Pos]struct{}), // *ast.FuncDecl node + all its children
 			Name:       FuncAnnotation},
 		RegexAnnotation: RegexAnnotation{
-			Exclusions: make(map[int]map[token.Pos]mutatorInfo), // source code line -> node -> excluded mutators
-			Name:       RegexpAnnotation,
+			Exclusions:    make(map[int]map[token.Pos]mutatorInfo), // source code line -> node -> excluded mutators
+			Name:          RegexpAnnotation,
+			PositionIndex: make(map[token.Pos]mutatorInfo),
 		},
 		LineAnnotation: LineAnnotation{
-			Exclusions: make(map[int]map[token.Pos]mutatorInfo), // source code line -> node -> excluded mutators
-			Name:       NextLineAnnotation,
+			Exclusions:    make(map[int]map[token.Pos]mutatorInfo), // source code line -> node -> excluded mutators
+			Name:          NextLineAnnotation,
+			PositionIndex: make(map[token.Pos]mutatorInfo),
 		},
 	}
 }
@@ -55,7 +57,8 @@ func (p *Processor) Collect(file *ast.File, fset *token.FileSet, fileAbs string)
 		}
 	}
 
-	handler := p.buildChain()
+	nodesByLine := indexNodesByLine(file, fset)
+	handler := p.buildChain(nodesByLine)
 
 	for _, commentGroup := range file.Comments {
 		for _, comm := range commentGroup.List {
@@ -105,29 +108,36 @@ func getAnnotationName(comment *ast.Comment) string {
 
 // collectExcludedNodes populates a map of nodes to exclude from mutation based on the line numbers.
 func collectExcludedNodes(
-	fileSet *token.FileSet,
-	file *ast.File,
+	nodesByLine map[int][]ast.Node,
 	lines []int,
 	excludedNodes map[int]map[token.Pos]mutatorInfo,
+	positions map[token.Pos]mutatorInfo,
 	mutators mutatorInfo) {
-	ast.Inspect(file, func(n ast.Node) bool {
-		if n == nil {
+	for _, line := range lines {
+		if _, exists := excludedNodes[line]; !exists {
+			excludedNodes[line] = make(map[token.Pos]mutatorInfo)
+		}
+		for _, node := range nodesByLine[line] {
+			excludedNodes[line][node.Pos()] = mutators
+			positions[node.Pos()] = mutators
+		}
+	}
+}
+
+func indexNodesByLine(file *ast.File, fileSet *token.FileSet) map[int][]ast.Node {
+	nodesByLine := make(map[int][]ast.Node)
+	ast.Inspect(file, func(node ast.Node) bool {
+		if node == nil {
 			return true
 		}
-
-		startLine, endLine := getNodeLineRange(fileSet, n)
-
-		for _, line := range lines {
-			if startLine == line || endLine == line {
-				if _, exists := excludedNodes[line]; !exists {
-					excludedNodes[line] = make(map[token.Pos]mutatorInfo)
-				}
-				excludedNodes[line][n.Pos()] = mutators
-			}
+		startLine, endLine := getNodeLineRange(fileSet, node)
+		nodesByLine[startLine] = append(nodesByLine[startLine], node)
+		if endLine != startLine {
+			nodesByLine[endLine] = append(nodesByLine[endLine], node)
 		}
-
 		return true
 	})
+	return nodesByLine
 }
 
 // collectNodesForBlockStmt is a temporary workaround specifically for handling BlockStmt nodes in AST.

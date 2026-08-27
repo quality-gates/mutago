@@ -126,8 +126,8 @@ func mainCmd(args []string) int {
 		return exitCode
 	}
 
-	files := importing.FilesOfArgs(opts.Remaining.Targets, opts)
-	if len(files) == 0 {
+	targets := importing.ResolveTargets(opts.Remaining.Targets, opts)
+	if len(targets.Files) == 0 {
 		return exitError("Could not find any suitable Go source files")
 	}
 
@@ -136,11 +136,11 @@ func mainCmd(args []string) int {
 		return exitError("Cannot load baseline: %v", err)
 	}
 
-	if handled, code := handleInfoFlags(opts, files); handled {
+	if handled, code := handleInfoFlags(opts, targets.Files); handled {
 		return code
 	}
 
-	return runMutationTesting(opts, bl)
+	return runMutationTesting(opts, bl, targets)
 }
 
 func handleInfoFlags(opts *models.Options, files []string) (bool, int) {
@@ -165,12 +165,12 @@ func handleInfoFlags(opts *models.Options, files []string) (bool, int) {
 	return false, 0
 }
 
-func runMutationTesting(opts *models.Options, bl *baseline.File) int {
+func runMutationTesting(opts *models.Options, bl *baseline.File, targets importing.ResolvedTargets) int {
 	e := &engine.Engine{
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 	}
-	res, err := e.Run(context.Background(), opts, bl)
+	res, err := e.RunResolved(context.Background(), opts, bl, targets)
 	if err != nil {
 		return exitError(err.Error())
 	}

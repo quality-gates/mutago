@@ -266,11 +266,28 @@ func singleLineChangeDesc(fromLines, toLines []string) (string, bool) {
 // mutator descriptions, and heuristic test-writing hints.
 func MakeAgenticJSONReport(report models.Report, moduleRoot string) error {
 	mutants := make([]AgenticMutant, 0, len(report.Escaped))
+	sourceLines := make(map[string][]string)
+	testFiles := make(map[string][]string)
 	for _, m := range report.Escaped {
 		relFile := toRelPath(m.Mutator.OriginalFilePath, moduleRoot)
 		id := baseline.MutantID(relFile, m.Mutator.MutatorName, m.Diff)
 		const contextRadius = 3
-		ctxLines, ctxStart := extractContextLines(m.Mutator.OriginalSourceCode, int(m.Mutator.OriginalStartLine), contextRadius)
+		source := report.Sources[m.Mutator.OriginalFilePath]
+		if source == "" {
+			source = m.Mutator.OriginalSourceCode
+		}
+		lines, ok := sourceLines[m.Mutator.OriginalFilePath]
+		if !ok {
+			lines = strings.Split(source, "\n")
+			sourceLines[m.Mutator.OriginalFilePath] = lines
+		}
+		ctxLines, ctxStart := extractContextFromLines(lines, int(m.Mutator.OriginalStartLine), contextRadius)
+		dir := filepath.Dir(m.Mutator.OriginalFilePath)
+		packageTests, ok := testFiles[dir]
+		if !ok {
+			packageTests = findTestFiles(dir, moduleRoot)
+			testFiles[dir] = packageTests
+		}
 		mutants = append(mutants, AgenticMutant{
 			ID:               id,
 			File:             relFile,
@@ -281,7 +298,7 @@ func MakeAgenticJSONReport(report models.Report, moduleRoot string) error {
 			Diff:             m.Diff,
 			ContextStartLine: ctxStart,
 			ContextLines:     ctxLines,
-			TestFiles:        findTestFiles(filepath.Dir(m.Mutator.OriginalFilePath), moduleRoot),
+			TestFiles:        packageTests,
 		})
 	}
 
@@ -319,7 +336,13 @@ func extractContextLines(source string, line, radius int) ([]string, int) {
 	if source == "" || line <= 0 {
 		return nil, 0
 	}
-	lines := strings.Split(source, "\n")
+	return extractContextFromLines(strings.Split(source, "\n"), line, radius)
+}
+
+func extractContextFromLines(lines []string, line, radius int) ([]string, int) {
+	if len(lines) == 0 || line <= 0 {
+		return nil, 0
+	}
 	start := max(line-radius-1, 0)
 	start = min(start, len(lines))
 	end := min(line+radius-1, len(lines)-1)

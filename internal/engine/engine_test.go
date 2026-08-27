@@ -3,9 +3,14 @@ package engine
 import (
 	"bytes"
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/quality-gates/mutago/v2/internal/gitdiff"
 	"github.com/quality-gates/mutago/v2/internal/models"
@@ -22,6 +27,70 @@ import (
 	_ "github.com/quality-gates/mutago/v2/mutator/select"
 	_ "github.com/quality-gates/mutago/v2/mutator/statement"
 )
+
+func TestRunCustomExecHonorsCancelledContext(t *testing.T) {
+	dir := t.TempDir()
+	original := filepath.Join(dir, "original.go")
+	mutated := filepath.Join(dir, "mutated.go")
+	if err := os.WriteFile(original, []byte("package sample\nvar n = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mutated, []byte("package sample\nvar n = 2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	opts := &models.Options{}
+	opts.Exec.Timeout = 30
+	job := execJob{
+		ctx:   ctx,
+		opts:  opts,
+		pkg:   types.NewPackage("sample", "sample"),
+		execs: []string{"sh", "-c", "sleep 10"},
+		source: mutationSource{
+			originalFile: original,
+			mutationFile: mutated,
+		},
+	}
+	started := time.Now()
+	code := runCustomExec(job, &models.Mutant{})
+	if code != 3 {
+		t.Fatalf("expected cancelled command to return tool error 3, got %d", code)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("cancelled command took %s", elapsed)
+	}
+}
+
+func TestMutationEditMaterializesChangedNode(t *testing.T) {
+	source := []byte("package sample\nvar value = 1\n")
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "sample.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var literal *ast.BasicLit
+	ast.Inspect(file, func(node ast.Node) bool {
+		if candidate, ok := node.(*ast.BasicLit); ok {
+			literal = candidate
+		}
+		return true
+	})
+	literal.Value = "2"
+
+	start, end := literal.Pos(), literal.End()
+	edit, err := captureMutationEdit(fset, literal, start, end, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := edit.materialize(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "package sample\nvar value = 2\n" {
+		t.Fatalf("unexpected mutation: %q", got)
+	}
+}
 
 func TestEngineDryRun(t *testing.T) {
 	opts := &models.Options{}
@@ -103,8 +172,10 @@ func TestShouldFail(t *testing.T) {
 
 func TestSkipForGitDiffUsesOriginalASTLine(t *testing.T) {
 	job := execJob{
-		absFile: "/repo/fixture.go",
-		opts:    &models.Options{},
+		opts: &models.Options{},
+		source: mutationSource{
+			absFile: "/repo/fixture.go",
+		},
 	}
 	gitChangedLines := gitdiff.ChangedLines{
 		"fixture.go": {{Start: 4, End: 4}},

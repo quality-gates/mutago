@@ -27,21 +27,23 @@ func MutatorSelectCaseRemove(_ *types.Package, _ *types.Info, node ast.Node) []m
 	}
 
 	var mutations []mutator.Mutation
+	original := append([]ast.Stmt(nil), n.Body.List...)
 
-	for i, stmt := range n.Body.List {
+	for i, stmt := range original {
 		comm, ok := stmt.(*ast.CommClause)
 		if !ok || comm.Comm == nil {
 			continue // skip default
 		}
 
 		li := i
-		original := make([]ast.Stmt, len(n.Body.List))
-		copy(original, n.Body.List)
 
 		mutations = append(mutations, mutator.Mutation{
 			Position: comm.Case,
 			Change: func() {
-				n.Body.List = append(n.Body.List[:li], n.Body.List[li+1:]...)
+				changed := make([]ast.Stmt, 0, len(original)-1)
+				changed = append(changed, original[:li]...)
+				changed = append(changed, original[li+1:]...)
+				n.Body.List = changed
 			},
 			Reset: func() {
 				n.Body.List = original

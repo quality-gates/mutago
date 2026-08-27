@@ -4,6 +4,8 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"sort"
+	"sync"
 )
 
 // IdentifiersInStatement returns all identifiers with their found in a statement.
@@ -12,22 +14,177 @@ func IdentifiersInStatement(pkg *types.Package, info *types.Info, stmt ast.Stmt)
 }
 
 func identifiersInStatements(pkg *types.Package, info *types.Info, stmts []ast.Stmt) []ast.Expr {
-	w := &identifierWalker{
-		pkg:      pkg,
-		info:     info,
-		excluded: variableDefinitions(info, stmts),
-	}
+	_ = pkg
+	index, _ := identifierIndexes.LoadOrStore(info, &identifierIndex{
+		seenNodes: make(map[ast.Node]struct{}),
+		seenDefs:  make(map[*ast.Ident]struct{}),
+	})
+	return index.(*identifierIndex).query(info, stmts)
+}
 
-	for _, stmt := range stmts {
-		ast.Walk(w, stmt)
-	}
+type identifierEvent struct {
+	pos    token.Pos
+	expr   ast.Expr
+	object types.Object
+}
 
-	return w.identifiers
+type definitionEvent struct {
+	pos    token.Pos
+	object types.Object
+}
+
+type positionRange struct{ start, end token.Pos }
+
+type identifierIndex struct {
+	mu        sync.Mutex
+	events    []identifierEvent
+	defs      []definitionEvent
+	covered   []positionRange
+	seenNodes map[ast.Node]struct{}
+	seenDefs  map[*ast.Ident]struct{}
+}
+
+var identifierIndexes sync.Map
+
+// ClearIdentifierCache releases per-type-check identifier indexes between runs.
+func ClearIdentifierCache() {
+	identifierIndexes = sync.Map{}
+}
+
+func (idx *identifierIndex) query(info *types.Info, stmts []ast.Stmt) []ast.Expr {
+	if len(stmts) == 0 {
+		return nil
+	}
+	start, end := stmts[0].Pos(), stmts[len(stmts)-1].End()
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	idx.ensure(info, stmts, start, end)
+	return idx.results(info, start, end)
+}
+
+func (idx *identifierIndex) ensure(info *types.Info, stmts []ast.Stmt, start, end token.Pos) {
+	if !idx.covers(start, end) {
+		for _, stmt := range stmts {
+			idx.collect(info, stmt)
+		}
+		idx.covered = append(idx.covered, positionRange{start: start, end: end})
+		sort.Slice(idx.events, func(i, j int) bool { return idx.events[i].pos < idx.events[j].pos })
+		sort.Slice(idx.defs, func(i, j int) bool { return idx.defs[i].pos < idx.defs[j].pos })
+	}
+}
+
+func (idx *identifierIndex) results(info *types.Info, start, end token.Pos) []ast.Expr {
+	excluded := make(map[types.Object]struct{})
+	defStart := sort.Search(len(idx.defs), func(i int) bool { return idx.defs[i].pos >= start })
+	for i := defStart; i < len(idx.defs) && idx.defs[i].pos <= end; i++ {
+		excluded[idx.defs[i].object] = struct{}{}
+	}
+	eventStart := sort.Search(len(idx.events), func(i int) bool { return idx.events[i].pos >= start })
+	result := make([]ast.Expr, 0)
+	for i := eventStart; i < len(idx.events) && idx.events[i].pos <= end; i++ {
+		event := idx.events[i]
+		if _, skip := excluded[event.object]; skip {
+			continue
+		}
+		if expr := cloneIdentifierEvent(info, event.expr); expr != nil {
+			result = append(result, expr)
+		}
+	}
+	return result
+}
+
+func cloneIdentifierEvent(info *types.Info, expr ast.Expr) ast.Expr {
+	switch expr := expr.(type) {
+	case *ast.Ident:
+		return &ast.Ident{Name: expr.Name}
+	case *ast.SelectorExpr:
+		selector := cloneSelector(expr)
+		if (&identifierWalker{info: info}).shouldInitialize(expr) {
+			return &ast.CompositeLit{Type: selector}
+		}
+		return selector
+	default:
+		return nil
+	}
+}
+
+func (idx *identifierIndex) covers(start, end token.Pos) bool {
+	for _, covered := range idx.covered {
+		if covered.start <= start && covered.end >= end {
+			return true
+		}
+	}
+	return false
+}
+
+func (idx *identifierIndex) collect(info *types.Info, root ast.Node) {
+	ast.Inspect(root, func(node ast.Node) bool {
+		return idx.collectNode(info, node)
+	})
+}
+
+func (idx *identifierIndex) collectNode(info *types.Info, node ast.Node) bool {
+	switch node := node.(type) {
+	case *ast.SelectorExpr:
+		return idx.collectSelector(info, node)
+	case *ast.Ident:
+		idx.collectDefinition(info, node)
+		idx.collectIdentifier(info, node)
+		return false
+	default:
+		return true
+	}
+}
+
+func (idx *identifierIndex) collectSelector(info *types.Info, selector *ast.SelectorExpr) bool {
+	if selector.Sel == nil || !checkForSelectorExpr(selector) {
+		return true
+	}
+	if _, seen := idx.seenNodes[selector]; seen {
+		return false
+	}
+	var object types.Object
+	if root := selectorRoot(selector); root != nil {
+		object = info.Uses[root]
+	}
+	idx.events = append(idx.events, identifierEvent{pos: selector.Pos(), expr: selector, object: object})
+	idx.seenNodes[selector] = struct{}{}
+	return false
+}
+
+func (idx *identifierIndex) collectDefinition(info *types.Info, ident *ast.Ident) {
+	object, ok := info.Defs[ident]
+	if !ok {
+		return
+	}
+	if _, variable := object.(*types.Var); !variable {
+		return
+	}
+	if _, seen := idx.seenDefs[ident]; seen {
+		return
+	}
+	idx.defs = append(idx.defs, definitionEvent{pos: ident.Pos(), object: object})
+	idx.seenDefs[ident] = struct{}{}
+}
+
+func (idx *identifierIndex) collectIdentifier(info *types.Info, ident *ast.Ident) {
+	if ident.Name == "_" || token.Lookup(ident.Name) != token.IDENT {
+		return
+	}
+	object, ok := info.Uses[ident]
+	variable, variableUse := object.(*types.Var)
+	if !ok || !variableUse || variable.IsField() {
+		return
+	}
+	if _, seen := idx.seenNodes[ident]; seen {
+		return
+	}
+	idx.events = append(idx.events, identifierEvent{pos: ident.Pos(), expr: ident, object: object})
+	idx.seenNodes[ident] = struct{}{}
 }
 
 type identifierWalker struct {
 	identifiers []ast.Expr
-	pkg         *types.Package
 	info        *types.Info
 	excluded    map[types.Object]struct{}
 }

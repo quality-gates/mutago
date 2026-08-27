@@ -23,9 +23,16 @@ type pkgCacheEntry struct {
 	err  error
 }
 
+type loadedFile struct {
+	pkg  *packages.Package
+	file *ast.File
+	fset *token.FileSet
+}
+
 var (
-	pkgCacheMu sync.Mutex
-	pkgCache   = map[string]*pkgCacheEntry{}
+	pkgCacheMu    sync.Mutex
+	pkgCache      = map[string]*pkgCacheEntry{}
+	preparedFiles = map[string]loadedFile{}
 )
 
 // ClearPackageCache resets the directory-level package-load cache.
@@ -33,7 +40,57 @@ var (
 func ClearPackageCache() {
 	pkgCacheMu.Lock()
 	pkgCache = map[string]*pkgCacheEntry{}
+	preparedFiles = map[string]loadedFile{}
 	pkgCacheMu.Unlock()
+}
+
+// PreparePackages loads all target packages in one packages.Load call and
+// indexes their syntax by absolute filename for subsequent parsing requests.
+func PreparePackages(files []string) error {
+	patterns := make([]string, 0, len(files))
+	for _, file := range files {
+		abs, err := filepath.Abs(file)
+		if err != nil {
+			return err
+		}
+		patterns = append(patterns, "file="+abs)
+	}
+	if len(patterns) == 0 {
+		return nil
+	}
+
+	fset := token.NewFileSet()
+	cfg := &packages.Config{
+		Mode: packages.NeedName |
+			packages.NeedFiles |
+			packages.NeedSyntax |
+			packages.NeedTypes |
+			packages.NeedTypesInfo |
+			packages.NeedImports,
+		Fset: fset,
+		ParseFile: func(fset *token.FileSet, filename string, src []byte) (*ast.File, error) {
+			return parser.ParseFile(fset, filename, src, parser.AllErrors|parser.ParseComments)
+		},
+	}
+	pkgs, err := packages.Load(cfg, patterns...)
+	if err != nil {
+		return err
+	}
+	index := make(map[string]loadedFile)
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Syntax {
+			filename := fset.PositionFor(file.Pos(), false).Filename
+			abs, absErr := filepath.Abs(filename)
+			if absErr != nil {
+				continue
+			}
+			index[abs] = loadedFile{pkg: pkg, file: file, fset: fset}
+		}
+	}
+	pkgCacheMu.Lock()
+	preparedFiles = index
+	pkgCacheMu.Unlock()
+	return nil
 }
 
 // loadPkgForDir returns the cached packages.Load result for dir, computing it on first
@@ -106,6 +163,13 @@ func ParseAndTypeCheckFile(file string, collectors []filter.NodeCollector) (*ast
 	fileAbs, err := filepath.Abs(file)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("Could not absolute the file path of %q: %v", file, err)
+	}
+	pkgCacheMu.Lock()
+	prepared, ok := preparedFiles[fileAbs]
+	pkgCacheMu.Unlock()
+	if ok {
+		applyCollectors(collectors, prepared.file, prepared.fset, fileAbs)
+		return prepared.file, prepared.fset, prepared.pkg.Types, prepared.pkg.TypesInfo, nil
 	}
 	entry := loadPkgForDir(filepath.Dir(fileAbs))
 	if entry.err != nil {

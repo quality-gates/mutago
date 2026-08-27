@@ -26,7 +26,7 @@ func (l *LineAnnotation) parseLineAnnotation(comment string) mutatorInfo {
 // 2. Determines the line number immediately following the comment
 // 3. Collects all AST nodes that appear on that line
 // 4. Records the exclusion information for those nodes
-func (l *LineAnnotation) collectNodesOnNextLine(comment *ast.Comment, fset *token.FileSet, file *ast.File) {
+func (l *LineAnnotation) collectNodesOnNextLine(comment *ast.Comment, fset *token.FileSet, _ *ast.File, nodesByLine map[int][]ast.Node) {
 	mutators := l.parseLineAnnotation(comment.Text)
 
 	start, end := findLine(fset, comment)
@@ -37,20 +37,13 @@ func (l *LineAnnotation) collectNodesOnNextLine(comment *ast.Comment, fset *toke
 
 	lines := []int{nextLine}
 
-	collectExcludedNodes(fset, file, lines, l.Exclusions, mutators)
+	collectExcludedNodes(nodesByLine, lines, l.Exclusions, l.PositionIndex, mutators)
 }
 
 // filterNodesOnNextLine checks if a given node should be excluded from mutation based on:
 // 1. Whether the node appears in the Exclusions map
 // 2. Whether the current mutator is in the node's exclusion list
 func (l *LineAnnotation) filterNodesOnNextLine(node ast.Node, mutatorName string) bool {
-	for _, n := range l.Exclusions {
-		if mutators, exists := n[node.Pos()]; exists {
-			if shouldSkipMutator(mutators, mutatorName) {
-				return true
-			}
-		}
-	}
-
-	return false
+	mutators, exists := l.PositionIndex[node.Pos()]
+	return exists && shouldSkipMutator(mutators, mutatorName)
 }

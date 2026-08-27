@@ -1,10 +1,26 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestReportSerializesSharedSourceOnce(t *testing.T) {
+	report := Report{
+		Sources: map[string]string{"sample.go": "package sample\nvar value = 1\n"},
+		Killed: []Mutant{
+			{Mutator: Mutator{OriginalFilePath: "sample.go"}},
+			{Mutator: Mutator{OriginalFilePath: "sample.go"}},
+		},
+	}
+	encoded, err := json.Marshal(report)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(encoded), "package sample"))
+	assert.NotContains(t, string(encoded), "mutatedSourceCode")
+}
 
 func killed(name string) Mutant {
 	return Mutant{Mutator: Mutator{MutatorName: name}}

@@ -127,6 +127,17 @@ func regexpSearchInFile(file string, re *regexp.Regexp) bool {
 
 // FilesOfArgs returns all available Go files given a list of packages, directories and files which can embed patterns.
 func FilesOfArgs(args []string, opts *models.Options) []string {
+	return ResolveTargets(args, opts).Files
+}
+
+// ResolvedTargets contains both views of one target-discovery pass.
+type ResolvedTargets struct {
+	Files    []string
+	Packages []Package
+}
+
+// ResolveTargets discovers targets once and derives flat and grouped views.
+func ResolveTargets(args []string, opts *models.Options) ResolvedTargets {
 	pkgs := packagesWithFilesOfArgs(args, opts)
 
 	pkgsNames := make([]string, 0, len(pkgs))
@@ -135,7 +146,7 @@ func FilesOfArgs(args []string, opts *models.Options) []string {
 	}
 	sort.Strings(pkgsNames)
 
-	var files []string
+	resolved := ResolvedTargets{Packages: make([]Package, 0, len(pkgs))}
 
 	for _, name := range pkgsNames {
 		var filenames []string
@@ -144,10 +155,11 @@ func FilesOfArgs(args []string, opts *models.Options) []string {
 		}
 		sort.Strings(filenames)
 
-		files = append(files, filenames...)
+		resolved.Files = append(resolved.Files, filenames...)
+		resolved.Packages = append(resolved.Packages, Package{Name: name, Files: filenames})
 	}
 
-	return files
+	return resolved
 }
 
 // Package holds file information of a package.
@@ -173,27 +185,7 @@ func (p PackagesByName) Less(i, j int) bool { return p.Packages[i].Name < p.Pack
 
 // PackagesWithFilesOfArgs returns all available Go files sorted by their packages given a list of packages, directories and files which can embed patterns.
 func PackagesWithFilesOfArgs(args []string, opts *models.Options) []Package {
-	pkgs := packagesWithFilesOfArgs(args, opts)
-
-	r := make([]Package, 0, len(pkgs))
-	for name := range pkgs {
-		r = append(r, Package{
-			Name: name,
-		})
-	}
-	sort.Sort(PackagesByName{r})
-
-	for i := range r {
-		var filenames []string
-		for name := range pkgs[r[i].Name] {
-			filenames = append(filenames, name)
-		}
-		sort.Strings(filenames)
-
-		r[i].Files = filenames
-	}
-
-	return r
+	return ResolveTargets(args, opts).Packages
 }
 
 func isDir(filename string) bool {

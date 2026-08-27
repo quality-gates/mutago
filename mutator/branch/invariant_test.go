@@ -138,6 +138,27 @@ func TestBranchMutatorsSkipEmptyBodies(t *testing.T) {
 	}
 }
 
+func BenchmarkNestedIfMutationAnalysis(b *testing.B) {
+	var statement ast.Stmt = &ast.ExprStmt{X: ast.NewIdent("external")}
+	for range 500 {
+		statement = &ast.IfStmt{Cond: ast.NewIdent("condition"), Body: &ast.BlockStmt{List: []ast.Stmt{statement}}}
+	}
+	info := &types.Info{Defs: make(map[*ast.Ident]types.Object), Uses: make(map[*ast.Ident]types.Object)}
+	var mutations []mutator.Mutation
+	ast.Inspect(statement, func(node ast.Node) bool {
+		mutations = append(mutations, MutatorIf(nil, info, node)...)
+		return true
+	})
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		for _, mutation := range mutations {
+			mutation.Change()
+			mutation.Reset()
+		}
+	}
+}
+
 func parseBranchSource(t *testing.T, source string) (*token.FileSet, *ast.File, *types.Package, *types.Info) {
 	t.Helper()
 

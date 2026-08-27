@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Mutation discovery now indexes annotation, coverage, git-diff, package, and identifier lookups; defers source rendering until a mutant is executed; and reuses scratch storage in high-cardinality mutators.
+- Per-test coverage now compiles one covered test binary per package and reuses it for every individual test instead of invoking the Go toolchain for each test.
+- Full JSON reports store source text once per file in `sources`; legacy per-mutant source fields are omitted from newly generated reports.
+- Agentic report context, CLI target resolution, AST diagnostic printing, and select/error-wrap/composite mutation generation now avoid repeated work and unnecessary allocations.
+
+### Fixed
+- Custom `--exec` commands now honor `--exec-timeout` and cancellation.
+- Per-test discovery excludes benchmarks, which cannot be selected reliably with the test `-run` filter.
+
 ## [v2.8.6] — 2026-08-27
 
 ### Changed

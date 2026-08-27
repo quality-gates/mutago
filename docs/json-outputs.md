@@ -1,6 +1,16 @@
 # JSON Output Schemas
 
-mutago can write two JSON files after each run.
+mutago can write three JSON files after each run.
+
+## Full report (`json_output`)
+
+Set `json_output: true` in the configuration file to write `report.json`. Its
+top-level `sources` object maps each source-file path to its original text.
+Mutants refer to that path through `mutator.originalFilePath`, so consumers can
+look up the source once instead of receiving a duplicate copy for every mutant.
+
+The legacy `mutator.originalSourceCode` and `mutator.mutatedSourceCode` fields
+remain accepted by the Go model for compatibility, but new reports omit them.
 
 ## `--logger-summary-json`
 

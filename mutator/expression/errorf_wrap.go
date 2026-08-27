@@ -38,14 +38,16 @@ func MutatorErrorfWrap(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 	}
 
 	var mutations []mutator.Mutation
+	original := lit.Value
 	for _, pos := range wrapVerbPositions(lit.Value) {
-		original := lit.Value
-		// pos indexes the '%'; the 'w' sits one byte later.
-		mutated := lit.Value[:pos+1] + "v" + lit.Value[pos+2:]
+		verbPos := pos
 		mutations = append(mutations, mutator.Mutation{
 			Position: lit.ValuePos,
-			Change:   func() { lit.Value = mutated },
-			Reset:    func() { lit.Value = original },
+			Change: func() {
+				// verbPos indexes the '%'; the 'w' sits one byte later.
+				lit.Value = original[:verbPos+1] + "v" + original[verbPos+2:]
+			},
+			Reset: func() { lit.Value = original },
 		})
 	}
 
