@@ -6,9 +6,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/quality-gates/mutago/v2/internal/gitdiff"
 	"github.com/quality-gates/mutago/v2/internal/models"
@@ -25,6 +27,30 @@ import (
 	_ "github.com/quality-gates/mutago/v2/mutator/select"
 	_ "github.com/quality-gates/mutago/v2/mutator/statement"
 )
+
+func TestRunCustomExecHonorsCancelledContext(t *testing.T) {
+	dir := t.TempDir()
+	original := filepath.Join(dir, "original.go")
+	mutated := filepath.Join(dir, "mutated.go")
+	if err := os.WriteFile(original, []byte("package sample\nvar n = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mutated, []byte("package sample\nvar n = 2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	opts := &models.Options{}
+	opts.Exec.Timeout = 30
+	started := time.Now()
+	code := runCustomExec(ctx, opts, types.NewPackage("sample", "sample"), original, mutated, []string{"sh", "-c", "sleep 10"}, &models.Mutant{})
+	if code != 3 {
+		t.Fatalf("expected cancelled command to return tool error 3, got %d", code)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("cancelled command took %s", elapsed)
+	}
+}
 
 func TestMutationEditMaterializesChangedNode(t *testing.T) {
 	source := []byte("package sample\nvar value = 1\n")

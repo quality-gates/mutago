@@ -64,6 +64,7 @@ type mutatorItem struct {
 }
 
 type mutationRun struct {
+	ctx            context.Context
 	opts           *models.Options
 	mutators       []mutatorItem
 	blacklist      map[string]struct{}
@@ -80,6 +81,7 @@ type mutationRun struct {
 }
 
 type execJob struct {
+	ctx            context.Context
 	opts           *models.Options
 	pkg            *types.Package
 	originalFile   string
@@ -114,7 +116,7 @@ type fileContext struct {
 func (e *Engine) Run(ctx context.Context, opts *models.Options, bl *baseline.File) (Result, error) {
 	e.initDefaults()
 
-	run, pkgs, jobs, jobWg, stopProgress, progressWg, _, err := e.initRun(opts)
+	run, pkgs, jobs, jobWg, stopProgress, progressWg, _, err := e.initRun(ctx, opts)
 	if err != nil {
 		return Result{ExitCode: returnError}, err
 	}
@@ -160,7 +162,7 @@ func (e *Engine) initDefaults() {
 	}
 }
 
-func (e *Engine) initRun(opts *models.Options) (*mutationRun, []importing.Package, chan execJob, *sync.WaitGroup, chan struct{}, *sync.WaitGroup, gitdiff.ChangedLines, error) {
+func (e *Engine) initRun(ctx context.Context, opts *models.Options) (*mutationRun, []importing.Package, chan execJob, *sync.WaitGroup, chan struct{}, *sync.WaitGroup, gitdiff.ChangedLines, error) {
 	files := importing.FilesOfArgs(opts.Remaining.Targets, opts)
 	if len(files) == 0 {
 		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Could not find any suitable Go source files")
@@ -204,6 +206,7 @@ func (e *Engine) initRun(opts *models.Options) (*mutationRun, []importing.Packag
 	}
 
 	run := &mutationRun{
+		ctx:            ctx,
 		opts:           opts,
 		mutators:       buildActiveMutators(opts),
 		blacklist:      mutationBlackList,
@@ -548,6 +551,7 @@ func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutation m
 	}
 
 	job := execJob{
+		ctx:            r.ctx,
 		opts:           r.opts,
 		pkg:            fc.pkg,
 		originalFile:   fc.sourceFile,
@@ -1172,7 +1176,7 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 		return
 	}
 
-	execExitCode := mutateExec(opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
+	execExitCode := mutateExec(job.ctx, opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)
 
 	mu.Lock()
@@ -1222,6 +1226,7 @@ func skipForMutantID(job execJob) bool {
 }
 
 func mutateExec(
+	ctx context.Context,
 	opts *models.Options,
 	pkg *types.Package,
 	file string,
@@ -1235,7 +1240,7 @@ func mutateExec(
 	if len(execs) == 0 {
 		return runBuiltinExec(opts, pkg, file, mutationFile, perTestProf, absFile, extraTestFlags, mutant)
 	}
-	return runCustomExec(opts, pkg, file, mutationFile, execs, mutant)
+	return runCustomExec(ctx, opts, pkg, file, mutationFile, execs, mutant)
 }
 
 func runBuiltinExec(
@@ -1327,7 +1332,7 @@ func runGoTest(opts *models.Options, pkg *types.Package, overlayName string, per
 	return execExitCode
 }
 
-func runCustomExec(opts *models.Options, pkg *types.Package, file string, mutationFile string, execs []string, mutant *models.Mutant) int {
+func runCustomExec(ctx context.Context, opts *models.Options, pkg *types.Package, file string, mutationFile string, execs []string, mutant *models.Mutant) int {
 	console.Debug(opts, "Execute %q for mutation", opts.Exec.Exec)
 
 	extDiff, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", file, mutationFile).CombinedOutput()
@@ -1336,7 +1341,15 @@ func runCustomExec(opts *models.Options, pkg *types.Package, file string, mutati
 	}
 	mutant.Diff = string(extDiff)
 
-	execCommand := exec.Command(execs[0], execs[1:]...)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if opts.Exec.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(opts.Exec.Timeout)*time.Second)
+		defer cancel()
+	}
+	execCommand := exec.CommandContext(ctx, execs[0], execs[1:]...)
 	execCommand.Stderr = os.Stderr
 	execCommand.Stdout = os.Stdout
 	execCommand.Env = append(os.Environ(), []string{
@@ -1357,6 +1370,10 @@ func runCustomExec(opts *models.Options, pkg *types.Package, file string, mutati
 	}
 
 	err := execCommand.Wait()
+	if ctx.Err() != nil {
+		fmt.Fprintf(os.Stderr, "mutago: custom exec timed out or was cancelled: %v\n", ctx.Err())
+		return 3
+	}
 	execExitCode, ok := commandExitCode(err)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "mutago: custom exec wait error: %v\n", err)
