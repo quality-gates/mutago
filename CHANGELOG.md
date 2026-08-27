@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Package preparation now batches target directories into one typed package load instead of launching one `go list` process per source file, restoring fast mutation discovery for multi-file packages.
+
 ## [v2.9.0] — 2026-08-27
 
 ### Changed

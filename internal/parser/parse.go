@@ -48,12 +48,18 @@ func ClearPackageCache() {
 // indexes their syntax by absolute filename for subsequent parsing requests.
 func PreparePackages(files []string) error {
 	patterns := make([]string, 0, len(files))
+	seenDirs := make(map[string]struct{})
 	for _, file := range files {
 		abs, err := filepath.Abs(file)
 		if err != nil {
 			return err
 		}
-		patterns = append(patterns, "file="+abs)
+		dir := filepath.Dir(abs)
+		if _, seen := seenDirs[dir]; seen {
+			continue
+		}
+		seenDirs[dir] = struct{}{}
+		patterns = append(patterns, dir)
 	}
 	if len(patterns) == 0 {
 		return nil
@@ -89,6 +95,10 @@ func PreparePackages(files []string) error {
 	}
 	pkgCacheMu.Lock()
 	preparedFiles = index
+	entry := &pkgCacheEntry{pkgs: pkgs, fset: fset}
+	for dir := range seenDirs {
+		pkgCache[dir] = entry
+	}
 	pkgCacheMu.Unlock()
 	return nil
 }
