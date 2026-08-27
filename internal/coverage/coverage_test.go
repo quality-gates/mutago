@@ -285,6 +285,11 @@ func TestCountTests_RealPackage(t *testing.T) {
 	assert.Positive(t, count, "arithmetic package should have tests")
 }
 
+func TestCountTests_ExcludesBenchmarks(t *testing.T) {
+	count := CountTests("github.com/quality-gates/mutago/v2/internal/coverage/testdata/entrypoints")
+	assert.Equal(t, 2, count, "only Test and Fuzz entrypoints run via -run")
+}
+
 func TestCountTests_NonexistentPackage(t *testing.T) {
 	count := CountTests("github.com/quality-gates/mutago/v2/nonexistent_pkg_xyzzy")
 	assert.Zero(t, count, "nonexistent package should return 0")

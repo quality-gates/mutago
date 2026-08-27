@@ -160,7 +160,7 @@ func (p *PerTestProfile) CoveringTests(absFile string, lineNum int) []string {
 	return nil
 }
 
-// CountTests returns the number of test functions (Test*, Benchmark*, Fuzz*)
+// CountTests returns the number of test functions (Test*, Fuzz*)
 // in pkgPath. Returns 0 on any error or when the package has no tests.
 func CountTests(pkgPath string) int {
 	names, err := listTestNames(pkgPath)
@@ -170,11 +170,10 @@ func CountTests(pkgPath string) int {
 	return len(names)
 }
 
-// isTestFuncName reports whether name is a top-level test entry point
-// (Test*, Benchmark*, or Fuzz*).
+// isTestFuncName reports whether name is a top-level test entry point that can
+// be selected with go test's -run flag (Test* or Fuzz*).
 func isTestFuncName(name string) bool {
 	return strings.HasPrefix(name, "Test") ||
-		strings.HasPrefix(name, "Benchmark") ||
 		strings.HasPrefix(name, "Fuzz")
 }
 
