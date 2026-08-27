@@ -259,13 +259,21 @@ func BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir string, timeout uin
 	if len(testNames) == 0 {
 		return nil, nil
 	}
-
 	if workers <= 0 {
 		workers = 1
 	}
+	binaryPath, err := compileCoverageTestBinary(pkgPath, tmpDir, extraTestFlags)
+	if err != nil {
+		return nil, err
+	}
+	results := profileTests(testNames, workers, binaryPath, modulePath, tmpDir, timeout, testBinaryFlags(extraTestFlags))
+	return mergePerTestProfiles(results, len(testNames)), nil
+}
+
+func compileCoverageTestBinary(pkgPath, tmpDir string, extraTestFlags []string) (string, error) {
 	binaryDir := filepath.Join(tmpDir, "per-test", strings.NewReplacer("/", "_", "\\", "_").Replace(pkgPath))
 	if err := os.MkdirAll(binaryDir, 0755); err != nil {
-		return nil, err
+		return "", err
 	}
 	binaryPath := filepath.Join(binaryDir, "tests")
 	compileArgs := []string{"test", "-c", "-cover", "-covermode=set", "-o", binaryPath}
@@ -274,36 +282,35 @@ func BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir string, timeout uin
 	compile := exec.Command("go", compileArgs...)
 	compile.Env = os.Environ()
 	if output, err := compile.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("compile coverage test binary: %w: %s", err, output)
+		return "", fmt.Errorf("compile coverage test binary: %w: %s", err, output)
 	}
+	return binaryPath, nil
+}
 
+func profileTests(testNames []string, workers int, binaryPath, modulePath, tmpDir string, timeout uint, binaryTestFlags []string) <-chan perTestResult {
 	jobs := make(chan perTestJob, len(testNames))
 	results := make(chan perTestResult, len(testNames))
-
 	for i := 0; i < workers; i++ {
-		go runPerTestWorker(jobs, results, binaryPath, modulePath, tmpDir, timeout, testBinaryFlags(extraTestFlags))
+		go runPerTestWorker(jobs, results, binaryPath, modulePath, tmpDir, timeout, binaryTestFlags)
 	}
-
 	for _, name := range testNames {
 		jobs <- perTestJob{name: name}
 	}
 	close(jobs)
+	return results
+}
 
-	// Merge per-test profiles into a single PerTestProfile.
+func mergePerTestProfiles(results <-chan perTestResult, count int) *PerTestProfile {
 	p := &PerTestProfile{data: make(map[string]map[int][]string)}
-
-	for i := 0; i < len(testNames); i++ {
+	for i := 0; i < count; i++ {
 		applyPerTestResult(p, <-results)
 	}
-
-	// Sort test lists for deterministic -run patterns.
 	for _, lines := range p.data {
 		for line := range lines {
 			sort.Strings(lines[line])
 		}
 	}
-
-	return p, nil
+	return p
 }
 
 func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, binaryPath, modulePath, tmpDir string, timeout uint, binaryTestFlags []string) {

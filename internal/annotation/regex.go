@@ -48,7 +48,7 @@ func (r *RegexAnnotation) collectMatchNodes(comment *ast.Comment, _ *token.FileS
 		log.Printf("Error scaning a source file: %v", err)
 	}
 
-	collectExcludedNodes(nodesByLine, lines, r.Exclusions, r.positions, mutators)
+	collectExcludedNodes(nodesByLine, lines, r.Exclusions, r.PositionIndex, mutators)
 }
 
 // findLinesMatchingRegex scans a source file and returns line numbers that match the given regex.
@@ -93,6 +93,6 @@ func (r *RegexAnnotation) findLinesMatchingRegex(filePath string, regex *regexp.
 // 1. Whether the node appears in the Exclusions map
 // 2. Whether the current mutator is in the node's exclusion list
 func (r *RegexAnnotation) filterRegexNodes(node ast.Node, mutatorName string) bool {
-	mutators, exists := r.positions[node.Pos()]
+	mutators, exists := r.PositionIndex[node.Pos()]
 	return exists && shouldSkipMutator(mutators, mutatorName)
 }

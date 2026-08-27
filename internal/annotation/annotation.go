@@ -31,14 +31,14 @@ func NewProcessor() *Processor {
 			Exclusions: make(map[token.Pos]struct{}), // *ast.FuncDecl node + all its children
 			Name:       FuncAnnotation},
 		RegexAnnotation: RegexAnnotation{
-			Exclusions: make(map[int]map[token.Pos]mutatorInfo), // source code line -> node -> excluded mutators
-			Name:       RegexpAnnotation,
-			positions:  make(map[token.Pos]mutatorInfo),
+			Exclusions:    make(map[int]map[token.Pos]mutatorInfo), // source code line -> node -> excluded mutators
+			Name:          RegexpAnnotation,
+			PositionIndex: make(map[token.Pos]mutatorInfo),
 		},
 		LineAnnotation: LineAnnotation{
-			Exclusions: make(map[int]map[token.Pos]mutatorInfo), // source code line -> node -> excluded mutators
-			Name:       NextLineAnnotation,
-			positions:  make(map[token.Pos]mutatorInfo),
+			Exclusions:    make(map[int]map[token.Pos]mutatorInfo), // source code line -> node -> excluded mutators
+			Name:          NextLineAnnotation,
+			PositionIndex: make(map[token.Pos]mutatorInfo),
 		},
 	}
 }

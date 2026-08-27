@@ -42,8 +42,18 @@ func TestRunCustomExecHonorsCancelledContext(t *testing.T) {
 	cancel()
 	opts := &models.Options{}
 	opts.Exec.Timeout = 30
+	job := execJob{
+		ctx:   ctx,
+		opts:  opts,
+		pkg:   types.NewPackage("sample", "sample"),
+		execs: []string{"sh", "-c", "sleep 10"},
+		source: mutationSource{
+			originalFile: original,
+			mutationFile: mutated,
+		},
+	}
 	started := time.Now()
-	code := runCustomExec(ctx, opts, types.NewPackage("sample", "sample"), original, mutated, []string{"sh", "-c", "sleep 10"}, &models.Mutant{})
+	code := runCustomExec(job, &models.Mutant{})
 	if code != 3 {
 		t.Fatalf("expected cancelled command to return tool error 3, got %d", code)
 	}
@@ -162,8 +172,10 @@ func TestShouldFail(t *testing.T) {
 
 func TestSkipForGitDiffUsesOriginalASTLine(t *testing.T) {
 	job := execJob{
-		absFile: "/repo/fixture.go",
-		opts:    &models.Options{},
+		opts: &models.Options{},
+		source: mutationSource{
+			absFile: "/repo/fixture.go",
+		},
 	}
 	gitChangedLines := gitdiff.ChangedLines{
 		"fixture.go": {{Start: 4, End: 4}},

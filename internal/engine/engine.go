@@ -84,19 +84,23 @@ type execJob struct {
 	ctx            context.Context
 	opts           *models.Options
 	pkg            *types.Package
-	originalFile   string
-	mutationFile   string
 	mutant         models.Mutant
-	absFile        string
 	coverProfile   *coverage.Profile
 	execs          []string
 	perTestProf    *coverage.PerTestProfile
 	extraTestFlags []string
 	runMutantID    string
-	moduleRoot     string
-	relFile        string
-	originalSource []byte
-	edit           mutationEdit
+	source         mutationSource
+}
+
+type mutationSource struct {
+	originalFile string
+	mutationFile string
+	absFile      string
+	relFile      string
+	moduleRoot   string
+	original     []byte
+	edit         mutationEdit
 }
 
 type fileContext struct {
@@ -138,7 +142,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 
 	coverageProfiles := configureAdaptiveTimeoutAndCoverage(opts, pkgs, run)
 
-	dryRunTotal, dryRunMutatorTotals, loopCode := run.mutateAll(pkgs, coverageProfiles)
+	dryRunTotal, dryRunMutatorTotals, loopCode := mutateAll(run, pkgs, coverageProfiles)
 
 	if !opts.General.DryRun {
 		shutdownAndCleanup(opts, jobs, jobWg, stopProgress, progressWg, run.tmpDir)
@@ -335,7 +339,7 @@ func detectModuleRoot() string {
 	return filepath.Dir(gomod)
 }
 
-func (r *mutationRun) mutateAll(pkgs []importing.Package, coverageProfiles []*coverage.Profile) (dryRunTotal int, dryRunMutatorTotals map[string]int, exitCode int) {
+func mutateAll(r *mutationRun, pkgs []importing.Package, coverageProfiles []*coverage.Profile) (dryRunTotal int, dryRunMutatorTotals map[string]int, exitCode int) {
 	if r.opts.General.DryRun {
 		dryRunMutatorTotals = make(map[string]int)
 	}
@@ -344,11 +348,11 @@ func (r *mutationRun) mutateAll(pkgs []importing.Package, coverageProfiles []*co
 		if coverageProfiles != nil {
 			coverProfile = coverageProfiles[i]
 		} else {
-			coverProfile = r.coverageForPackage(importPkg)
+			coverProfile = coverageForPackage(r, importPkg)
 		}
-		perTestProf := r.perTestForPackage(importPkg)
+		perTestProf := perTestForPackage(r, importPkg)
 		for _, file := range importPkg.Files {
-			count, code := r.processFile(file, coverProfile, perTestProf, dryRunMutatorTotals)
+			count, code := processFile(r, file, coverProfile, perTestProf, dryRunMutatorTotals)
 			if code != 0 {
 				return dryRunTotal, dryRunMutatorTotals, code
 			}
@@ -358,7 +362,7 @@ func (r *mutationRun) mutateAll(pkgs []importing.Package, coverageProfiles []*co
 	return dryRunTotal, dryRunMutatorTotals, 0
 }
 
-func (r *mutationRun) coverageForPackage(importPkg importing.Package) *coverage.Profile {
+func coverageForPackage(r *mutationRun, importPkg importing.Package) *coverage.Profile {
 	if r.opts.General.DryRun {
 		return nil
 	}
@@ -395,14 +399,14 @@ func prepareCoverageProfiles(opts *models.Options, pkgs []importing.Package, tmp
 	return profiles, maxBaseline
 }
 
-func (r *mutationRun) perTestForPackage(importPkg importing.Package) *coverage.PerTestProfile {
+func perTestForPackage(r *mutationRun, importPkg importing.Package) *coverage.PerTestProfile {
 	if !r.opts.Exec.PerTest || r.opts.Exec.NoExec || r.opts.General.DryRun || len(r.execs) != 0 {
 		return nil
 	}
 	return buildPerTestCoverageProfile(r.opts, importPkg.Files, r.modulePath, r.tmpDir, r.numWorkers, r.extraTestFlags)
 }
 
-func (r *mutationRun) processFile(file string, coverProfile *coverage.Profile, perTestProf *coverage.PerTestProfile, dryRunMutatorTotals map[string]int) (int, int) {
+func processFile(r *mutationRun, file string, coverProfile *coverage.Profile, perTestProf *coverage.PerTestProfile, dryRunMutatorTotals map[string]int) (int, int) {
 	console.Verbose(r.opts, "Mutate %q", file)
 
 	annotationProcessor := annotation.NewProcessor()
@@ -458,14 +462,14 @@ func (r *mutationRun) processFile(file string, coverProfile *coverage.Profile, p
 		originalSource: originalSource,
 	}
 
-	return r.mutateFile(fc, dryRunMutatorTotals)
+	return mutateFile(r, fc, dryRunMutatorTotals)
 }
 
-func (r *mutationRun) mutateFile(fc *fileContext, dryRunMutatorTotals map[string]int) (int, int) {
+func mutateFile(r *mutationRun, fc *fileContext, dryRunMutatorTotals map[string]int) (int, int) {
 	mutationID := 0
 
 	if r.opts.Filter.Match == "" {
-		mutationID = r.mutate(fc, fc.src, mutationID, dryRunMutatorTotals)
+		mutationID = mutate(r, fc, fc.src, mutationID, dryRunMutatorTotals)
 		return mutationID, 0
 	}
 
@@ -475,13 +479,13 @@ func (r *mutationRun) mutateFile(fc *fileContext, dryRunMutatorTotals map[string
 	}
 	for _, f := range astutil.Functions(fc.src) {
 		if m.MatchString(f.Name.Name) {
-			mutationID = r.mutate(fc, f, mutationID, dryRunMutatorTotals)
+			mutationID = mutate(r, fc, f, mutationID, dryRunMutatorTotals)
 		}
 	}
 	return mutationID, 0
 }
 
-func (r *mutationRun) mutate(fc *fileContext, node ast.Node, mutationID int, dryRunGlobalTotals map[string]int) int {
+func mutate(r *mutationRun, fc *fileContext, node ast.Node, mutationID int, dryRunGlobalTotals map[string]int) int {
 	originalSourceCode := fc.originalSource
 
 	var dryRunCounts map[string]int
@@ -490,7 +494,7 @@ func (r *mutationRun) mutate(fc *fileContext, node ast.Node, mutationID int, dry
 	}
 
 	for _, m := range r.mutators {
-		mutationID = r.applyMutator(m, fc, node, mutationID, originalSourceCode, dryRunCounts, dryRunGlobalTotals)
+		mutationID = applyMutator(r, m, fc, node, mutationID, originalSourceCode, dryRunCounts, dryRunGlobalTotals)
 	}
 
 	printDryRunFileSummary(r.opts, r.stdout, fc.sourceFile, dryRunCounts)
@@ -498,7 +502,7 @@ func (r *mutationRun) mutate(fc *fileContext, node ast.Node, mutationID int, dry
 	return mutationID
 }
 
-func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node, mutationID int, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) int {
+func applyMutator(r *mutationRun, m mutatorItem, fc *fileContext, node ast.Node, mutationID int, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) int {
 	console.Debug(r.opts, "Mutator %s", m.Name)
 
 	mutatorAnnotated := annotation.DecoratorFilter(m.Mutator, m.Name, fc.filters...)
@@ -511,7 +515,7 @@ func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node
 		}
 
 		originalStartLine := int64(fc.fset.Position(mutation.Position).Line)
-		r.recordOneMutation(m, fc, mutation, mutationID, originalStartLine, originalSourceCode, dryRunCounts, dryRunGlobalTotals)
+		recordOneMutation(r, m, fc, mutation, mutationID, originalStartLine, originalSourceCode, dryRunCounts, dryRunGlobalTotals)
 
 		changed <- mutago.PositionedMutation{}
 		<-changed
@@ -522,15 +526,15 @@ func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node
 	return mutationID
 }
 
-func (r *mutationRun) recordOneMutation(m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
+func recordOneMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
 	if r.opts.General.DryRun {
 		countDryRunMutation(m.Name, dryRunCounts, dryRunGlobalTotals)
 		return
 	}
-	r.processMutation(m, fc, mutation, mutationID, originalStartLine, originalSourceCode)
+	processMutation(r, m, fc, mutation, mutationID, originalStartLine, originalSourceCode)
 }
 
-func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte) {
+func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte) {
 	mutant := models.Mutant{}
 	mutant.Mutator.MutatorName = m.Name
 	mutant.Mutator.OriginalFilePath = fc.sourceFile
@@ -565,19 +569,21 @@ func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutation m
 		ctx:            r.ctx,
 		opts:           r.opts,
 		pkg:            fc.pkg,
-		originalFile:   fc.sourceFile,
-		mutationFile:   mutationFile,
 		mutant:         mutant,
-		absFile:        fc.absFile,
 		coverProfile:   fc.coverProfile,
 		execs:          r.execs,
 		perTestProf:    fc.perTestProf,
 		extraTestFlags: r.extraTestFlags,
 		runMutantID:    r.opts.Exec.RunMutantID,
-		moduleRoot:     r.moduleRoot,
-		relFile:        toRelPath(fc.absFile, r.moduleRoot),
-		originalSource: originalSourceCode,
-		edit:           edit,
+		source: mutationSource{
+			originalFile: fc.sourceFile,
+			mutationFile: mutationFile,
+			absFile:      fc.absFile,
+			relFile:      toRelPath(fc.absFile, r.moduleRoot),
+			moduleRoot:   r.moduleRoot,
+			original:     originalSourceCode,
+			edit:         edit,
+		},
 	}
 	r.jobs <- job
 }
@@ -1166,7 +1172,7 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 	}
 
 	startLine := mutant.Mutator.OriginalStartLine
-	notCovered := job.coverProfile != nil && startLine > 0 && !job.coverProfile.IsCovered(job.absFile, int(startLine))
+	notCovered := job.coverProfile != nil && startLine > 0 && !job.coverProfile.IsCovered(job.source.absFile, int(startLine))
 	if notCovered {
 		mu.Lock()
 		defer mu.Unlock()
@@ -1174,9 +1180,9 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 		return
 	}
 
-	mutatedSourceCode, err := job.edit.materialize(job.originalSource)
+	mutatedSourceCode, err := job.source.edit.materialize(job.source.original)
 	if err == nil {
-		err = os.WriteFile(job.mutationFile, mutatedSourceCode, 0666)
+		err = os.WriteFile(job.source.mutationFile, mutatedSourceCode, 0666)
 	}
 	if err != nil {
 		out := fmt.Sprintf("INTERNAL ERROR %s\n", err.Error())
@@ -1192,7 +1198,7 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 		return
 	}
 
-	execExitCode := mutateExec(job.ctx, opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
+	execExitCode := mutateExec(job, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)
 
 	mu.Lock()
@@ -1216,14 +1222,14 @@ func skipForGitDiff(job execJob, gitChangedLines gitdiff.ChangedLines) bool {
 		return false
 	}
 	lineNum := int(job.mutant.Mutator.OriginalStartLine)
-	changed := gitdiff.IsRelativeLineChanged(gitChangedLines, job.relFile, lineNum)
-	if job.relFile == "" {
-		changed = gitdiff.IsLineChanged(gitChangedLines, job.absFile, lineNum)
+	changed := gitdiff.IsRelativeLineChanged(gitChangedLines, job.source.relFile, lineNum)
+	if job.source.relFile == "" {
+		changed = gitdiff.IsLineChanged(gitChangedLines, job.source.absFile, lineNum)
 	}
 	if changed {
 		return false
 	}
-	console.Debug(job.opts, "Skip %q at line %d (not in git diff)", job.mutationFile, lineNum)
+	console.Debug(job.opts, "Skip %q at line %d (not in git diff)", job.source.mutationFile, lineNum)
 	return true
 }
 
@@ -1239,54 +1245,35 @@ func skipForMutantID(job execJob) bool {
 	if job.runMutantID == "" {
 		return false
 	}
-	relFile := toRelPath(job.mutant.Mutator.OriginalFilePath, job.moduleRoot)
-	diffOut, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", job.originalFile, job.mutationFile).CombinedOutput()
+	relFile := toRelPath(job.mutant.Mutator.OriginalFilePath, job.source.moduleRoot)
+	diffOut, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", job.source.originalFile, job.source.mutationFile).CombinedOutput()
 	id := baseline.MutantID(relFile, job.mutant.Mutator.MutatorName, string(diffOut))
 	return id != job.runMutantID
 }
 
-func mutateExec(
-	ctx context.Context,
-	opts *models.Options,
-	pkg *types.Package,
-	file string,
-	mutationFile string,
-	execs []string,
-	perTestProf *coverage.PerTestProfile,
-	absFile string,
-	extraTestFlags []string,
-	mutant *models.Mutant,
-) int {
-	if len(execs) == 0 {
-		return runBuiltinExec(opts, pkg, file, mutationFile, perTestProf, absFile, extraTestFlags, mutant)
+func mutateExec(job execJob, mutant *models.Mutant) int {
+	if len(job.execs) == 0 {
+		return runBuiltinExec(job, mutant)
 	}
-	return runCustomExec(ctx, opts, pkg, file, mutationFile, execs, mutant)
+	return runCustomExec(job, mutant)
 }
 
-func runBuiltinExec(
-	opts *models.Options,
-	pkg *types.Package,
-	file string,
-	mutationFile string,
-	perTestProf *coverage.PerTestProfile,
-	absFile string,
-	extraTestFlags []string,
-	mutant *models.Mutant,
-) int {
+func runBuiltinExec(job execJob, mutant *models.Mutant) int {
+	opts := job.opts
 	console.Debug(opts, "Execute built-in exec command for mutation")
 
-	diff, code := computeDiff(file, mutationFile, mutant)
+	diff, code := computeDiff(job.source.originalFile, job.source.mutationFile, mutant)
 	if code != 0 {
 		return code
 	}
 
-	overlayName, code := prepareOverlay(file, mutationFile)
+	overlayName, code := prepareOverlay(job.source.originalFile, job.source.mutationFile)
 	if code != 0 {
 		return code
 	}
 	defer os.Remove(overlayName)
 
-	execExitCode := runGoTest(opts, pkg, overlayName, perTestProf, absFile, int(mutant.Mutator.OriginalStartLine), extraTestFlags)
+	execExitCode := runGoTest(opts, job.pkg, overlayName, job.perTestProf, job.source.absFile, int(mutant.Mutator.OriginalStartLine), job.extraTestFlags)
 
 	mutant.Diff = string(diff)
 	return mapTestExitToResult(execExitCode)
@@ -1352,7 +1339,9 @@ func runGoTest(opts *models.Options, pkg *types.Package, overlayName string, per
 	return execExitCode
 }
 
-func runCustomExec(ctx context.Context, opts *models.Options, pkg *types.Package, file string, mutationFile string, execs []string, mutant *models.Mutant) int {
+func runCustomExec(job execJob, mutant *models.Mutant) int {
+	ctx, opts := job.ctx, job.opts
+	file, mutationFile := job.source.originalFile, job.source.mutationFile
 	console.Debug(opts, "Execute %q for mutation", opts.Exec.Exec)
 
 	extDiff, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", file, mutationFile).CombinedOutput()
@@ -1369,14 +1358,14 @@ func runCustomExec(ctx context.Context, opts *models.Options, pkg *types.Package
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(opts.Exec.Timeout)*time.Second)
 		defer cancel()
 	}
-	execCommand := exec.CommandContext(ctx, execs[0], execs[1:]...)
+	execCommand := exec.CommandContext(ctx, job.execs[0], job.execs[1:]...)
 	execCommand.Stderr = os.Stderr
 	execCommand.Stdout = os.Stdout
 	execCommand.Env = append(os.Environ(), []string{
 		"MUTATE_CHANGED=" + mutationFile,
 		fmt.Sprintf("MUTATE_DEBUG=%t", opts.General.Debug),
 		"MUTATE_ORIGINAL=" + file,
-		"MUTATE_PACKAGE=" + pkg.Path(),
+		"MUTATE_PACKAGE=" + job.pkg.Path(),
 		fmt.Sprintf("MUTATE_TIMEOUT=%d", opts.Exec.Timeout),
 		fmt.Sprintf("MUTATE_VERBOSE=%t", opts.General.Verbose),
 	}...)

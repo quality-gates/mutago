@@ -180,12 +180,12 @@ func TestFuncMap(t *testing.T) {
 
 func TestExtractContextLines(t *testing.T) {
 	tests := []struct {
-		name       string
-		source     string
-		line       int
-		radius     int
-		wantLines  []string
-		wantStart  int
+		name      string
+		source    string
+		line      int
+		radius    int
+		wantLines []string
+		wantStart int
 	}{
 		{
 			name:      "empty source",

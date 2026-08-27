@@ -58,6 +58,11 @@ func (idx *identifierIndex) query(info *types.Info, stmts []ast.Stmt) []ast.Expr
 	start, end := stmts[0].Pos(), stmts[len(stmts)-1].End()
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
+	idx.ensure(info, stmts, start, end)
+	return idx.results(info, start, end)
+}
+
+func (idx *identifierIndex) ensure(info *types.Info, stmts []ast.Stmt, start, end token.Pos) {
 	if !idx.covers(start, end) {
 		for _, stmt := range stmts {
 			idx.collect(info, stmt)
@@ -66,7 +71,9 @@ func (idx *identifierIndex) query(info *types.Info, stmts []ast.Stmt) []ast.Expr
 		sort.Slice(idx.events, func(i, j int) bool { return idx.events[i].pos < idx.events[j].pos })
 		sort.Slice(idx.defs, func(i, j int) bool { return idx.defs[i].pos < idx.defs[j].pos })
 	}
+}
 
+func (idx *identifierIndex) results(info *types.Info, start, end token.Pos) []ast.Expr {
 	excluded := make(map[types.Object]struct{})
 	defStart := sort.Search(len(idx.defs), func(i int) bool { return idx.defs[i].pos >= start })
 	for i := defStart; i < len(idx.defs) && idx.defs[i].pos <= end; i++ {
@@ -79,20 +86,26 @@ func (idx *identifierIndex) query(info *types.Info, stmts []ast.Stmt) []ast.Expr
 		if _, skip := excluded[event.object]; skip {
 			continue
 		}
-		switch expr := event.expr.(type) {
-		case *ast.Ident:
-			result = append(result, &ast.Ident{Name: expr.Name})
-		case *ast.SelectorExpr:
-			selector := cloneSelector(expr)
-			walker := identifierWalker{info: info}
-			if walker.shouldInitialize(expr) {
-				result = append(result, &ast.CompositeLit{Type: selector})
-			} else {
-				result = append(result, selector)
-			}
+		if expr := cloneIdentifierEvent(info, event.expr); expr != nil {
+			result = append(result, expr)
 		}
 	}
 	return result
+}
+
+func cloneIdentifierEvent(info *types.Info, expr ast.Expr) ast.Expr {
+	switch expr := expr.(type) {
+	case *ast.Ident:
+		return &ast.Ident{Name: expr.Name}
+	case *ast.SelectorExpr:
+		selector := cloneSelector(expr)
+		if (&identifierWalker{info: info}).shouldInitialize(expr) {
+			return &ast.CompositeLit{Type: selector}
+		}
+		return selector
+	default:
+		return nil
+	}
 }
 
 func (idx *identifierIndex) covers(start, end token.Pos) bool {
@@ -106,50 +119,72 @@ func (idx *identifierIndex) covers(start, end token.Pos) bool {
 
 func (idx *identifierIndex) collect(info *types.Info, root ast.Node) {
 	ast.Inspect(root, func(node ast.Node) bool {
-		switch n := node.(type) {
-		case *ast.SelectorExpr:
-			if n.Sel == nil || !checkForSelectorExpr(n) {
-				return true
-			}
-			if _, seen := idx.seenNodes[n]; !seen {
-				var object types.Object
-				if root := selectorRoot(n); root != nil {
-					object = info.Uses[root]
-				}
-				idx.events = append(idx.events, identifierEvent{pos: n.Pos(), expr: n, object: object})
-				idx.seenNodes[n] = struct{}{}
-			}
-			return false
-		case *ast.Ident:
-			if object, ok := info.Defs[n]; ok {
-				if _, variable := object.(*types.Var); variable {
-					if _, seen := idx.seenDefs[n]; !seen {
-						idx.defs = append(idx.defs, definitionEvent{pos: n.Pos(), object: object})
-						idx.seenDefs[n] = struct{}{}
-					}
-				}
-			}
-			if n.Name == "_" || token.Lookup(n.Name) != token.IDENT {
-				return false
-			}
-			object, ok := info.Uses[n]
-			variable, variableUse := object.(*types.Var)
-			if !ok || !variableUse || variable.IsField() {
-				return false
-			}
-			if _, seen := idx.seenNodes[n]; !seen {
-				idx.events = append(idx.events, identifierEvent{pos: n.Pos(), expr: n, object: object})
-				idx.seenNodes[n] = struct{}{}
-			}
-			return false
-		}
-		return true
+		return idx.collectNode(info, node)
 	})
+}
+
+func (idx *identifierIndex) collectNode(info *types.Info, node ast.Node) bool {
+	switch node := node.(type) {
+	case *ast.SelectorExpr:
+		return idx.collectSelector(info, node)
+	case *ast.Ident:
+		idx.collectDefinition(info, node)
+		idx.collectIdentifier(info, node)
+		return false
+	default:
+		return true
+	}
+}
+
+func (idx *identifierIndex) collectSelector(info *types.Info, selector *ast.SelectorExpr) bool {
+	if selector.Sel == nil || !checkForSelectorExpr(selector) {
+		return true
+	}
+	if _, seen := idx.seenNodes[selector]; seen {
+		return false
+	}
+	var object types.Object
+	if root := selectorRoot(selector); root != nil {
+		object = info.Uses[root]
+	}
+	idx.events = append(idx.events, identifierEvent{pos: selector.Pos(), expr: selector, object: object})
+	idx.seenNodes[selector] = struct{}{}
+	return false
+}
+
+func (idx *identifierIndex) collectDefinition(info *types.Info, ident *ast.Ident) {
+	object, ok := info.Defs[ident]
+	if !ok {
+		return
+	}
+	if _, variable := object.(*types.Var); !variable {
+		return
+	}
+	if _, seen := idx.seenDefs[ident]; seen {
+		return
+	}
+	idx.defs = append(idx.defs, definitionEvent{pos: ident.Pos(), object: object})
+	idx.seenDefs[ident] = struct{}{}
+}
+
+func (idx *identifierIndex) collectIdentifier(info *types.Info, ident *ast.Ident) {
+	if ident.Name == "_" || token.Lookup(ident.Name) != token.IDENT {
+		return
+	}
+	object, ok := info.Uses[ident]
+	variable, variableUse := object.(*types.Var)
+	if !ok || !variableUse || variable.IsField() {
+		return
+	}
+	if _, seen := idx.seenNodes[ident]; seen {
+		return
+	}
+	idx.events = append(idx.events, identifierEvent{pos: ident.Pos(), expr: ident, object: object})
+	idx.seenNodes[ident] = struct{}{}
 }
 
 type identifierWalker struct {
 	identifiers []ast.Expr
-	pkg         *types.Package
 	info        *types.Info
 	excluded    map[types.Object]struct{}
 }

@@ -10,14 +10,14 @@ type FunctionAnnotation struct {
 
 // LineAnnotation represents a collection of exclusions based on lines in the file.
 type LineAnnotation struct {
-	Exclusions map[int]map[token.Pos]mutatorInfo
-	Name       string
-	positions  map[token.Pos]mutatorInfo
+	Exclusions    map[int]map[token.Pos]mutatorInfo
+	Name          string
+	PositionIndex map[token.Pos]mutatorInfo
 }
 
 // RegexAnnotation represents a collection of exclusions based on regex pattern matches.
 type RegexAnnotation struct {
-	Exclusions map[int]map[token.Pos]mutatorInfo
-	Name       string
-	positions  map[token.Pos]mutatorInfo
+	Exclusions    map[int]map[token.Pos]mutatorInfo
+	Name          string
+	PositionIndex map[token.Pos]mutatorInfo
 }
