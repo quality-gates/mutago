@@ -9,6 +9,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ### Fixed
 - `numbers/decrementer` now parenthesizes negative integer and float mutations, preventing invalid expressions such as `value--0.5`.
 
+### Changed
+- `--coverage` with `--timeout-coefficient` now derives its adaptive timeout from the coverage run, avoiding a duplicate clean test run for every target package.
+
 ## [v2.8.3] — 2026-08-26
 
 ### Fixed
