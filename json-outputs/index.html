@@ -534,6 +534,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#full-report-json_output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full report (json_output)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#-logger-summary-json" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -607,6 +618,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#full-report-json_output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full report (json_output)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#-logger-summary-json" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -666,7 +688,14 @@
 
 
 <h1 id="json-output-schemas">JSON Output Schemas<a class="headerlink" href="#json-output-schemas" title="Permanent link">&para;</a></h1>
-<p>mutago can write two JSON files after each run.</p>
+<p>mutago can write three JSON files after each run.</p>
+<h2 id="full-report-json_output">Full report (<code>json_output</code>)<a class="headerlink" href="#full-report-json_output" title="Permanent link">&para;</a></h2>
+<p>Set <code>json_output: true</code> in the configuration file to write <code>report.json</code>. Its
+top-level <code>sources</code> object maps each source-file path to its original text.
+Mutants refer to that path through <code>mutator.originalFilePath</code>, so consumers can
+look up the source once instead of receiving a duplicate copy for every mutant.</p>
+<p>The legacy <code>mutator.originalSourceCode</code> and <code>mutator.mutatedSourceCode</code> fields
+remain accepted by the Go model for compatibility, but new reports omit them.</p>
 <h2 id="-logger-summary-json"><code>--logger-summary-json</code><a class="headerlink" href="#-logger-summary-json" title="Permanent link">&para;</a></h2>
 <p>Writes <code>mutago-summary.json</code>. Useful for CI badges, dashboards, and downstream scripts.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
