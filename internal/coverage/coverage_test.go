@@ -2,11 +2,34 @@ package coverage
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBuildPerTestProfileCompilesOnce(t *testing.T) {
+	realGo, err := exec.LookPath("go")
+	require.NoError(t, err)
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "go-calls.log")
+	wrapper := filepath.Join(dir, "go")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + logPath + "\nexec " + realGo + " \"$@\"\n"
+	require.NoError(t, os.WriteFile(wrapper, []byte(script), 0o700))
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, err = BuildPerTestProfile(
+		"github.com/quality-gates/mutago/v2/internal/coverage/testdata/entrypoints",
+		"github.com/quality-gates/mutago/v2", dir, 30, 1, nil,
+	)
+	require.NoError(t, err)
+	calls, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	assert.Equal(t, 2, len(strings.Split(strings.TrimSpace(string(calls)), "\n")), "list once and compile once")
+}
 
 // modulePath is the module root — shorter than the package path so that stripping
 // it from coverage entries leaves multi-component relative keys.

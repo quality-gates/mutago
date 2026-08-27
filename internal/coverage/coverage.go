@@ -189,11 +189,16 @@ func (p *PerTestProfile) CoveringTestsRelative(relFile string, lineNum int) []st
 // CountTests returns the number of test functions (Test*, Fuzz*)
 // in pkgPath. Returns 0 on any error or when the package has no tests.
 func CountTests(pkgPath string) int {
-	names, err := listTestNames(pkgPath)
+	names, err := ListTests(pkgPath)
 	if err != nil {
 		return 0
 	}
 	return len(names)
+}
+
+// ListTests returns runnable top-level Test and Fuzz entrypoint names.
+func ListTests(pkgPath string) ([]string, error) {
+	return listTestNames(pkgPath)
 }
 
 // isTestFuncName reports whether name is a top-level test entry point that can
@@ -241,10 +246,16 @@ type perTestResult struct {
 
 func BuildPerTestProfile(pkgPath, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags []string) (*PerTestProfile, error) {
 	// List test functions (not subtests).
-	testNames, err := listTestNames(pkgPath)
+	testNames, err := ListTests(pkgPath)
 	if err != nil {
 		return nil, fmt.Errorf("go test -list: %w", err)
 	}
+	return BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir, timeout, workers, extraTestFlags, testNames)
+}
+
+// BuildPerTestProfileForTests builds a profile from an already-discovered test
+// list, avoiding a second go test -list invocation in callers that show counts.
+func BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags, testNames []string) (*PerTestProfile, error) {
 	if len(testNames) == 0 {
 		return nil, nil
 	}
@@ -252,12 +263,25 @@ func BuildPerTestProfile(pkgPath, modulePath, tmpDir string, timeout uint, worke
 	if workers <= 0 {
 		workers = 1
 	}
+	binaryDir := filepath.Join(tmpDir, "per-test", strings.NewReplacer("/", "_", "\\", "_").Replace(pkgPath))
+	if err := os.MkdirAll(binaryDir, 0755); err != nil {
+		return nil, err
+	}
+	binaryPath := filepath.Join(binaryDir, "tests")
+	compileArgs := []string{"test", "-c", "-cover", "-covermode=set", "-o", binaryPath}
+	compileArgs = append(compileArgs, extraTestFlags...)
+	compileArgs = append(compileArgs, pkgPath)
+	compile := exec.Command("go", compileArgs...)
+	compile.Env = os.Environ()
+	if output, err := compile.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("compile coverage test binary: %w: %s", err, output)
+	}
 
 	jobs := make(chan perTestJob, len(testNames))
 	results := make(chan perTestResult, len(testNames))
 
 	for i := 0; i < workers; i++ {
-		go runPerTestWorker(jobs, results, pkgPath, modulePath, tmpDir, timeout, extraTestFlags)
+		go runPerTestWorker(jobs, results, binaryPath, modulePath, tmpDir, timeout, testBinaryFlags(extraTestFlags))
 	}
 
 	for _, name := range testNames {
@@ -282,21 +306,18 @@ func BuildPerTestProfile(pkgPath, modulePath, tmpDir string, timeout uint, worke
 	return p, nil
 }
 
-func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, pkgPath, modulePath, tmpDir string, timeout uint, extraTestFlags []string) {
+func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, binaryPath, modulePath, tmpDir string, timeout uint, binaryTestFlags []string) {
 	for job := range jobs {
 		profDir := filepath.Join(tmpDir, "per-test", job.name)
 		_ = os.MkdirAll(profDir, 0755)
 		profPath := filepath.Join(profDir, "coverage.out")
 
-		args := []string{"test"}
-		args = append(args, extraTestFlags...)
+		args := append([]string{}, binaryTestFlags...)
 		args = append(args,
-			"-run", "^"+job.name+"$",
-			"-coverprofile="+profPath,
-			"-covermode=set",
-			"-timeout", fmt.Sprintf("%ds", timeout),
-			pkgPath)
-		cmd := exec.Command("go", args...)
+			"-test.run=^"+job.name+"$",
+			"-test.coverprofile="+profPath,
+			"-test.timeout="+fmt.Sprintf("%ds", timeout))
+		cmd := exec.Command(binaryPath, args...)
 		cmd.Env = os.Environ()
 		_ = cmd.Run() // test failures are expected; we only care about coverage
 
@@ -307,6 +328,27 @@ func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, pkgP
 		}
 		results <- perTestResult{name: job.name, prof: prof}
 	}
+}
+
+func testBinaryFlags(extraTestFlags []string) []string {
+	flags := make([]string, 0, len(extraTestFlags))
+	for _, flag := range extraTestFlags {
+		switch {
+		case flag == "-short" || flag == "--short":
+			flags = append(flags, "-test.short=true")
+		case strings.HasPrefix(flag, "-test."):
+			flags = append(flags, flag)
+		case flag == "-v" || flag == "--verbose":
+			flags = append(flags, "-test.v=true")
+		case strings.HasPrefix(flag, "-race"), strings.HasPrefix(flag, "-tags"),
+			strings.HasPrefix(flag, "-vet"), strings.HasPrefix(flag, "-gcflags"),
+			strings.HasPrefix(flag, "-asmflags"), strings.HasPrefix(flag, "-trimpath"):
+			// Build-only flags were already applied by go test -c.
+		default:
+			flags = append(flags, flag)
+		}
+	}
+	return flags
 }
 
 func applyPerTestResult(p *PerTestProfile, r perTestResult) {

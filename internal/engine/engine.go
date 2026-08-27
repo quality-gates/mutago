@@ -753,11 +753,15 @@ func buildPerTestCoverageProfile(opts *models.Options, pkgFiles []string, module
 	if pkgPath == "" {
 		return nil
 	}
-	testCount := coverage.CountTests(pkgPath)
-	if testCount > 0 {
-		fmt.Printf("Building per-test coverage map for %q (%d tests)...\n", pkgPath, testCount)
+	testNames, err := coverage.ListTests(pkgPath)
+	if err != nil {
+		console.Verbose(opts, "Per-test coverage unavailable for %q: %v", pkgPath, err)
+		return nil
 	}
-	prof, err := coverage.BuildPerTestProfile(pkgPath, modulePath, tmpDir, opts.Exec.Timeout, numWorkers, extraTestFlags)
+	if len(testNames) > 0 {
+		fmt.Printf("Building per-test coverage map for %q (%d tests)...\n", pkgPath, len(testNames))
+	}
+	prof, err := coverage.BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir, opts.Exec.Timeout, numWorkers, extraTestFlags, testNames)
 	if err != nil {
 		console.Verbose(opts, "Per-test coverage unavailable for %q: %v", pkgPath, err)
 		return nil
