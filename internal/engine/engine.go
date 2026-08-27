@@ -179,6 +179,10 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options) (*mutationRu
 	}
 
 	pkgs := importing.PackagesWithFilesOfArgs(opts.Remaining.Targets, opts)
+	parser.ClearPackageCache()
+	if err := parser.PreparePackages(files); err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Cannot load target packages: %w", err)
+	}
 
 	report := &models.Report{}
 	var reportMu sync.Mutex
