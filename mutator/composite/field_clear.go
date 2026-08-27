@@ -39,6 +39,7 @@ func MutatorFieldClear(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 	original := lit.Elts
 
 	var mutations []mutator.Mutation
+	var scratch []ast.Expr
 	for i, elt := range lit.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
 		if !ok || isZeroish(kv.Value) {
@@ -46,23 +47,21 @@ func MutatorFieldClear(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 		}
 
 		idx := i
+		if scratch == nil {
+			scratch = make([]ast.Expr, len(original)-1)
+		}
 		mutations = append(mutations, mutator.Mutation{
 			Position: kv.Pos(),
-			Change:   func() { lit.Elts = without(original, idx) },
-			Reset:    func() { lit.Elts = original },
+			Change: func() {
+				copy(scratch[:idx], original[:idx])
+				copy(scratch[idx:], original[idx+1:])
+				lit.Elts = scratch
+			},
+			Reset: func() { lit.Elts = original },
 		})
 	}
 
 	return mutations
-}
-
-// without returns a new slice with the element at idx removed, leaving the
-// input untouched so Reset can restore it.
-func without(elts []ast.Expr, idx int) []ast.Expr {
-	out := make([]ast.Expr, 0, len(elts)-1)
-	out = append(out, elts[:idx]...)
-	out = append(out, elts[idx+1:]...)
-	return out
 }
 
 // isZeroish reports whether expr is a literal spelling of a zero value, where
