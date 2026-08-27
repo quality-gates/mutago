@@ -35,13 +35,15 @@ func (h *BaseCollector) Handle(name string, comment *ast.Comment, fset *token.Fi
 // RegexAnnotationCollector implements the ChainCollector interface for "mutator-disable-regexp" annotations.
 type RegexAnnotationCollector struct {
 	BaseCollector
-	Processor RegexAnnotation
+	Processor   RegexAnnotation
+	nodesByLine map[int][]ast.Node
 }
 
 // NextLineAnnotationCollector implements the ChainCollector interface for "mutator-disable-next-line" annotations.
 type NextLineAnnotationCollector struct {
 	BaseCollector
-	Processor LineAnnotation
+	Processor   LineAnnotation
+	nodesByLine map[int][]ast.Node
 }
 
 // Handle processes regex pattern annotations, delegating other types to the next handler.
@@ -52,7 +54,7 @@ func (r *RegexAnnotationCollector) Handle(name string, comment *ast.Comment, fse
 		return
 	}
 
-	r.Processor.collectMatchNodes(comment, fset, file, fileAbs)
+	r.Processor.collectMatchNodes(comment, fset, file, fileAbs, r.nodesByLine)
 }
 
 // Handle processes regex pattern annotations, delegating other types to the next handler.
@@ -63,12 +65,12 @@ func (n *NextLineAnnotationCollector) Handle(name string, comment *ast.Comment, 
 		return
 	}
 
-	n.Processor.collectNodesOnNextLine(comment, fset, file)
+	n.Processor.collectNodesOnNextLine(comment, fset, file, n.nodesByLine)
 }
 
-func (p *Processor) buildChain() ChainCollector {
-	regexHandler := &RegexAnnotationCollector{Processor: p.RegexAnnotation}
-	nextLineHandler := &NextLineAnnotationCollector{Processor: p.LineAnnotation}
+func (p *Processor) buildChain(nodesByLine map[int][]ast.Node) ChainCollector {
+	regexHandler := &RegexAnnotationCollector{Processor: p.RegexAnnotation, nodesByLine: nodesByLine}
+	nextLineHandler := &NextLineAnnotationCollector{Processor: p.LineAnnotation, nodesByLine: nodesByLine}
 	regexHandler.SetNext(nextLineHandler)
 
 	return regexHandler

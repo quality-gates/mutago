@@ -12,10 +12,12 @@ type FunctionAnnotation struct {
 type LineAnnotation struct {
 	Exclusions map[int]map[token.Pos]mutatorInfo
 	Name       string
+	positions  map[token.Pos]mutatorInfo
 }
 
 // RegexAnnotation represents a collection of exclusions based on regex pattern matches.
 type RegexAnnotation struct {
 	Exclusions map[int]map[token.Pos]mutatorInfo
 	Name       string
+	positions  map[token.Pos]mutatorInfo
 }

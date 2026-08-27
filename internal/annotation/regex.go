@@ -40,7 +40,7 @@ func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, 
 // 1. Parsing the regex pattern and mutators from the comment
 // 2. Finding all lines in the file that match the regex
 // 3. Recording nodes from matching lines to be excluded
-func (r *RegexAnnotation) collectMatchNodes(comment *ast.Comment, fset *token.FileSet, file *ast.File, fileAbs string) {
+func (r *RegexAnnotation) collectMatchNodes(comment *ast.Comment, _ *token.FileSet, _ *ast.File, fileAbs string, nodesByLine map[int][]ast.Node) {
 	regex, mutators := r.parseRegexAnnotation(comment.Text)
 
 	lines, err := r.findLinesMatchingRegex(fileAbs, regex)
@@ -48,7 +48,7 @@ func (r *RegexAnnotation) collectMatchNodes(comment *ast.Comment, fset *token.Fi
 		log.Printf("Error scaning a source file: %v", err)
 	}
 
-	collectExcludedNodes(fset, file, lines, r.Exclusions, mutators)
+	collectExcludedNodes(nodesByLine, lines, r.Exclusions, r.positions, mutators)
 }
 
 // findLinesMatchingRegex scans a source file and returns line numbers that match the given regex.
@@ -93,13 +93,6 @@ func (r *RegexAnnotation) findLinesMatchingRegex(filePath string, regex *regexp.
 // 1. Whether the node appears in the Exclusions map
 // 2. Whether the current mutator is in the node's exclusion list
 func (r *RegexAnnotation) filterRegexNodes(node ast.Node, mutatorName string) bool {
-	for _, nodes := range r.Exclusions {
-		if mutatorInfo, exists := nodes[node.Pos()]; exists {
-			if shouldSkipMutator(mutatorInfo, mutatorName) {
-				return true
-			}
-		}
-	}
-
-	return false
+	mutators, exists := r.positions[node.Pos()]
+	return exists && shouldSkipMutator(mutators, mutatorName)
 }
