@@ -4,6 +4,18 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [v2.8.5] — 2026-08-27
+
+### Changed
+- `--coverage` with `--timeout-coefficient` now derives its adaptive timeout from the coverage run, avoiding a duplicate clean test run for every target package.
+
+## [v2.8.4] — 2026-08-27
+
+### Fixed
+- `numbers/decrementer` now parenthesizes negative integer and float mutations, preventing invalid expressions such as `value--0.5`.
+
 ## [v2.8.3] — 2026-08-26
 
 ### Fixed
@@ -454,4 +466,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.8.1]: https://github.com/quality-gates/mutago/compare/v2.8.0...v2.8.1
 [v2.8.2]: https://github.com/quality-gates/mutago/compare/v2.8.1...v2.8.2
 [v2.8.3]: https://github.com/quality-gates/mutago/compare/v2.8.2...v2.8.3
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.8.3...HEAD
+[v2.8.4]: https://github.com/quality-gates/mutago/compare/v2.8.3...v2.8.4
+[v2.8.5]: https://github.com/quality-gates/mutago/compare/v2.8.4...v2.8.5
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.8.5...HEAD

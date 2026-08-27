@@ -29,6 +29,9 @@ func MutatorNumbersDecrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 
 		originalInt--
 		mutated := strconv.Itoa(originalInt)
+		if originalInt < 0 {
+			mutated = "(" + mutated + ")"
+		}
 
 		return []mutator.Mutation{
 			{
@@ -52,6 +55,9 @@ func MutatorNumbersDecrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 
 		originalFloat--
 		mutated := strconv.FormatFloat(originalFloat, 'f', -1, 64)
+		if originalFloat < 0 {
+			mutated = "(" + mutated + ")"
+		}
 
 		return []mutator.Mutation{
 			{

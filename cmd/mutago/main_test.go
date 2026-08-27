@@ -310,6 +310,59 @@ func TestMainTestFlagsPassthrough(t *testing.T) {
 	)
 }
 
+func TestMainCoverageUsesSingleBaselineForAdaptiveTimeout(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/adaptive\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "add.go"), `package adaptive
+
+func Add(a, b int) int { return a + b }
+`)
+	writeFixtureFile(t, filepath.Join(root, "add_test.go"), `package adaptive
+
+import "testing"
+
+func TestAdd(t *testing.T) {
+	if got := Add(1, 2); got != 3 {
+		t.Fatalf("Add(1, 2) = %d, want 3", got)
+	}
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - arithmetic/base\n")
+
+	realGo, err := exec.LookPath("go")
+	require.NoError(t, err)
+	goLog := filepath.Join(t.TempDir(), "go-test.log")
+	goWrapper := filepath.Join(t.TempDir(), "go")
+	writeFixtureFile(t, goWrapper, `#!/bin/sh
+if [ "$1" = test ]; then
+  printf '%s\n' "$*" >> "$MUTAGO_GO_TEST_LOG"
+fi
+exec "$MUTAGO_REAL_GO" "$@"
+`)
+	require.NoError(t, os.Chmod(goWrapper, 0755))
+	t.Setenv("MUTAGO_GO_TEST_LOG", goLog)
+	t.Setenv("MUTAGO_REAL_GO", realGo)
+	t.Setenv("PATH", filepath.Dir(goWrapper)+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	testMain(
+		t,
+		root,
+		[]string{"--coverage", "--timeout-coefficient", "1", "--config", "mutago.yml", "add.go"},
+		returnOk,
+		"mutation score",
+	)
+
+	log, err := os.ReadFile(goLog)
+	require.NoError(t, err)
+	cleanTestRuns := 0
+	for _, line := range strings.Split(string(log), "\n") {
+		if strings.HasPrefix(line, "test ") && !strings.Contains(line, "-overlay=") {
+			cleanTestRuns++
+		}
+	}
+	assert.Equal(t, 1, cleanTestRuns, "coverage should also provide the adaptive timeout baseline")
+}
+
 func TestMainPerTestFlag(t *testing.T) {
 	// --per-test builds a per-test coverage map and runs only covering tests
 	// for each mutation. Results must be identical to running without --per-test.
@@ -422,7 +475,31 @@ func TestMainGenericsTypeUnionNoInternalError(t *testing.T) {
 	assert.NotContains(t, out, "INTERNAL ERROR")
 }
 
-func testMain(t *testing.T, root string, exec []string, expectedExitCode int, contains string) {
+func TestMainFloatDecrementNegativeLiteralNoInternalError(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/floatdecrement\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "jitter.go"), `package floatdecrement
+
+func Jitter() float64 {
+	return 1.0+(0.75-0.5)*0.5
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "jitter_test.go"), `package floatdecrement
+
+import "testing"
+
+func TestJitter(t *testing.T) {
+	if got := Jitter(); got != 1.125 {
+		t.Fatalf("Jitter() = %v, want 1.125", got)
+	}
+}
+`)
+
+	out := testMain(t, root, []string{"--exec-timeout", "5"}, returnOk, "mutation score")
+	assert.NotContains(t, out, "INTERNAL ERROR")
+}
+
+func testMain(t *testing.T, root string, exec []string, expectedExitCode int, contains string) string {
 	// Clear the parser cache so each test loads files fresh from disk.
 	// Without this, TestMainMatch's exec script (which writes to the original
 	// file on disk) can leave the cache holding a stale AST for later tests.
@@ -463,4 +540,5 @@ func testMain(t *testing.T, root string, exec []string, expectedExitCode int, co
 
 	assert.Equal(t, expectedExitCode, exitCode)
 	assert.Contains(t, out, contains)
+	return out
 }
