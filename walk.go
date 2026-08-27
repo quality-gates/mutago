@@ -66,6 +66,9 @@ func MutateWalk(pkg *types.Package, info *types.Info, node ast.Node, m mutator.M
 // The channel also carries zero values for the reset/advance handshake.
 type PositionedMutation struct {
 	Position token.Pos
+	Node     ast.Node
+	Start    token.Pos
+	End      token.Pos
 }
 
 // MutateWalkWithPositions behaves like MutateWalk but reports the source
@@ -133,9 +136,10 @@ func (w *positionedMutateWalk) Visit(node ast.Node) ast.Visitor {
 		if !position.IsValid() {
 			position = node.Pos()
 		}
+		start, end := node.Pos(), node.End()
 
 		m.Change()
-		w.changed <- PositionedMutation{Position: position}
+		w.changed <- PositionedMutation{Position: position, Node: node, Start: start, End: end}
 		<-w.changed
 
 		m.Reset()

@@ -3,6 +3,9 @@ package engine
 import (
 	"bytes"
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,6 +25,36 @@ import (
 	_ "github.com/quality-gates/mutago/v2/mutator/select"
 	_ "github.com/quality-gates/mutago/v2/mutator/statement"
 )
+
+func TestMutationEditMaterializesChangedNode(t *testing.T) {
+	source := []byte("package sample\nvar value = 1\n")
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "sample.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var literal *ast.BasicLit
+	ast.Inspect(file, func(node ast.Node) bool {
+		if candidate, ok := node.(*ast.BasicLit); ok {
+			literal = candidate
+		}
+		return true
+	})
+	literal.Value = "2"
+
+	start, end := literal.Pos(), literal.End()
+	edit, err := captureMutationEdit(fset, literal, start, end, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := edit.materialize(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "package sample\nvar value = 2\n" {
+		t.Fatalf("unexpected mutation: %q", got)
+	}
+}
 
 func TestEngineDryRun(t *testing.T) {
 	opts := &models.Options{}

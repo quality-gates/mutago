@@ -93,6 +93,8 @@ type execJob struct {
 	extraTestFlags []string
 	runMutantID    string
 	moduleRoot     string
+	originalSource []byte
+	edit           mutationEdit
 }
 
 type fileContext struct {
@@ -457,10 +459,6 @@ func (r *mutationRun) mutate(fc *fileContext, node ast.Node, mutationID int, dry
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmtOriginal, fmtErr := format.Source(originalSourceCode)
-	if fmtErr != nil {
-		fmtOriginal = originalSourceCode
-	}
 
 	var dryRunCounts map[string]int
 	if r.opts.General.DryRun {
@@ -468,7 +466,7 @@ func (r *mutationRun) mutate(fc *fileContext, node ast.Node, mutationID int, dry
 	}
 
 	for _, m := range r.mutators {
-		mutationID = r.applyMutator(m, fc, node, mutationID, originalSourceCode, fmtOriginal, dryRunCounts, dryRunGlobalTotals)
+		mutationID = r.applyMutator(m, fc, node, mutationID, originalSourceCode, dryRunCounts, dryRunGlobalTotals)
 	}
 
 	printDryRunFileSummary(r.opts, r.stdout, fc.sourceFile, dryRunCounts)
@@ -476,7 +474,7 @@ func (r *mutationRun) mutate(fc *fileContext, node ast.Node, mutationID int, dry
 	return mutationID
 }
 
-func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node, mutationID int, originalSourceCode, fmtOriginal []byte, dryRunCounts, dryRunGlobalTotals map[string]int) int {
+func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node, mutationID int, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) int {
 	console.Debug(r.opts, "Mutator %s", m.Name)
 
 	mutatorAnnotated := annotation.DecoratorFilter(m.Mutator, m.Name, fc.filters...)
@@ -489,7 +487,7 @@ func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node
 		}
 
 		originalStartLine := int64(fc.fset.Position(mutation.Position).Line)
-		r.recordOneMutation(m, fc, mutationID, originalStartLine, originalSourceCode, fmtOriginal, dryRunCounts, dryRunGlobalTotals)
+		r.recordOneMutation(m, fc, mutation, mutationID, originalStartLine, originalSourceCode, dryRunCounts, dryRunGlobalTotals)
 
 		changed <- mutago.PositionedMutation{}
 		<-changed
@@ -500,15 +498,15 @@ func (r *mutationRun) applyMutator(m mutatorItem, fc *fileContext, node ast.Node
 	return mutationID
 }
 
-func (r *mutationRun) recordOneMutation(m mutatorItem, fc *fileContext, mutationID int, originalStartLine int64, originalSourceCode, fmtOriginal []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
+func (r *mutationRun) recordOneMutation(m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
 	if r.opts.General.DryRun {
 		countDryRunMutation(m.Name, dryRunCounts, dryRunGlobalTotals)
 		return
 	}
-	r.processMutation(m, fc, mutationID, originalStartLine, originalSourceCode, fmtOriginal)
+	r.processMutation(m, fc, mutation, mutationID, originalStartLine, originalSourceCode)
 }
 
-func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutationID int, originalStartLine int64, originalSourceCode, fmtOriginal []byte) {
+func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte) {
 	mutant := models.Mutant{}
 	mutant.Mutator.MutatorName = m.Name
 	mutant.Mutator.OriginalFilePath = fc.sourceFile
@@ -516,7 +514,7 @@ func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutationID
 	mutant.Mutator.OriginalStartLine = originalStartLine
 
 	mutationFile := fmt.Sprintf("%s.%d", fc.mutatedFile, mutationID)
-	_, duplicate, err := saveAST(r.blacklist, mutationFile, fc.fset, fc.src, fmtOriginal)
+	edit, err := captureMutationEdit(fc.fset, mutation.Node, mutation.Start, mutation.End, originalSourceCode)
 	if err != nil {
 		out := fmt.Sprintf("INTERNAL ERROR %s\n", err.Error())
 		fmt.Fprintf(r.stdout, "%s", out)
@@ -527,11 +525,16 @@ func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutationID
 		r.mu.Unlock()
 		return
 	}
-
-	if duplicate {
+	checksum := stableMutationEditKey(originalSourceCode, edit)
+	if _, duplicate := r.blacklist[checksum]; duplicate {
 		r.mu.Lock()
 		r.report.Stats.DuplicatedCount++
 		r.mu.Unlock()
+		return
+	}
+	r.blacklist[checksum] = struct{}{}
+
+	if r.jobs == nil {
 		return
 	}
 
@@ -548,11 +551,10 @@ func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutationID
 		extraTestFlags: r.extraTestFlags,
 		runMutantID:    r.opts.Exec.RunMutantID,
 		moduleRoot:     r.moduleRoot,
+		originalSource: originalSourceCode,
+		edit:           edit,
 	}
-
-	if r.jobs != nil {
-		r.jobs <- job
-	}
+	r.jobs <- job
 }
 
 func countDryRunMutation(name string, dryRunCounts, dryRunGlobalTotals map[string]int) {
@@ -1065,6 +1067,44 @@ func saveAST(mutationBlackList map[string]struct{}, file string, fset *token.Fil
 	return checksum, false, os.WriteFile(file, mutatedSrc, 0666)
 }
 
+type mutationEdit struct {
+	start       int
+	end         int
+	replacement []byte
+}
+
+func captureMutationEdit(fset *token.FileSet, node ast.Node, startPos, endPos token.Pos, original []byte) (mutationEdit, error) {
+	start := fset.PositionFor(startPos, false).Offset
+	end := fset.PositionFor(endPos, false).Offset
+	if start < 0 || end < start || end > len(original) {
+		return mutationEdit{}, fmt.Errorf("invalid mutation range %d:%d for %d-byte source", start, end, len(original))
+	}
+	var replacement bytes.Buffer
+	if err := printer.Fprint(&replacement, fset, node); err != nil {
+		return mutationEdit{}, err
+	}
+	return mutationEdit{start: start, end: end, replacement: replacement.Bytes()}, nil
+}
+
+func (e mutationEdit) materialize(original []byte) ([]byte, error) {
+	if e.start < 0 || e.end < e.start || e.end > len(original) {
+		return nil, fmt.Errorf("invalid mutation range %d:%d for %d-byte source", e.start, e.end, len(original))
+	}
+	mutated := make([]byte, 0, len(original)-(e.end-e.start)+len(e.replacement))
+	mutated = append(mutated, original[:e.start]...)
+	mutated = append(mutated, e.replacement...)
+	mutated = append(mutated, original[e.end:]...)
+	return mutated, nil
+}
+
+func stableMutationEditKey(original []byte, edit mutationEdit) string {
+	h := md5.New()
+	h.Write(original[edit.start:edit.end])
+	h.Write([]byte{0})
+	h.Write(edit.replacement)
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
 func stableMutationKey(original, mutated []byte) string {
 	h := md5.New()
 	oLines := strings.Split(string(original), "\n")
@@ -1092,15 +1132,9 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 	opts := job.opts
 	mutant := job.mutant
 
-	if skipForGitDiff(job, gitChangedLines) || skipForMutantID(job) {
+	if skipForGitDiff(job, gitChangedLines) {
 		return
 	}
-
-	mutatedSourceCode, err := os.ReadFile(job.mutationFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	mutant.Mutator.MutatedSourceCode = string(mutatedSourceCode)
 
 	startLine := mutant.Mutator.OriginalStartLine
 	notCovered := job.coverProfile != nil && startLine > 0 && !job.coverProfile.IsCovered(job.absFile, int(startLine))
@@ -1110,6 +1144,25 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 		recordNotCovered(opts, stats, mutant, mutantLocation(mutant))
 		return
 	}
+
+	mutatedSourceCode, err := job.edit.materialize(job.originalSource)
+	if err == nil {
+		err = os.WriteFile(job.mutationFile, mutatedSourceCode, 0666)
+	}
+	if err != nil {
+		out := fmt.Sprintf("INTERNAL ERROR %s\n", err.Error())
+		fmt.Fprint(stdout, out)
+		mutant.ProcessOutput = out
+		mu.Lock()
+		stats.Errored = append(stats.Errored, mutant)
+		stats.Stats.ErrorCount++
+		mu.Unlock()
+		return
+	}
+	if skipForMutantID(job) {
+		return
+	}
+	mutant.Mutator.MutatedSourceCode = string(mutatedSourceCode)
 
 	execExitCode := mutateExec(opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)
