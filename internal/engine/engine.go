@@ -126,14 +126,7 @@ func (e *Engine) Run(ctx context.Context, opts *models.Options, bl *baseline.Fil
 		return Result{Report: report, ExitCode: exitCode}, nil
 	}
 
-	var coverageProfiles []*coverage.Profile
-	if opts.Exec.Coverage && opts.Exec.TimeoutCoefficient > 0 && !opts.Exec.NoExec && !opts.General.DryRun && len(run.execs) == 0 {
-		var maxBaseline time.Duration
-		coverageProfiles, maxBaseline = run.prepareCoverageProfiles(pkgs)
-		applyAdaptiveTimeoutFromBaseline(opts, maxBaseline)
-	} else {
-		applyAdaptiveTimeout(opts, pkgs, run.execs, run.extraTestFlags)
-	}
+	coverageProfiles := configureAdaptiveTimeoutAndCoverage(opts, pkgs, run)
 
 	dryRunTotal, dryRunMutatorTotals, loopCode := run.mutateAll(pkgs, coverageProfiles)
 
@@ -360,14 +353,24 @@ func (r *mutationRun) coverageForPackage(importPkg importing.Package) *coverage.
 	return coverProfile
 }
 
-func (r *mutationRun) prepareCoverageProfiles(pkgs []importing.Package) ([]*coverage.Profile, time.Duration) {
+func configureAdaptiveTimeoutAndCoverage(opts *models.Options, pkgs []importing.Package, run *mutationRun) []*coverage.Profile {
+	if opts.Exec.Coverage && opts.Exec.TimeoutCoefficient > 0 && !opts.Exec.NoExec && !opts.General.DryRun && len(run.execs) == 0 {
+		profiles, maxBaseline := prepareCoverageProfiles(opts, pkgs, run.tmpDir, run.modulePath, run.extraTestFlags, run.report)
+		applyAdaptiveTimeoutFromBaseline(opts, maxBaseline)
+		return profiles
+	}
+	applyAdaptiveTimeout(opts, pkgs, run.execs, run.extraTestFlags)
+	return nil
+}
+
+func prepareCoverageProfiles(opts *models.Options, pkgs []importing.Package, tmpDir string, modulePath string, extraTestFlags []string, report *models.Report) ([]*coverage.Profile, time.Duration) {
 	profiles := make([]*coverage.Profile, len(pkgs))
 	var maxBaseline time.Duration
 	for i, importPkg := range pkgs {
-		profile, elapsed := buildCoverageProfile(r.opts, importPkg.Files, r.tmpDir, r.modulePath, r.extraTestFlags)
+		profile, elapsed := buildCoverageProfile(opts, importPkg.Files, tmpDir, modulePath, extraTestFlags)
 		profiles[i] = profile
 		if profile != nil {
-			r.report.HasCoverage = true
+			report.HasCoverage = true
 		}
 		if elapsed > maxBaseline {
 			maxBaseline = elapsed
