@@ -115,9 +115,14 @@ type fileContext struct {
 
 // Run executes the mutation testing lifecycle based on options and baseline.
 func (e *Engine) Run(ctx context.Context, opts *models.Options, bl *baseline.File) (Result, error) {
+	return e.RunResolved(ctx, opts, bl, importing.ResolveTargets(opts.Remaining.Targets, opts))
+}
+
+// RunResolved executes a mutation run using targets discovered by the caller.
+func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *baseline.File, targets importing.ResolvedTargets) (Result, error) {
 	e.initDefaults()
 
-	run, pkgs, jobs, jobWg, stopProgress, progressWg, _, err := e.initRun(ctx, opts)
+	run, pkgs, jobs, jobWg, stopProgress, progressWg, _, err := e.initRun(ctx, opts, targets)
 	if err != nil {
 		return Result{ExitCode: returnError}, err
 	}
@@ -163,8 +168,8 @@ func (e *Engine) initDefaults() {
 	}
 }
 
-func (e *Engine) initRun(ctx context.Context, opts *models.Options) (*mutationRun, []importing.Package, chan execJob, *sync.WaitGroup, chan struct{}, *sync.WaitGroup, gitdiff.ChangedLines, error) {
-	files := importing.FilesOfArgs(opts.Remaining.Targets, opts)
+func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets importing.ResolvedTargets) (*mutationRun, []importing.Package, chan execJob, *sync.WaitGroup, chan struct{}, *sync.WaitGroup, gitdiff.ChangedLines, error) {
+	files := targets.Files
 	if len(files) == 0 {
 		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Could not find any suitable Go source files")
 	}
@@ -179,7 +184,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options) (*mutationRu
 		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Cannot load git diff: %w", err)
 	}
 
-	pkgs := importing.PackagesWithFilesOfArgs(opts.Remaining.Targets, opts)
+	pkgs := targets.Packages
 	parser.ClearPackageCache()
 	if err := parser.PreparePackages(files); err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Cannot load target packages: %w", err)
