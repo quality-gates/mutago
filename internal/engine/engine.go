@@ -12,7 +12,6 @@ import (
 	"go/token"
 	"go/types"
 	"io"
-	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -98,16 +97,17 @@ type execJob struct {
 }
 
 type fileContext struct {
-	pkg          *types.Package
-	info         *types.Info
-	fset         *token.FileSet
-	src          ast.Node
-	sourceFile   string
-	mutatedFile  string
-	absFile      string
-	coverProfile *coverage.Profile
-	perTestProf  *coverage.PerTestProfile
-	filters      []filter.NodeFilter
+	pkg            *types.Package
+	info           *types.Info
+	fset           *token.FileSet
+	src            ast.Node
+	sourceFile     string
+	mutatedFile    string
+	absFile        string
+	coverProfile   *coverage.Profile
+	perTestProf    *coverage.PerTestProfile
+	filters        []filter.NodeFilter
+	originalSource []byte
 }
 
 // Run executes the mutation testing lifecycle based on options and baseline.
@@ -402,6 +402,18 @@ func (r *mutationRun) processFile(file string, coverProfile *coverage.Profile, p
 	if err != nil {
 		return 0, returnError
 	}
+	originalSource, err := os.ReadFile(file)
+	if err != nil {
+		return 0, returnError
+	}
+	if !r.opts.General.DryRun {
+		r.mu.Lock()
+		if r.report.Sources == nil {
+			r.report.Sources = make(map[string]string)
+		}
+		r.report.Sources[file] = string(originalSource)
+		r.mu.Unlock()
+	}
 
 	if !r.opts.General.DryRun {
 		if err := os.MkdirAll(r.tmpDir+"/"+filepath.Dir(file), 0755); err != nil {
@@ -419,16 +431,17 @@ func (r *mutationRun) processFile(file string, coverProfile *coverage.Profile, p
 	absFile, _ := filepath.Abs(file)
 
 	fc := &fileContext{
-		pkg:          pkg,
-		info:         info,
-		fset:         fset,
-		src:          src,
-		sourceFile:   file,
-		mutatedFile:  tmpFile,
-		absFile:      absFile,
-		coverProfile: coverProfile,
-		perTestProf:  perTestProf,
-		filters:      nodeFilters,
+		pkg:            pkg,
+		info:           info,
+		fset:           fset,
+		src:            src,
+		sourceFile:     file,
+		mutatedFile:    tmpFile,
+		absFile:        absFile,
+		coverProfile:   coverProfile,
+		perTestProf:    perTestProf,
+		filters:        nodeFilters,
+		originalSource: originalSource,
 	}
 
 	return r.mutateFile(fc, dryRunMutatorTotals)
@@ -455,10 +468,7 @@ func (r *mutationRun) mutateFile(fc *fileContext, dryRunMutatorTotals map[string
 }
 
 func (r *mutationRun) mutate(fc *fileContext, node ast.Node, mutationID int, dryRunGlobalTotals map[string]int) int {
-	originalSourceCode, err := os.ReadFile(fc.sourceFile)
-	if err != nil {
-		log.Fatal(err)
-	}
+	originalSourceCode := fc.originalSource
 
 	var dryRunCounts map[string]int
 	if r.opts.General.DryRun {
@@ -510,7 +520,6 @@ func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutation m
 	mutant := models.Mutant{}
 	mutant.Mutator.MutatorName = m.Name
 	mutant.Mutator.OriginalFilePath = fc.sourceFile
-	mutant.Mutator.OriginalSourceCode = string(originalSourceCode)
 	mutant.Mutator.OriginalStartLine = originalStartLine
 
 	mutationFile := fmt.Sprintf("%s.%d", fc.mutatedFile, mutationID)
@@ -1162,7 +1171,6 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 	if skipForMutantID(job) {
 		return
 	}
-	mutant.Mutator.MutatedSourceCode = string(mutatedSourceCode)
 
 	execExitCode := mutateExec(opts, job.pkg, job.originalFile, job.mutationFile, job.execs, job.perTestProf, job.absFile, job.extraTestFlags, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)

@@ -270,7 +270,11 @@ func MakeAgenticJSONReport(report models.Report, moduleRoot string) error {
 		relFile := toRelPath(m.Mutator.OriginalFilePath, moduleRoot)
 		id := baseline.MutantID(relFile, m.Mutator.MutatorName, m.Diff)
 		const contextRadius = 3
-		ctxLines, ctxStart := extractContextLines(m.Mutator.OriginalSourceCode, int(m.Mutator.OriginalStartLine), contextRadius)
+		source := report.Sources[m.Mutator.OriginalFilePath]
+		if source == "" {
+			source = m.Mutator.OriginalSourceCode
+		}
+		ctxLines, ctxStart := extractContextLines(source, int(m.Mutator.OriginalStartLine), contextRadius)
 		mutants = append(mutants, AgenticMutant{
 			ID:               id,
 			File:             relFile,

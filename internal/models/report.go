@@ -17,13 +17,14 @@ var ReportGitLabJSONFileName string = "mutago-gitlab.json"
 
 // Report holds the complete mutation testing result.
 type Report struct {
-	Stats        Stats          `json:"stats"`
-	MutatorStats []MutatorStats `json:"mutatorStats,omitempty"`
-	Escaped      []Mutant       `json:"escaped"`
-	Killed       []Mutant       `json:"killed"`
-	Skipped      []Mutant       `json:"skipped,omitempty"`
-	Errored      []Mutant       `json:"errored"`
-	NotCovered   []Mutant       `json:"notCovered,omitempty"`
+	Stats        Stats             `json:"stats"`
+	MutatorStats []MutatorStats    `json:"mutatorStats,omitempty"`
+	Sources      map[string]string `json:"sources,omitempty"`
+	Escaped      []Mutant          `json:"escaped"`
+	Killed       []Mutant          `json:"killed"`
+	Skipped      []Mutant          `json:"skipped,omitempty"`
+	Errored      []Mutant          `json:"errored"`
+	NotCovered   []Mutant          `json:"notCovered,omitempty"`
 	// HasCoverage is true when a coverage profile was loaded before mutation.
 	// It distinguishes "coverage was run and all code is covered" (NotCoveredCount==0
 	// but CoveredCodeMsi is meaningful) from "coverage was never run".
@@ -63,8 +64,8 @@ type Mutant struct {
 // Mutator describes what was mutated.
 type Mutator struct {
 	MutatorName        string `json:"mutatorName"`
-	OriginalSourceCode string `json:"originalSourceCode"`
-	MutatedSourceCode  string `json:"mutatedSourceCode"`
+	OriginalSourceCode string `json:"originalSourceCode,omitempty"`
+	MutatedSourceCode  string `json:"mutatedSourceCode,omitempty"`
 	OriginalFilePath   string `json:"originalFilePath"`
 	OriginalStartLine  int64  `json:"originalStartLine"`
 }
