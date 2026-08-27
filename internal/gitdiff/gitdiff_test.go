@@ -115,3 +115,11 @@ func TestIsLineChanged_ExactMatch(t *testing.T) {
 	assert.True(t, IsLineChanged(cl, "pkg/foo/foo.go", 5))
 	assert.False(t, IsLineChanged(cl, "pkg/foo/foo.go", 11))
 }
+
+func TestIsRelativeLineChangedCoalescesAndSearchesRanges(t *testing.T) {
+	cl := ChangedLines{"pkg/foo.go": {{10, 12}, {4, 6}, {6, 9}, {20, 20}}}
+	cl.Coalesce()
+	assert.Equal(t, []LineRange{{4, 12}, {20, 20}}, cl["pkg/foo.go"])
+	assert.True(t, IsRelativeLineChanged(cl, "pkg/foo.go", 11))
+	assert.False(t, IsRelativeLineChanged(cl, "pkg/foo.go", 13))
+}

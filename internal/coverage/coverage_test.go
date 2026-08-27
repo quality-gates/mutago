@@ -118,6 +118,14 @@ func TestIsCovered_UnknownFile(t *testing.T) {
 	assert.False(t, p.IsCovered("/some/unknown/file.go", 10))
 }
 
+func TestIsCoveredRelativeUsesDirectProfileKey(t *testing.T) {
+	path := writeTmpProfile(t, sampleProfile)
+	p, err := ParseProfile(path, modulePath)
+	require.NoError(t, err)
+	assert.True(t, p.IsCoveredRelative("pkg/foo.go", 10))
+	assert.False(t, p.IsCoveredRelative("pkg/foo.go", 20))
+}
+
 func TestIsCovered_DifferentPackageSameFilename(t *testing.T) {
 	// A file in a different package with the same name must NOT match.
 	path := writeTmpProfile(t, sampleProfile)

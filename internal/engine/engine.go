@@ -94,6 +94,7 @@ type execJob struct {
 	extraTestFlags []string
 	runMutantID    string
 	moduleRoot     string
+	relFile        string
 	originalSource []byte
 	edit           mutationEdit
 }
@@ -568,6 +569,7 @@ func (r *mutationRun) processMutation(m mutatorItem, fc *fileContext, mutation m
 		extraTestFlags: r.extraTestFlags,
 		runMutantID:    r.opts.Exec.RunMutantID,
 		moduleRoot:     r.moduleRoot,
+		relFile:        toRelPath(fc.absFile, r.moduleRoot),
 		originalSource: originalSourceCode,
 		edit:           edit,
 	}
@@ -1204,7 +1206,7 @@ func skipForGitDiff(job execJob, gitChangedLines gitdiff.ChangedLines) bool {
 		return false
 	}
 	lineNum := int(job.mutant.Mutator.OriginalStartLine)
-	if gitdiff.IsLineChanged(gitChangedLines, job.absFile, lineNum) {
+	if gitdiff.IsRelativeLineChanged(gitChangedLines, job.relFile, lineNum) {
 		return false
 	}
 	console.Debug(job.opts, "Skip %q at line %d (not in git diff)", job.mutationFile, lineNum)

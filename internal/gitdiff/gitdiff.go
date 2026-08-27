@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -84,7 +85,41 @@ func parse(output string) ChangedLines {
 		}
 		cl[cur] = append(cl[cur], LineRange{Start: start, End: start + count - 1})
 	}
+	cl.Coalesce()
 	return cl
+}
+
+// Coalesce sorts and merges overlapping or adjacent ranges for each file.
+func (cl ChangedLines) Coalesce() {
+	for file, ranges := range cl {
+		if len(ranges) < 2 {
+			continue
+		}
+		sort.Slice(ranges, func(i, j int) bool { return ranges[i].Start < ranges[j].Start })
+		merged := ranges[:1]
+		for _, current := range ranges[1:] {
+			last := &merged[len(merged)-1]
+			if current.Start <= last.End+1 {
+				if current.End > last.End {
+					last.End = current.End
+				}
+				continue
+			}
+			merged = append(merged, current)
+		}
+		cl[file] = merged
+	}
+}
+
+// IsRelativeLineChanged checks a normalized repository-relative file path
+// using direct map lookup and binary search over coalesced ranges.
+func IsRelativeLineChanged(cl ChangedLines, relFile string, line int) bool {
+	if line == 0 {
+		return true
+	}
+	ranges := cl[filepath.ToSlash(relFile)]
+	i := sort.Search(len(ranges), func(i int) bool { return ranges[i].End >= line })
+	return i < len(ranges) && ranges[i].Start <= line
 }
 
 // IsLineChanged reports whether absFile at the given line falls within any
@@ -105,12 +140,7 @@ func IsLineChanged(cl ChangedLines, absFile string, line int) bool {
 		if !strings.HasSuffix(absFile, "/"+relPath) && absFile != relPath {
 			continue
 		}
-		for _, r := range ranges {
-			if line >= r.Start && line <= r.End {
-				return true
-			}
-		}
-		return false // file is in diff but this line was not changed
+		return IsRelativeLineChanged(ChangedLines{relPath: ranges}, relPath, line)
 	}
 	return false // file not in diff → unchanged → skip
 }
