@@ -23,12 +23,15 @@ func TestBuildPerTestProfileCompilesOnce(t *testing.T) {
 
 	_, err = BuildPerTestProfile(
 		"github.com/quality-gates/mutago/v2/internal/coverage/testdata/entrypoints",
-		"github.com/quality-gates/mutago/v2", dir, 30, 1, nil,
+		"github.com/quality-gates/mutago/v2", dir, 30, 1, []string{"-trimpath"},
 	)
 	require.NoError(t, err)
 	calls, err := os.ReadFile(logPath)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(strings.Split(strings.TrimSpace(string(calls)), "\n")), "list once and compile once")
+	callLines := strings.Split(strings.TrimSpace(string(calls)), "\n")
+	require.Len(t, callLines, 2, "list once and compile once")
+	assert.NotContains(t, callLines[0], "-trimpath", "listing tests must not receive build flags")
+	assert.Contains(t, callLines[1], "-trimpath", "compilation must receive build flags")
 }
 
 // modulePath is the module root — shorter than the package path so that stripping
@@ -139,6 +142,25 @@ func TestIsCovered_UnknownFile(t *testing.T) {
 	p, err := ParseProfile(path, modulePath)
 	require.NoError(t, err)
 	assert.False(t, p.IsCovered("/some/unknown/file.go", 10))
+}
+
+func TestIsCovered_CachesResolvedPath(t *testing.T) {
+	lines := map[int]bool{10: true}
+	p := &Profile{coveredLines: map[string]map[int]bool{"pkg/foo.go": lines}}
+	absFile := "/workspace/pkg/foo.go"
+
+	assert.True(t, p.IsCovered(absFile, 10))
+	p.coveredLines["pkg/foo.go"] = map[int]bool{}
+	assert.True(t, p.IsCovered(absFile, 10), "subsequent lookups must reuse the resolved path")
+}
+
+func TestIsCovered_CachesMissingPath(t *testing.T) {
+	p := &Profile{coveredLines: map[string]map[int]bool{}}
+	absFile := "/workspace/pkg/foo.go"
+
+	assert.False(t, p.IsCovered(absFile, 10))
+	p.coveredLines["pkg/foo.go"] = map[int]bool{10: true}
+	assert.False(t, p.IsCovered(absFile, 10), "subsequent lookups must reuse the cached miss")
 }
 
 func TestIsCoveredRelativeUsesDirectProfileKey(t *testing.T) {
@@ -402,6 +424,51 @@ func TestBuildPerTestProfile_WorkersZero(t *testing.T) {
 	assert.True(t, found, "profile should contain coverage data for gitdiff.go")
 }
 
+func TestBuildPerTestProfileForTests_InvalidTempDir(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("occupied"), 0o600))
+
+	prof, err := BuildPerTestProfileForTests(
+		"github.com/quality-gates/mutago/v2/internal/coverage/testdata/entrypoints",
+		"github.com/quality-gates/mutago/v2", tmpFile, 30, 1, nil, []string{"TestAlpha"},
+	)
+	assert.Error(t, err)
+	assert.Nil(t, prof)
+}
+
+func TestBuildPerTestProfileForTests_CompileFailure(t *testing.T) {
+	prof, err := BuildPerTestProfileForTests(
+		"github.com/quality-gates/mutago/v2/nonexistent_pkg_xyzzy",
+		"github.com/quality-gates/mutago/v2", t.TempDir(), 30, 1, nil, []string{"TestMissing"},
+	)
+	assert.ErrorContains(t, err, "compile coverage test binary")
+	assert.Nil(t, prof)
+}
+
+func TestTestBinaryFlags(t *testing.T) {
+	assert.Equal(t, []string{
+		"-test.short=true",
+		"-test.short=true",
+		"-test.count=2",
+		"-test.v=true",
+		"-test.v=true",
+		"-count=3",
+	}, testBinaryFlags([]string{
+		"-short",
+		"--short",
+		"-test.count=2",
+		"-v",
+		"--verbose",
+		"-race",
+		"-tags=integration",
+		"-vet=off",
+		"-gcflags=all=-N",
+		"-asmflags=all=-trimpath=/tmp",
+		"-trimpath",
+		"-count=3",
+	}))
+}
+
 // --- PerTestProfile tests ---
 
 func TestCoveringTests_NilReceiver(t *testing.T) {
@@ -450,6 +517,25 @@ func TestCoveringTests_NoMatch(t *testing.T) {
 	}}
 	assert.Nil(t, p.CoveringTests("/different/path/bar.go", 5))
 	assert.Nil(t, p.CoveringTests("/abs/pkg/foo.go", 99))
+}
+
+func TestCoveringTests_CachesResolvedPath(t *testing.T) {
+	lines := map[int][]string{5: {"TestA"}}
+	p := &PerTestProfile{data: map[string]map[int][]string{"pkg/foo.go": lines}}
+	absFile := "/workspace/pkg/foo.go"
+
+	assert.Equal(t, []string{"TestA"}, p.CoveringTests(absFile, 5))
+	p.data["pkg/foo.go"] = map[int][]string{5: {"TestB"}}
+	assert.Equal(t, []string{"TestA"}, p.CoveringTests(absFile, 5), "subsequent lookups must reuse the resolved path")
+}
+
+func TestCoveringTests_CachesMissingPath(t *testing.T) {
+	p := &PerTestProfile{data: map[string]map[int][]string{}}
+	absFile := "/workspace/pkg/foo.go"
+
+	assert.Nil(t, p.CoveringTests(absFile, 5))
+	p.data["pkg/foo.go"] = map[int][]string{5: {"TestA"}}
+	assert.Nil(t, p.CoveringTests(absFile, 5), "subsequent lookups must reuse the cached miss")
 }
 
 // TestBuildPerTestProfile_SingleTestPackage uses a package with exactly one test
