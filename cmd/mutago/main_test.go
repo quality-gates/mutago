@@ -422,7 +422,31 @@ func TestMainGenericsTypeUnionNoInternalError(t *testing.T) {
 	assert.NotContains(t, out, "INTERNAL ERROR")
 }
 
-func testMain(t *testing.T, root string, exec []string, expectedExitCode int, contains string) {
+func TestMainFloatDecrementNegativeLiteralNoInternalError(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/floatdecrement\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "jitter.go"), `package floatdecrement
+
+func Jitter() float64 {
+	return 1.0+(0.75-0.5)*0.5
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "jitter_test.go"), `package floatdecrement
+
+import "testing"
+
+func TestJitter(t *testing.T) {
+	if got := Jitter(); got != 1.125 {
+		t.Fatalf("Jitter() = %v, want 1.125", got)
+	}
+}
+`)
+
+	out := testMain(t, root, []string{"--exec-timeout", "5"}, returnOk, "mutation score")
+	assert.NotContains(t, out, "INTERNAL ERROR")
+}
+
+func testMain(t *testing.T, root string, exec []string, expectedExitCode int, contains string) string {
 	// Clear the parser cache so each test loads files fresh from disk.
 	// Without this, TestMainMatch's exec script (which writes to the original
 	// file on disk) can leave the cache holding a stale AST for later tests.
@@ -463,4 +487,5 @@ func testMain(t *testing.T, root string, exec []string, expectedExitCode int, co
 
 	assert.Equal(t, expectedExitCode, exitCode)
 	assert.Contains(t, out, contains)
+	return out
 }
