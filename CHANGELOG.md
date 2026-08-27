@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.8.6] — 2026-08-27
+
 ### Changed
 - Package parsing no longer loads full syntax and type information for dependencies. Full-tree dry runs complete substantially faster while retaining target-package type information.
 
@@ -471,4 +473,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.8.3]: https://github.com/quality-gates/mutago/compare/v2.8.2...v2.8.3
 [v2.8.4]: https://github.com/quality-gates/mutago/compare/v2.8.3...v2.8.4
 [v2.8.5]: https://github.com/quality-gates/mutago/compare/v2.8.4...v2.8.5
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.8.5...HEAD
+[v2.8.6]: https://github.com/quality-gates/mutago/compare/v2.8.5...v2.8.6
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.8.6...HEAD
