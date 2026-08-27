@@ -1216,7 +1216,11 @@ func skipForGitDiff(job execJob, gitChangedLines gitdiff.ChangedLines) bool {
 		return false
 	}
 	lineNum := int(job.mutant.Mutator.OriginalStartLine)
-	if gitdiff.IsRelativeLineChanged(gitChangedLines, job.relFile, lineNum) {
+	changed := gitdiff.IsRelativeLineChanged(gitChangedLines, job.relFile, lineNum)
+	if job.relFile == "" {
+		changed = gitdiff.IsLineChanged(gitChangedLines, job.absFile, lineNum)
+	}
+	if changed {
 		return false
 	}
 	console.Debug(job.opts, "Skip %q at line %d (not in git diff)", job.mutationFile, lineNum)
