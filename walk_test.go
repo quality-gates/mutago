@@ -1,16 +1,35 @@
 package mutago
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"go/types"
+	"strings"
 	"testing"
 
 	"github.com/quality-gates/mutago/v2/mutator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPrintWalkWritesOneLinePerNode(t *testing.T) {
+	fset := token.NewFileSet()
+	src, err := parser.ParseFile(fset, "fixture.go", "package fixture\nvar n = 1 + 2\n", 0)
+	require.NoError(t, err)
+	nodes := 0
+	ast.Inspect(src, func(node ast.Node) bool {
+		if node != nil {
+			nodes++
+		}
+		return true
+	})
+	var output bytes.Buffer
+	printWalkTo(&output, fset, src)
+	assert.Equal(t, nodes, strings.Count(strings.TrimSpace(output.String()), "\n")+1)
+	assert.NotContains(t, output.String(), "&ast.")
+}
 
 func TestMutateWalkWithPositionsUsesMutationPosition(t *testing.T) {
 	fset := token.NewFileSet()

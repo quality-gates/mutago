@@ -5,7 +5,8 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"strings"
+	"io"
+	"os"
 
 	"github.com/quality-gates/mutago/v2/mutator"
 )
@@ -152,28 +153,19 @@ func (w *positionedMutateWalk) Visit(node ast.Node) ast.Visitor {
 
 // PrintWalk traverses the AST of the given node and prints every node to STDOUT.
 func PrintWalk(node ast.Node) {
-	w := &printWalk{
-		level: 0,
-	}
-
-	ast.Walk(w, node)
+	printWalkTo(os.Stdout, nil, node)
 }
 
-type printWalk struct {
-	level int
-}
-
-// Visit implements the Visit method of the ast.Visitor interface
-func (w *printWalk) Visit(node ast.Node) ast.Visitor {
-	if node == nil {
-		w.level--
-
-		return w
-	}
-
-	w.level++
-
-	fmt.Printf("%s(%p)%#v\n", strings.Repeat("\t", w.level), node, node)
-
-	return w
+func printWalkTo(w io.Writer, fset *token.FileSet, root ast.Node) {
+	ast.Inspect(root, func(node ast.Node) bool {
+		if node == nil {
+			return true
+		}
+		if fset == nil {
+			fmt.Fprintf(w, "%T pos=%d end=%d\n", node, node.Pos(), node.End())
+		} else {
+			fmt.Fprintf(w, "%T pos=%s end=%s\n", node, fset.Position(node.Pos()), fset.Position(node.End()))
+		}
+		return true
+	})
 }
