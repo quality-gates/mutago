@@ -47,13 +47,9 @@ func ClearPackageCache() {
 // PreparePackages loads all target packages in one packages.Load call and
 // indexes their syntax by absolute filename for subsequent parsing requests.
 func PreparePackages(files []string) error {
-	patterns := make([]string, 0, len(files))
-	for _, file := range files {
-		abs, err := filepath.Abs(file)
-		if err != nil {
-			return err
-		}
-		patterns = append(patterns, "file="+abs)
+	patterns, seenDirs, err := packagePatterns(files)
+	if err != nil {
+		return err
 	}
 	if len(patterns) == 0 {
 		return nil
@@ -89,8 +85,30 @@ func PreparePackages(files []string) error {
 	}
 	pkgCacheMu.Lock()
 	preparedFiles = index
+	entry := &pkgCacheEntry{pkgs: pkgs, fset: fset}
+	for dir := range seenDirs {
+		pkgCache[dir] = entry
+	}
 	pkgCacheMu.Unlock()
 	return nil
+}
+
+func packagePatterns(files []string) ([]string, map[string]struct{}, error) {
+	patterns := make([]string, 0, len(files))
+	seenDirs := make(map[string]struct{})
+	for _, file := range files {
+		abs, err := filepath.Abs(file)
+		if err != nil {
+			return nil, nil, err
+		}
+		dir := filepath.Dir(abs)
+		if _, seen := seenDirs[dir]; seen {
+			continue
+		}
+		seenDirs[dir] = struct{}{}
+		patterns = append(patterns, dir)
+	}
+	return patterns, seenDirs, nil
 }
 
 // loadPkgForDir returns the cached packages.Load result for dir, computing it on first
