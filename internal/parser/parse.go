@@ -54,8 +54,7 @@ func loadPkgForDir(dir string) *pkgCacheEntry {
 			packages.NeedSyntax |
 			packages.NeedTypes |
 			packages.NeedTypesInfo |
-			packages.NeedImports |
-			packages.NeedDeps,
+			packages.NeedImports,
 		Dir:  dir,
 		Fset: fset,
 		ParseFile: func(fset *token.FileSet, filename string, src []byte) (*ast.File, error) {
