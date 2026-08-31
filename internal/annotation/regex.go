@@ -69,14 +69,18 @@ func (r *RegexAnnotation) findLinesMatchingRegex(filePath string, regex *regexp.
 	lineNumber := 0
 	for {
 		line, err := reader.ReadString('\n')
+		// On io.EOF the final line is returned together with the error when the
+		// file has no trailing newline. Process that partial line before breaking
+		// so a regex matching only the last line is not silently ignored.
+		if len(line) > 0 {
+			if regex.MatchString(line) {
+				matchedLineNumbers = append(matchedLineNumbers, lineNumber+1)
+			}
+			lineNumber++
+		}
 		if err != nil {
 			break
 		}
-
-		if regex.MatchString(line) {
-			matchedLineNumbers = append(matchedLineNumbers, lineNumber+1)
-		}
-		lineNumber++
 	}
 
 	defer func() {
