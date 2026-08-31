@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `// mutator-disable-regexp` directives now match the final line of a source file even when the file has no trailing newline. Previously `bufio.Reader.ReadString` returned that line together with `io.EOF` and the loop discarded it, so regex annotations on the last line were silently ignored.
+
 ## [v2.9.1] — 2026-08-27
 
 ### Fixed
