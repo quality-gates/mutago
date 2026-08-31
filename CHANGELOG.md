@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ### Fixed
 - `// mutator-disable-regexp` directives now match the final line of a source file even when the file has no trailing newline. Previously `bufio.Reader.ReadString` returned that line together with `io.EOF` and the loop discarded it, so regex annotations on the last line were silently ignored.
 - The `std` target pattern now resolves standard-library packages again. The importer walked `$GOROOT/src/pkg`, a directory removed in Go 1.4 (the standard library has lived under `$GOROOT/src` since then), so `std` silently returned only `cmd/*` packages. The walk now targets `$GOROOT/src`.
+- Coverage resolution (`Profile.IsCovered`, `PerTestProfile.CoveringTests`) is now deterministic. It previously matched an absolute file path against module-relative keys with a path-suffix test while iterating a Go map, so when one file path was a suffix of another (e.g. `foo/bar.go` and `bar.go`) the matching key was chosen at random and the wrong result was cached. The longest — most specific — matching key now wins, and that correct result is cached.
 
 ## [v2.9.1] — 2026-08-27
 

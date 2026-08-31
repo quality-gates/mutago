@@ -47,22 +47,40 @@ func ParseProfile(path, modulePath string) (*Profile, error) {
 	return p, scanner.Err()
 }
 
+// longestSuffixKey returns the key from m that is the most specific path
+// suffix of absFile, or "" if none match. A key matches when it equals
+// absFile or absFile ends in "/"+key. When multiple keys match — one relPath
+// is a path-suffix of another, e.g. "foo/bar.go" and "bar.go" — the longest
+// (most specific) key wins, so the choice is deterministic regardless of map
+// iteration order. Ties are impossible because map keys are unique: two
+// distinct strings of equal length cannot both be a suffix of the same path.
+func longestSuffixKey[V any](absFile string, m map[string]V) string {
+	var best string
+	for relPath := range m {
+		if relPath == absFile || strings.HasSuffix(absFile, "/"+relPath) {
+			if len(relPath) > len(best) {
+				best = relPath
+			}
+		}
+	}
+	return best
+}
+
 // IsCovered reports whether the given absolute file path and line number are
 // reached by any test. The match uses the relative path suffix of absFile
 // against the module-relative keys stored in the profile.
+//
+// When more than one key matches (one relPath is a path-suffix of another,
+// e.g. "foo/bar.go" and "bar.go"), the longest — most specific — match wins,
+// so resolution is deterministic regardless of map iteration order.
 func (p *Profile) IsCovered(absFile string, line int) bool {
 	absFile = filepath.ToSlash(absFile)
 	if cached, ok := p.resolved.Load(absFile); ok {
 		return cached.(map[int]bool)[line]
 	}
-	for relPath, lines := range p.coveredLines {
-		if strings.HasSuffix(absFile, "/"+relPath) || absFile == relPath {
-			p.resolved.Store(absFile, lines)
-			return lines[line]
-		}
-	}
-	p.resolved.Store(absFile, map[int]bool(nil))
-	return false
+	lines := p.coveredLines[longestSuffixKey(absFile, p.coveredLines)]
+	p.resolved.Store(absFile, lines)
+	return lines[line]
 }
 
 // IsCoveredRelative performs a direct lookup with a module-relative path.
@@ -160,6 +178,10 @@ type PerTestProfile struct {
 
 // CoveringTests returns the sorted test names that cover absFile at lineNum.
 // Returns nil when the line is not covered by any individually-run test.
+//
+// When more than one key matches (one relPath is a path-suffix of another),
+// the longest — most specific — match wins, so resolution is deterministic
+// regardless of map iteration order.
 func (p *PerTestProfile) CoveringTests(absFile string, lineNum int) []string {
 	if p == nil || lineNum <= 0 {
 		return nil
@@ -168,14 +190,9 @@ func (p *PerTestProfile) CoveringTests(absFile string, lineNum int) []string {
 	if cached, ok := p.resolved.Load(absSlash); ok {
 		return cached.(map[int][]string)[lineNum]
 	}
-	for relPath, lines := range p.data {
-		if strings.HasSuffix(absSlash, "/"+relPath) || absSlash == relPath {
-			p.resolved.Store(absSlash, lines)
-			return lines[lineNum]
-		}
-	}
-	p.resolved.Store(absSlash, map[int][]string(nil))
-	return nil
+	lines := p.data[longestSuffixKey(absSlash, p.data)]
+	p.resolved.Store(absSlash, lines)
+	return lines[lineNum]
 }
 
 // CoveringTestsRelative performs a direct lookup with a module-relative path.
