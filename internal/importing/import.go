@@ -23,8 +23,8 @@ import (
 var buildContext = build.Default
 
 var (
-	goroot       = filepath.Clean(runtime.GOROOT())
-	gorootSrcPkg = filepath.Join(goroot, "src/pkg")
+	goroot    = filepath.Clean(runtime.GOROOT())
+	gorootSrc = filepath.Join(goroot, "src")
 )
 
 // importPathsNoDotExpansion returns the import paths to use for the given
@@ -221,7 +221,7 @@ func importablePkg(path string) bool {
 func walkSrcPackages(pattern string, treeCanMatch, match func(string) bool, have map[string]bool) ([]string, error) {
 	var pkgs []string
 	for _, src := range buildContext.SrcDirs() {
-		if pattern == "std" && src != gorootSrcPkg {
+		if pattern == "std" && src != gorootSrc {
 			continue
 		}
 		src = filepath.Clean(src) + string(filepath.Separator)
