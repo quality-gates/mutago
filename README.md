@@ -309,7 +309,9 @@ The final summary includes a per-mutator breakdown so you can see which mutation
 
 By default mutago runs the test suite once without any mutations first (the baseline pre-flight check). If the clean suite already fails — the package does not compile, or a test is red — mutago exits immediately with a tool error (exit 3) rather than producing meaningless results. The `--noop` flag is kept for backward compatibility but has no effect; the check is always on for normal runs (it is skipped under `--coverage`, `--no-exec`, `--dry-run`, or a custom `--exec`).
 
-Use `--timeout-coefficient` to scale the per-mutation timeout relative to the baseline test-suite run time (e.g. `--timeout-coefficient 3` allows each mutation up to 3× the clean run). More reliable than a fixed `--exec-timeout` on machines with variable load.
+Use `--timeout-coefficient` to scale the per-mutation timeout relative to an uncached baseline test-suite run (e.g. `--timeout-coefficient 3` allows each mutation up to 3× the clean run). Mutago adds `-count=1` unless `--test-flags` already contains a positive `-count=N`. More reliable than a fixed `--exec-timeout` on machines with variable load.
+
+When `--coverage` is enabled, a failed clean coverage run stops Mutago with exit code 3. A partial coverage profile from failed tests is never used to classify mutants.
 
 ### <a name="git-diff"></a>Git diff filtering (CI mode)
 

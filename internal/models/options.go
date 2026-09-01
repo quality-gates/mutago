@@ -40,7 +40,7 @@ type Options struct {
 		Coverage           bool    `long:"coverage" description:"Run go test -coverprofile before mutating to compute covered-code MSI and mark uncovered mutants"`
 		PerTest            bool    `long:"per-test" description:"Build a per-test coverage map and run only covering tests for each mutation. Fastest on packages with slow tests; pairs well with --coverage."`
 		TestFlags          string  `long:"test-flags" description:"Extra flags passed to each 'go test' invocation. Use the = form to pass flag values: --test-flags='-short'. Ignored when --exec is set."`
-		TimeoutCoefficient float64 `long:"timeout-coefficient" description:"Set per-mutation timeout as a multiple of the baseline test-suite run time (e.g. 3 = 3× the clean run). Overrides --exec-timeout when > 0." default:"0"`
+		TimeoutCoefficient float64 `long:"timeout-coefficient" description:"Set per-mutation timeout as a multiple of an uncached baseline test-suite run (e.g. 3 = 3× the clean run). Overrides --exec-timeout when > 0." default:"0"`
 	} `group:"Exec options"`
 
 	// GitDiff limits mutation to lines changed since a git base ref.

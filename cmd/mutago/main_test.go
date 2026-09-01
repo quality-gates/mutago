@@ -311,8 +311,64 @@ func TestMainTestFlagsPassthrough(t *testing.T) {
 }
 
 func TestMainCoverageUsesSingleBaselineForAdaptiveTimeout(t *testing.T) {
+	root, goLog := adaptiveTimeoutFixture(t, "example.com/adaptive")
+
+	testMain(
+		t,
+		root,
+		[]string{"--coverage", "--timeout-coefficient", "1", "--config", "mutago.yml", "add.go"},
+		returnOk,
+		"mutation score",
+	)
+
+	cleanTestRuns := cleanGoTestRuns(t, goLog)
+	require.Len(t, cleanTestRuns, 1, "coverage should also provide the adaptive timeout baseline")
+	assert.Contains(t, cleanTestRuns[0], "-count=1", "adaptive timeout baseline must bypass the test cache")
+}
+
+func TestMainAdaptiveTimeoutBypassesTestCacheWithoutCoverage(t *testing.T) {
+	root, goLog := adaptiveTimeoutFixture(t, "example.com/adaptivenocoverage")
+
+	testMain(
+		t,
+		root,
+		[]string{"--timeout-coefficient", "1", "--config", "mutago.yml", "add.go"},
+		returnOk,
+		"mutation score",
+	)
+
+	cleanTestRuns := cleanGoTestRuns(t, goLog)
+	var adaptiveBaselineRuns []string
+	for _, run := range cleanTestRuns {
+		if strings.Contains(run, "-timeout 300s") {
+			adaptiveBaselineRuns = append(adaptiveBaselineRuns, run)
+		}
+	}
+	require.Len(t, adaptiveBaselineRuns, 1)
+	assert.Contains(t, adaptiveBaselineRuns[0], "-count=1", "adaptive timeout baseline must bypass the test cache")
+}
+
+func TestMainAdaptiveTimeoutPreservesPositiveTestCount(t *testing.T) {
+	root, goLog := adaptiveTimeoutFixture(t, "example.com/adaptivecount")
+
+	testMain(
+		t,
+		root,
+		[]string{"--coverage", "--timeout-coefficient", "1", "--test-flags=-count=2", "--config", "mutago.yml", "add.go"},
+		returnOk,
+		"mutation score",
+	)
+
+	cleanTestRuns := cleanGoTestRuns(t, goLog)
+	require.Len(t, cleanTestRuns, 1)
+	assert.Contains(t, cleanTestRuns[0], "-count=2")
+	assert.NotContains(t, cleanTestRuns[0], "-count=1")
+}
+
+func adaptiveTimeoutFixture(t *testing.T, modulePath string) (string, string) {
+	t.Helper()
 	root := t.TempDir()
-	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/adaptive\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module "+modulePath+"\n\ngo 1.26.5\n")
 	writeFixtureFile(t, filepath.Join(root, "add.go"), `package adaptive
 
 func Add(a, b int) int { return a + b }
@@ -343,24 +399,57 @@ exec "$MUTAGO_REAL_GO" "$@"
 	t.Setenv("MUTAGO_GO_TEST_LOG", goLog)
 	t.Setenv("MUTAGO_REAL_GO", realGo)
 	t.Setenv("PATH", filepath.Dir(goWrapper)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return root, goLog
+}
+
+func cleanGoTestRuns(t *testing.T, goLog string) []string {
+	t.Helper()
+	log, err := os.ReadFile(goLog)
+	require.NoError(t, err)
+	var cleanTestRuns []string
+	for _, line := range strings.Split(string(log), "\n") {
+		if strings.HasPrefix(line, "test ") && !strings.Contains(line, "-overlay=") {
+			cleanTestRuns = append(cleanTestRuns, line)
+		}
+	}
+	return cleanTestRuns
+}
+
+func TestMainAdaptiveTimeoutRejectsZeroTestCount(t *testing.T) {
+	testMain(
+		t,
+		"../../example",
+		[]string{"--coverage", "--timeout-coefficient", "1", "--test-flags=-count=0"},
+		returnError,
+		"adaptive timeout requires a positive test count",
+	)
+}
+
+func TestMainCoverageFailureStopsMutationRun(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/coveragefailure\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "value.go"), `package coveragefailure
+
+func Value() int { return 1 }
+`)
+	writeFixtureFile(t, filepath.Join(root, "value_test.go"), `package coveragefailure
+
+import "testing"
+
+func TestValue(t *testing.T) {
+	_ = Value()
+	t.Fatal("clean test failure")
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - numbers/incrementer\n")
 
 	testMain(
 		t,
 		root,
-		[]string{"--coverage", "--timeout-coefficient", "1", "--config", "mutago.yml", "add.go"},
-		returnOk,
-		"mutation score",
+		[]string{"--coverage", "--config", "mutago.yml", "value.go"},
+		returnError,
+		"coverage test failed",
 	)
-
-	log, err := os.ReadFile(goLog)
-	require.NoError(t, err)
-	cleanTestRuns := 0
-	for _, line := range strings.Split(string(log), "\n") {
-		if strings.HasPrefix(line, "test ") && !strings.Contains(line, "-overlay=") {
-			cleanTestRuns++
-		}
-	}
-	assert.Equal(t, 1, cleanTestRuns, "coverage should also provide the adaptive timeout baseline")
 }
 
 func TestMainPerTestFlag(t *testing.T) {
