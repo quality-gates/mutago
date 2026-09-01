@@ -25,7 +25,7 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | Flag | Description |
 | :--- | :---------- |
 | `--dry-run` | Count mutations per file and mutator without generating files or running tests; prints a summary table and exits 0 |
-| `--noop` | Run the test suite once without any mutations first; exits immediately if the clean suite fails |
+| `--noop` | No-op (backward compatibility). The baseline pre-flight check — run the suite once unmutated, exit with a tool error if it fails — is now always on by default. Skipped under `--coverage`, `--no-exec`, `--dry-run`, or a custom `--exec` |
 | `--no-diffs` | Suppress diff output for all mutation results (useful in CI where diffs are noisy and the JSON report is consumed instead) |
 | `--output-statuses` | Show only listed result statuses in the terminal: `k`=killed `e`=escaped `s`=skipped `n`=not-covered `x`=errored (e.g. `--output-statuses=ke`). Does not affect JSON reports. Overrides `--quiet` when set. |
 | `--quiet` | Suppress killed/skipped lines; show only escaped mutants and summary (equivalent to `--output-statuses=e`) |

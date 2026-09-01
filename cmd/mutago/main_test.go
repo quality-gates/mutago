@@ -338,8 +338,14 @@ func TestMainAdaptiveTimeoutBypassesTestCacheWithoutCoverage(t *testing.T) {
 	)
 
 	cleanTestRuns := cleanGoTestRuns(t, goLog)
-	require.Len(t, cleanTestRuns, 1)
-	assert.Contains(t, cleanTestRuns[0], "-count=1", "adaptive timeout baseline must bypass the test cache")
+	var adaptiveBaselineRuns []string
+	for _, run := range cleanTestRuns {
+		if strings.Contains(run, "-timeout 300s") {
+			adaptiveBaselineRuns = append(adaptiveBaselineRuns, run)
+		}
+	}
+	require.Len(t, adaptiveBaselineRuns, 1)
+	assert.Contains(t, adaptiveBaselineRuns[0], "-count=1", "adaptive timeout baseline must bypass the test cache")
 }
 
 func TestMainAdaptiveTimeoutPreservesPositiveTestCount(t *testing.T) {

@@ -88,6 +88,25 @@ func (p *Profile) IsCoveredRelative(relFile string, line int) bool {
 	return p.coveredLines[filepath.ToSlash(relFile)][line]
 }
 
+// IsLineCoveredAnywhere reports whether any file in the profile has line
+// recorded as covered. It is a last-resort fallback for //line-directive
+// positions whose coverage block was filed under a different filename than
+// either the physical file or the directive filename of the mutation (this
+// happens when a single coverage block spans a //line filename change).
+// Callers MUST gate this on a directive-shifted position; without a filename
+// anchor it is too loose for general use.
+func (p *Profile) IsLineCoveredAnywhere(line int) bool {
+	if line <= 0 {
+		return false
+	}
+	for _, lines := range p.coveredLines {
+		if lines[line] {
+			return true
+		}
+	}
+	return false
+}
+
 // parseLine parses one data line from a coverage profile and strips modulePfx
 // from the file name before storing coverage data.
 // Format: file:startLine.startCol,endLine.endCol stmtCount hitCount

@@ -101,7 +101,7 @@ Beyond finding escaped mutants, mutago can enforce quality gates in CI — faili
 | Quiet mode — suppress killed/skip noise | `--quiet` |
 | Suppress diff output | `--no-diffs` |
 | Dry-run mode — count mutations without running tests | `--dry-run` |
-| Pre-flight check — fail fast if tests already broken | `--noop` |
+| Baseline pre-flight check — fail fast if tests already broken | default (was `--noop`) |
 | Fail on any escape without a score threshold | `--fail-on-escaped` |
 | Run a single mutant by stable ID | `--run-mutant-id` |
 | Scale per-mutation timeout by baseline run time | `--timeout-coefficient` |
@@ -307,7 +307,7 @@ mutago --coverage --min-msi 50 --min-covered-msi 75 ./...
 
 The final summary includes a per-mutator breakdown so you can see which mutation types your tests are weakest against.
 
-Use `--noop` to run the test suite once without any mutations first. If the clean suite already fails, mutago exits immediately rather than producing meaningless results.
+By default mutago runs the test suite once without any mutations first (the baseline pre-flight check). If the clean suite already fails — the package does not compile, or a test is red — mutago exits immediately with a tool error (exit 3) rather than producing meaningless results. The `--noop` flag is kept for backward compatibility but has no effect; the check is always on for normal runs (it is skipped under `--coverage`, `--no-exec`, `--dry-run`, or a custom `--exec`).
 
 Use `--timeout-coefficient` to scale the per-mutation timeout relative to an uncached baseline test-suite run (e.g. `--timeout-coefficient 3` allows each mutation up to 3× the clean run). Mutago adds `-count=1` unless `--test-flags` already contains a positive `-count=N`. More reliable than a fixed `--exec-timeout` on machines with variable load.
 

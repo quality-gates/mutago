@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Fixed
 - Adaptive timeout baselines now bypass Go's test-result cache, preventing cached coverage runs from producing false killed mutants. Failed coverage runs now stop with a tool error instead of using partial profiles.
+- `--coverage` no longer skips mutations inside package-level `const`/`var`/`type` declarations as NOT COVERED (#83). Go's coverage profile never instruments such non-executable declarations, so mutago wrongly filtered their mutations out even when a test asserted the exact value and would kill them. Mutations at package-level declarations are now always executed (scored killed/escaped), not skipped.
+- `--coverage` now honors `//line` directives when classifying coverage (#84). A `//line` directive shifts Go's coverage-profile line (and, for a named directive, filename) attribution, but mutago looked up coverage using the physical file path, so covered mutations on directive-shifted lines were classified NOT COVERED and skipped — understating MSI and inflating covered-code MSI. The coverage lookup now consults the directive-adjusted filename and falls back to a line-anywhere search when the position was directive-shifted.
+- A broken (non-compiling) package no longer reports a false-green 100% MSI (#85). `go test` exits 1 for a build failure, which mutago mapped to KILLED, so an uncompilable package reported every mutant killed and exit 0. A baseline pre-flight check now runs by default: mutago runs the unmutated test suite once first and exits with a tool error (exit 3) if it fails, so a broken baseline fails fast instead of producing a meaningless score.
+
+### Changed
+- The baseline pre-flight check (formerly opt-in via `--noop`) is now always on by default for normal runs. It is skipped under `--coverage` (the coverage build is the baseline), `--no-exec`, `--dry-run`, or a custom `--exec`. The `--noop` flag is kept for backward compatibility and has no effect.
 
 ## [v2.9.2] — 2026-08-31
 
