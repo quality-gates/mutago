@@ -91,6 +91,22 @@ type execJob struct {
 	extraTestFlags []string
 	runMutantID    string
 	source         mutationSource
+	// packageLevelDecl is true when the mutation sits inside a package-level
+	// const/var/type/import declaration. Such declarations are not executable
+	// and never appear in `go test` coverage profiles, so the --coverage
+	// filter must not skip them as NOT COVERED (see #83).
+	packageLevelDecl bool
+	// directiveShifted is true when a //line directive altered the position
+	// mutago reports for this mutation (filename and/or line differ from the
+	// raw source position). Go's coverage profile records such positions under
+	// the directive's filename (or "." for a filename-less directive), not the
+	// physical file, so the coverage lookup must consult the directive
+	// filename too (see #84).
+	directiveShifted bool
+	// adjRelFile is the directive-adjusted filename relative to the module
+	// root (the filename Go's coverage profile uses for this position). It is
+	// only meaningful when directiveShifted is true.
+	adjRelFile string
 }
 
 type mutationSource struct {
@@ -136,7 +152,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	}
 
 	report := run.report
-	if exitCode := runNoopChecks(opts, pkgs, run.execs, run.extraTestFlags); exitCode != 0 {
+	if exitCode := runBaselineChecks(opts, pkgs, run.execs, run.extraTestFlags); exitCode != 0 {
 		return Result{Report: report, ExitCode: exitCode}, nil
 	}
 
@@ -565,6 +581,10 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 		return
 	}
 
+	adjPos := fc.fset.PositionFor(mutation.Position, true)
+	rawPos := fc.fset.PositionFor(mutation.Position, false)
+	directiveShifted := adjPos.Filename != rawPos.Filename || adjPos.Line != rawPos.Line
+
 	job := execJob{
 		ctx:            r.ctx,
 		opts:           r.opts,
@@ -584,6 +604,9 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 			original:     originalSourceCode,
 			edit:         edit,
 		},
+		packageLevelDecl: isPackageLevelDecl(fc.src, mutation.Position),
+		directiveShifted: directiveShifted,
+		adjRelFile:       toRelPath(filepath.Join(r.moduleRoot, adjPos.Filename), r.moduleRoot),
 	}
 	r.jobs <- job
 }
@@ -636,12 +659,20 @@ func parseExecFlags(opts *models.Options) (execs []string, extraTestFlags []stri
 	return
 }
 
-func runNoopChecks(opts *models.Options, pkgs []importing.Package, execs []string, extraTestFlags []string) int {
-	if !opts.General.Noop || opts.Exec.NoExec {
-		return 0 // returnOk
-	}
-	if len(execs) > 0 {
-		fmt.Fprintln(os.Stderr, "Warning: --noop is not supported with --exec; skipping initial test run")
+// runBaselineChecks runs `go test` once per package without any mutations
+// applied. A package whose baseline does not pass (including a build/compile
+// failure) is meaningless to mutate: `go test` exits 1 and mapTestExitToResult
+// classifies that as KILLED, so every mutant is "killed" by the pre-existing
+// failure and the run reports a false 100% MSI (see #85). Fail fast with a tool
+// error instead.
+//
+// The check runs by default for the built-in exec path. It is skipped for
+// --coverage (the coverage build itself is the baseline and is validated
+// separately), --no-exec, --dry-run, and custom --exec (the built-in `go test`
+// baseline does not reflect a custom exec command). The --noop flag is now a
+// no-op retained for backward compatibility, since the check is always on.
+func runBaselineChecks(opts *models.Options, pkgs []importing.Package, execs []string, extraTestFlags []string) int {
+	if opts.Exec.Coverage || opts.Exec.NoExec || opts.General.DryRun || len(execs) > 0 {
 		return 0 // returnOk
 	}
 	for _, importPkg := range pkgs {
@@ -649,17 +680,17 @@ func runNoopChecks(opts *models.Options, pkgs []importing.Package, execs []strin
 		if pkgPath == "" {
 			continue
 		}
-		noopArgs := []string{"test", "-timeout", fmt.Sprintf("%ds", opts.Exec.Timeout)}
-		noopArgs = append(noopArgs, extraTestFlags...)
-		noopArgs = append(noopArgs, pkgPath)
-		cmd := exec.Command("go", noopArgs...)
+		args := []string{"test", "-timeout", fmt.Sprintf("%ds", opts.Exec.Timeout)}
+		args = append(args, extraTestFlags...)
+		args = append(args, pkgPath)
+		cmd := exec.Command("go", args...)
 		cmd.Env = os.Environ()
 		if out, err := cmd.CombinedOutput(); err != nil {
-			fmt.Fprintf(os.Stderr, "Noop check failed for %q — fix your tests before running mutation testing:\n%s\n", pkgPath, out)
+			fmt.Fprintf(os.Stderr, "Baseline test failed for %q — mutation testing requires a green baseline; fix the build/tests before running mutago:\n%s\n", pkgPath, out)
 			return 3 // returnError
 		}
 	}
-	console.Verbose(opts, "Noop check passed — all packages green before mutation")
+	console.Verbose(opts, "Baseline check passed — all packages green before mutation")
 	return 0 // returnOk
 }
 
@@ -1163,6 +1194,50 @@ func stableMutationKey(original, mutated []byte) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+// mutationCovered reports whether the mutation at startLine is reached by any
+// test, accounting for //line directives. The primary lookup uses the physical
+// file path (the common case, where the adjusted line equals the raw line). For
+// directive-shifted positions Go's coverage profile files the block under the
+// directive's filename (or "." for a filename-less directive), so a second
+// lookup uses the directive-adjusted filename. A third, line-only fallback
+// handles the rare case where a single coverage block spans a //line filename
+// change and is filed under a third filename; it is gated on directiveShifted
+// so it never applies to ordinary positions (see #84).
+func mutationCovered(job execJob, startLine int) bool {
+	if job.coverProfile.IsCovered(job.source.absFile, startLine) {
+		return true
+	}
+	if !job.directiveShifted || job.adjRelFile == "" {
+		return false
+	}
+	if job.coverProfile.IsCoveredRelative(job.adjRelFile, startLine) {
+		return true
+	}
+	return job.coverProfile.IsLineCoveredAnywhere(startLine)
+}
+
+// isPackageLevelDecl reports whether pos lies within a package-level
+// GenDecl (const, var, type, import) in file. Declarations at package scope are
+// not executable statements, so `go test` coverage profiles never record them as
+// covered. The --coverage filter must therefore not skip mutations at such
+// positions, even when the profile has no entry for the line (see #83).
+func isPackageLevelDecl(file ast.Node, pos token.Pos) bool {
+	f, ok := file.(*ast.File)
+	if !ok {
+		return false
+	}
+	for _, decl := range f.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		if pos >= gen.Pos() && pos <= gen.End() {
+			return true
+		}
+	}
+	return false
+}
+
 func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Writer, gitChangedLines gitdiff.ChangedLines) {
 	opts := job.opts
 	mutant := job.mutant
@@ -1172,7 +1247,7 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 	}
 
 	startLine := mutant.Mutator.OriginalStartLine
-	notCovered := job.coverProfile != nil && startLine > 0 && !job.coverProfile.IsCovered(job.source.absFile, int(startLine))
+	notCovered := !job.packageLevelDecl && job.coverProfile != nil && startLine > 0 && !mutationCovered(job, int(startLine))
 	if notCovered {
 		mu.Lock()
 		defer mu.Unlock()
