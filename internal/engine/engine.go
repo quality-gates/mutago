@@ -126,11 +126,7 @@ func (e *Engine) Run(ctx context.Context, opts *models.Options, bl *baseline.Fil
 // RunResolved executes a mutation run using targets discovered by the caller.
 func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *baseline.File, targets importing.ResolvedTargets) (Result, error) {
 	e.initDefaults()
-	if err := validateAdaptiveTimeoutTestCount(opts); err != nil {
-		return Result{ExitCode: returnError}, err
-	}
-
-	run, pkgs, jobs, jobWg, stopProgress, progressWg, _, err := e.initRun(ctx, opts, targets)
+	run, pkgs, jobs, jobWg, stopProgress, progressWg, _, err := e.validateAndInitRun(ctx, opts, targets)
 	if err != nil {
 		return Result{ExitCode: returnError}, err
 	}
@@ -178,6 +174,13 @@ func (e *Engine) initDefaults() {
 	if e.Stderr == nil {
 		e.Stderr = os.Stderr
 	}
+}
+
+func (e *Engine) validateAndInitRun(ctx context.Context, opts *models.Options, targets importing.ResolvedTargets) (*mutationRun, []importing.Package, chan execJob, *sync.WaitGroup, chan struct{}, *sync.WaitGroup, gitdiff.ChangedLines, error) {
+	if err := validateAdaptiveTimeoutTestCount(opts); err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, err
+	}
+	return e.initRun(ctx, opts, targets)
 }
 
 func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets importing.ResolvedTargets) (*mutationRun, []importing.Package, chan execJob, *sync.WaitGroup, chan struct{}, *sync.WaitGroup, gitdiff.ChangedLines, error) {
@@ -773,20 +776,28 @@ func validateAdaptiveTimeoutTestCount(opts *models.Options) error {
 		return nil
 	}
 	testFlags := strings.Fields(opts.Exec.TestFlags)
-	for i, flag := range testFlags {
-		value, found := strings.CutPrefix(flag, "-count=")
-		if !found && flag == "-count" && i+1 < len(testFlags) {
-			value, found = testFlags[i+1], true
-		}
+	for i := range testFlags {
+		value, found := testCountValue(testFlags, i)
 		if !found {
 			continue
 		}
 		count, err := strconv.Atoi(value)
-		if err == nil && count <= 0 {
-			return fmt.Errorf("adaptive timeout requires a positive test count, got %d", count)
+		if err != nil || count > 0 {
+			continue
 		}
+		return fmt.Errorf("adaptive timeout requires a positive test count, got %d", count)
 	}
 	return nil
+}
+
+func testCountValue(testFlags []string, index int) (string, bool) {
+	if value, found := strings.CutPrefix(testFlags[index], "-count="); found {
+		return value, true
+	}
+	if testFlags[index] != "-count" || index+1 >= len(testFlags) {
+		return "", false
+	}
+	return testFlags[index+1], true
 }
 
 func runCoverageProfile(pkg, profilePath string, extraTestFlags []string) error {
