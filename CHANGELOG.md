@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.9.3] — 2026-09-01
 
 ### Fixed
 - Adaptive timeout baselines now bypass Go's test-result cache, preventing cached coverage runs from producing false killed mutants. Failed coverage runs now stop with a tool error instead of using partial profiles.
@@ -511,4 +511,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.9.0]: https://github.com/quality-gates/mutago/compare/v2.8.6...v2.9.0
 [v2.9.1]: https://github.com/quality-gates/mutago/compare/v2.9.0...v2.9.1
 [v2.9.2]: https://github.com/quality-gates/mutago/compare/v2.9.1...v2.9.2
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.9.2...HEAD
+[v2.9.3]: https://github.com/quality-gates/mutago/compare/v2.9.2...v2.9.3
