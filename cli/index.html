@@ -794,7 +794,7 @@
 <tr>
 <td style="text-align: left;"><code>--timeout-coefficient</code></td>
 <td style="text-align: left;"><code>0</code> (disabled)</td>
-<td style="text-align: left;">Scale per-mutation timeout as a multiple of the baseline test-suite run time (e.g. <code>3</code> = 3× the clean run). Overrides <code>--exec-timeout</code> when set.</td>
+<td style="text-align: left;">Scale per-mutation timeout as a multiple of an uncached baseline test-suite run (e.g. <code>3</code> = 3× the clean run). Overrides <code>--exec-timeout</code> when set.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>--workers</code></td>
@@ -910,7 +910,7 @@
 <tbody>
 <tr>
 <td style="text-align: left;"><code>--coverage</code></td>
-<td style="text-align: left;">Run <code>go test -coverprofile</code> first; skip test execution for uncovered lines and exclude them from covered-MSI</td>
+<td style="text-align: left;">Run <code>go test -coverprofile</code> first; stop with exit 3 if it fails, otherwise skip test execution for uncovered lines and exclude them from covered-MSI</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>--per-test</code></td>
@@ -918,7 +918,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>--test-flags</code></td>
-<td style="text-align: left;">Extra flags passed to every <code>go test</code> call (e.g. <code>--test-flags=-short</code>). Use the <code>=</code> form for values starting with a dash. Ignored when <code>--exec</code> is set.</td>
+<td style="text-align: left;">Extra flags passed to every <code>go test</code> call (e.g. <code>--test-flags=-short</code>). Use the <code>=</code> form for values starting with a dash. Adaptive timeout preserves a positive <code>-count=N</code>, adds <code>-count=1</code> when absent, and rejects <code>-count=0</code>. Ignored when <code>--exec</code> is set.</td>
 </tr>
 </tbody>
 </table>
@@ -982,8 +982,8 @@
 <td style="text-align: left;">All mutations tested; all quality gates passed</td>
 </tr>
 <tr>
-<td style="text-align: left;">1</td>
-<td style="text-align: left;">Internal error</td>
+<td style="text-align: left;">3</td>
+<td style="text-align: left;">Invalid input or tool failure, including a failed clean coverage run</td>
 </tr>
 <tr>
 <td style="text-align: left;">4</td>
