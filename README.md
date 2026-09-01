@@ -309,7 +309,9 @@ The final summary includes a per-mutator breakdown so you can see which mutation
 
 Use `--noop` to run the test suite once without any mutations first. If the clean suite already fails, mutago exits immediately rather than producing meaningless results.
 
-Use `--timeout-coefficient` to scale the per-mutation timeout relative to the baseline test-suite run time (e.g. `--timeout-coefficient 3` allows each mutation up to 3× the clean run). More reliable than a fixed `--exec-timeout` on machines with variable load.
+Use `--timeout-coefficient` to scale the per-mutation timeout relative to an uncached baseline test-suite run (e.g. `--timeout-coefficient 3` allows each mutation up to 3× the clean run). Mutago adds `-count=1` unless `--test-flags` already contains a positive `-count=N`. More reliable than a fixed `--exec-timeout` on machines with variable load.
+
+When `--coverage` is enabled, a failed clean coverage run stops Mutago with exit code 3. A partial coverage profile from failed tests is never used to classify mutants.
 
 ### <a name="git-diff"></a>Git diff filtering (CI mode)
 
