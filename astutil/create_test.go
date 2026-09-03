@@ -81,6 +81,50 @@ func mutate(enabled bool) {
 `,
 			comments: []string{"// keep this nested selector comment", "// keep this block boundary comment"},
 		},
+		{
+			name: "type assertion with interface selector",
+			source: `package example
+
+import "io"
+
+var sink any
+
+func dummy() {
+	io.WriteString(nil, "")
+}
+
+func mutate(enabled bool, r any) {
+	if enabled {
+		// keep this comment
+		v := r.(io.Reader)
+		sink = v
+	}
+}
+`,
+			comments: []string{"// keep this comment"},
+		},
+		{
+			name: "type conversion with basic named type selector",
+			source: `package example
+
+import "time"
+
+var sink any
+
+func dummy() {
+	time.Sleep(0)
+}
+
+func mutate(enabled bool, n int64) {
+	if enabled {
+		// keep this comment
+		d := time.Duration(n)
+		sink = d
+	}
+}
+`,
+			comments: []string{"// keep this comment"},
+		},
 	}
 
 	for _, tt := range tests {

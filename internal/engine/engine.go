@@ -1147,9 +1147,11 @@ func checkEscapedGate(opts *models.Options, report *models.Report, bl *baseline.
 	return true
 }
 
+const msiEpsilon = 1e-9
+
 func checkMsiGate(report *models.Report, minMsi float64) bool {
 	msiPct := report.Stats.Msi * 100
-	if minMsi >= 0 && msiPct < minMsi {
+	if minMsi >= 0 && (minMsi-msiPct) > msiEpsilon {
 		fmt.Fprintf(os.Stderr, "MSI %.2f%% is below minimum required %.2f%%\n", msiPct, minMsi)
 		return true
 	}
@@ -1165,7 +1167,7 @@ func checkCoveredMsiGate(report *models.Report, minCoveredMsi float64) bool {
 		return true
 	}
 	covMsiPct := report.Stats.CoveredCodeMsi * 100
-	if covMsiPct < minCoveredMsi {
+	if (minCoveredMsi - covMsiPct) > msiEpsilon {
 		fmt.Fprintf(os.Stderr, "Covered MSI %.2f%% is below minimum required %.2f%%\n", covMsiPct, minCoveredMsi)
 		return true
 	}

@@ -39,7 +39,7 @@ func stringLiteralMutation(exprPtr *ast.Expr) []mutator.Mutation {
 		return nil
 	}
 	switch lit.Value {
-	case `""`:
+	case `""`, "``":
 		return nil
 	}
 	original := *exprPtr
