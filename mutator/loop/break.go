@@ -46,13 +46,13 @@ func (c *loopBranchCollector) Visit(node ast.Node) ast.Visitor {
 	case *ast.ForStmt, *ast.RangeStmt, *ast.FuncLit:
 		return nil
 	case *ast.SwitchStmt:
-		c.visitSwitch(n)
+		c.walkScoped(n.Body)
 		return nil
 	case *ast.TypeSwitchStmt:
-		c.visitTypeSwitch(n)
+		c.walkScoped(n.Body)
 		return nil
 	case *ast.SelectStmt:
-		c.visitSelect(n)
+		c.walkScoped(n.Body)
 		return nil
 	case *ast.BranchStmt:
 		c.visitBranch(n)
@@ -61,31 +61,7 @@ func (c *loopBranchCollector) Visit(node ast.Node) ast.Visitor {
 	return c
 }
 
-func (c *loopBranchCollector) visitSwitch(n *ast.SwitchStmt) {
-	if n.Init != nil {
-		ast.Walk(c, n.Init)
-	}
-	if n.Tag != nil {
-		ast.Walk(c, n.Tag)
-	}
-	c.walkScoped(n.Body)
-}
-
-func (c *loopBranchCollector) visitTypeSwitch(n *ast.TypeSwitchStmt) {
-	if n.Init != nil {
-		ast.Walk(c, n.Init)
-	}
-	if n.Assign != nil {
-		ast.Walk(c, n.Assign)
-	}
-	c.walkScoped(n.Body)
-}
-
-func (c *loopBranchCollector) visitSelect(n *ast.SelectStmt) {
-	c.walkScoped(n.Body)
-}
-
-func (c *loopBranchCollector) walkScoped(body ast.Node) {
+func (c *loopBranchCollector) walkScoped(body *ast.BlockStmt) {
 	if body != nil {
 		c.switchOrSelectDepth++
 		ast.Walk(c, body)
