@@ -18,6 +18,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestVersionFlag(t *testing.T) {
+	for _, flag := range []string{"--version", "-v"} {
+		t.Run(flag, func(t *testing.T) {
+			out := testMain(t, ".", []string{flag}, returnOk, "mutago dev")
+			assert.Equal(t, "mutago dev\n", out)
+		})
+	}
+}
+
 func TestMainSimple(t *testing.T) {
 	testMain(
 		t,

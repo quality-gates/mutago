@@ -1,0 +1,198 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable release tag to retry Homebrew publication for
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.26.5"
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      source_sha: ${{ steps.release.outputs['source-sha'] }}
+      immutable_release: ${{ steps.release.outputs['immutable-release'] }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - id: release
+        name: Validate the stable release identity
+        uses: quality-gates/homebrew-tap/.github/actions/validate-source-release@0076a679dc5f6ee0ef6e28f571b24fc3ec973ae2
+        with:
+          tool: mutago
+          tag: ${{ env.TAG }}
+          github-token: ${{ github.token }}
+
+  test:
+    name: Test release source
+    needs: validate
+    if: needs.validate.outputs.immutable_release != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: go test ./...
+      - name: Build and verify mutago CLI
+        run: |
+          go build -o mutago ./cmd/mutago
+          ./mutago --version
+          ./mutago --help >/dev/null
+
+  build:
+    name: Build darwin/${{ matrix.arch }}
+    needs: [validate, test]
+    if: needs.validate.outputs.immutable_release != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build reproducible archive
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          archive="mutago_${VERSION}_darwin_${ARCH}.tar.gz"
+          source_date_epoch="$(git show -s --format=%ct "${{ needs.validate.outputs.source_sha }}")"
+          mkdir -p dist/package
+          cp LICENSE dist/package/LICENSE
+          CGO_ENABLED=0 GOOS=darwin GOARCH="$ARCH" go build \
+            -trimpath \
+            -ldflags="-s -w -X github.com/quality-gates/mutago/v2/internal/version.Version=$VERSION" \
+            -o dist/package/mutago ./cmd/mutago
+          tar --sort=name \
+            --mtime="@$source_date_epoch" \
+            --owner=0 --group=0 --numeric-owner \
+            -C dist/package -czf "dist/$archive" LICENSE mutago
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutago-darwin-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Package release assets
+    needs: [validate, build]
+    if: needs.validate.outputs.immutable_release != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: mutago-darwin-*
+          path: dist
+          merge-multiple: true
+      - name: Create checksum manifest
+        working-directory: dist
+        run: sha256sum mutago_*.tar.gz | LC_ALL=C sort > checksums.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke:
+    name: Smoke test ${{ matrix.runner }}
+    needs: [validate, package]
+    if: needs.validate.outputs.immutable_release != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: macos-15-intel
+            machine: x86_64
+          - arch: arm64
+            runner: macos-15
+            machine: arm64
+          - arch: amd64
+            runner: macos-26-intel
+            machine: x86_64
+          - arch: arm64
+            runner: macos-26
+            machine: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-assets
+          path: dist
+
+      - name: Run packaged binary
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "${{ matrix.machine }}"
+          (cd dist && shasum -a 256 -c checksums.txt)
+          tar -xzf "dist/mutago_${VERSION}_darwin_${{ matrix.arch }}.tar.gz" -C dist
+          test "$(dist/mutago --version)" = "mutago $VERSION"
+          dist/mutago --help >/dev/null
+
+  publish:
+    name: Publish the immutable release and Homebrew formula
+    needs: [validate, smoke]
+    if: >-
+      always() &&
+      needs.validate.result == 'success' &&
+      (needs.smoke.result == 'success' || needs.validate.outputs.immutable_release == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 135
+    environment: homebrew
+    permissions:
+      contents: write
+    steps:
+      - uses: quality-gates/homebrew-tap/.github/actions/publish-source-release@0076a679dc5f6ee0ef6e28f571b24fc3ec973ae2
+        with:
+          tool: mutago
+          tag: ${{ env.TAG }}
+          version: ${{ needs.validate.outputs.version }}
+          source-sha: ${{ needs.validate.outputs.source_sha }}
+          immutable-release: ${{ needs.validate.outputs.immutable_release }}
+          github-token: ${{ github.token }}
+          tap-app-id: ${{ secrets.HOMEBREW_TAP_APP_ID }}
+          tap-app-private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}

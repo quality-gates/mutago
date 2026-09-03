@@ -4,7 +4,15 @@
 
 - Go 1.26 or later
 
-## Install the binary
+## Homebrew (macOS)
+
+```bash
+brew install quality-gates/tap/mutago
+```
+
+After `brew tap quality-gates/tap`, you can also install with `brew install mutago`.
+
+## Install the binary (Go)
 
 ```bash
 go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
