@@ -544,3 +544,61 @@ func Add(a, b int) int {
 			res.Report.Stats.KilledCount, res.Report.Stats.TotalMutantsCount, stdout.String(), stderr.String())
 	}
 }
+
+func TestCheckMsiGate_FloatPrecision(t *testing.T) {
+	// 29 out of 100 mutants killed = exactly 29.0%
+	report := &models.Report{
+		Stats: models.Stats{
+			TotalMutantsCount: 100,
+			KilledCount:       29,
+			EscapedCount:      71,
+			Msi:               29.0 / 100.0,
+		},
+	}
+	if checkMsiGate(report, 29.0) {
+		t.Fatalf("checkMsiGate failed for exact 29%% threshold")
+	}
+
+	// 28 out of 100 mutants killed = 28.0%, should fail 29.0% gate
+	reportBelow := &models.Report{
+		Stats: models.Stats{
+			TotalMutantsCount: 100,
+			KilledCount:       28,
+			EscapedCount:      72,
+			Msi:               28.0 / 100.0,
+		},
+	}
+	if !checkMsiGate(reportBelow, 29.0) {
+		t.Fatalf("checkMsiGate expected to fail for 28%% when min is 29%%")
+	}
+}
+
+func TestCheckCoveredMsiGate_FloatPrecision(t *testing.T) {
+	// 58 out of 100 covered mutants killed = exactly 58.0%
+	report := &models.Report{
+		HasCoverage: true,
+		Stats: models.Stats{
+			TotalMutantsCount: 100,
+			KilledCount:       58,
+			EscapedCount:      42,
+			CoveredCodeMsi:    58.0 / 100.0,
+		},
+	}
+	if checkCoveredMsiGate(report, 58.0) {
+		t.Fatalf("checkCoveredMsiGate failed for exact 58%% threshold")
+	}
+
+	// 57 out of 100 covered mutants killed = 57.0%, should fail 58.0% gate
+	reportBelow := &models.Report{
+		HasCoverage: true,
+		Stats: models.Stats{
+			TotalMutantsCount: 100,
+			KilledCount:       57,
+			EscapedCount:      43,
+			CoveredCodeMsi:    57.0 / 100.0,
+		},
+	}
+	if !checkCoveredMsiGate(reportBelow, 58.0) {
+		t.Fatalf("checkCoveredMsiGate expected to fail for 57%% when min is 58%%")
+	}
+}

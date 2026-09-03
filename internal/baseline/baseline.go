@@ -41,7 +41,7 @@ func MutantID(relFile, mutatorName, diff string) string {
 	var removed, added strings.Builder
 	for line := range strings.SplitSeq(diff, "\n") {
 		switch {
-		case strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++"):
+		case strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ "):
 			// skip diff header lines
 		case strings.HasPrefix(line, "-"):
 			removed.WriteString(strings.TrimPrefix(line, "-"))

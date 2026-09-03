@@ -1,4 +1,4 @@
 interface:
-  display_name: "Improve Performance"
-  short_description: "Find and prove worthwhile speedups"
-  default_prompt: "Use $seeking-performance to find and prove a performance improvement in this code."
+  display_name: "Audit Performance"
+  short_description: "Rank codebase bottlenecks by Big O severity"
+  default_prompt: "Use $seeking-performance to audit this codebase and report its performance bottlenecks ranked by Big O severity."
