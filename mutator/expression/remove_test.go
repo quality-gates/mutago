@@ -46,4 +46,38 @@ func TestMutatorRemoveTerm_SkipsEquivalent(t *testing.T) {
 	if len(mutsOr) != 1 {
 		t.Fatalf("expected 1 mutation for false || x, got %d", len(mutsOr))
 	}
+
+	// x && true should only mutate x
+	exprAndY := &ast.BinaryExpr{
+		X:  ast.NewIdent("x"),
+		Op: token.LAND,
+		Y:  ast.NewIdent("true"),
+	}
+	mutsAndY := MutatorRemoveTerm(nil, nil, exprAndY)
+	if len(mutsAndY) != 1 {
+		t.Fatalf("expected 1 mutation for x && true, got %d", len(mutsAndY))
+	}
+
+	// x || false should only mutate x
+	exprOrY := &ast.BinaryExpr{
+		X:  ast.NewIdent("x"),
+		Op: token.LOR,
+		Y:  ast.NewIdent("false"),
+	}
+	mutsOrY := MutatorRemoveTerm(nil, nil, exprOrY)
+	if len(mutsOrY) != 1 {
+		t.Fatalf("expected 1 mutation for x || false, got %d", len(mutsOrY))
+	}
+}
+
+func TestIsIdent(t *testing.T) {
+	if isIdent(&ast.BasicLit{}, "true") {
+		t.Fatal("expected false for non-ident")
+	}
+	if isIdent(ast.NewIdent("false"), "true") {
+		t.Fatal("expected false for mismatched ident")
+	}
+	if !isIdent(ast.NewIdent("true"), "true") {
+		t.Fatal("expected true for matching ident")
+	}
 }

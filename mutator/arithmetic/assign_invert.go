@@ -33,7 +33,7 @@ func MutatorArithmeticAssignInvert(_ *types.Package, info *types.Info, node ast.
 		return nil
 	}
 
-	if n.Tok == token.ADD_ASSIGN && len(n.Lhs) > 0 && isStringExpr(info, n.Lhs[0]) {
+	if n.Tok == token.ADD_ASSIGN && isStringAssign(info, n) {
 		return nil
 	}
 
@@ -54,4 +54,17 @@ func MutatorArithmeticAssignInvert(_ *types.Package, info *types.Info, node ast.
 			},
 		},
 	}
+}
+
+func isStringAssign(info *types.Info, n *ast.AssignStmt) bool {
+	if len(n.Rhs) > 0 && isStringLit(n.Rhs[0]) {
+		return true
+	}
+	if info != nil && len(n.Lhs) > 0 {
+		if t := info.TypeOf(n.Lhs[0]); t != nil {
+			basic, ok := t.Underlying().(*types.Basic)
+			return ok && basic.Info()&types.IsString != 0
+		}
+	}
+	return false
 }

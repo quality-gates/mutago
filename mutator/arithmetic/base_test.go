@@ -9,6 +9,7 @@ import (
 
 	"github.com/quality-gates/mutago/v2/mutator"
 	"github.com/quality-gates/mutago/v2/test"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMutatorArithmeticBase(t *testing.T) {
@@ -55,4 +56,20 @@ func concat(a, b string) string {
 	if count != 0 {
 		t.Fatalf("expected 0 mutations on string +, got %d", count)
 	}
+}
+
+func TestMutatorArithmeticBase_StringLiteralWithoutInfo(t *testing.T) {
+	strBin := &ast.BinaryExpr{
+		Op: token.ADD,
+		X:  &ast.BasicLit{Kind: token.STRING, Value: `"hello"`},
+		Y:  &ast.BasicLit{Kind: token.STRING, Value: `"world"`},
+	}
+	assert.Empty(t, MutatorArithmeticBase(nil, nil, strBin))
+
+	intBin := &ast.BinaryExpr{
+		Op: token.ADD,
+		X:  &ast.BasicLit{Kind: token.INT, Value: "1"},
+		Y:  &ast.BasicLit{Kind: token.INT, Value: "2"},
+	}
+	assert.Len(t, MutatorArithmeticBase(nil, nil, intBin), 1)
 }

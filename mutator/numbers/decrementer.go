@@ -28,11 +28,7 @@ func MutatorNumbersDecrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 			return nil
 		}
 
-		mutatedVal := info.val - 1
-		mutated := formatIntLiteral(mutatedVal, info)
-		if info.base == 10 && mutatedVal < 0 {
-			mutated = "(" + mutated + ")"
-		}
+		mutated := formatIntLiteral(info.val-1, info)
 
 		return []mutator.Mutation{
 			{

@@ -50,19 +50,20 @@ func MutatorArithmeticBase(_ *types.Package, info *types.Info, node ast.Node) []
 	}
 }
 
-func isStringExpr(info *types.Info, expr ast.Expr) bool {
-	if expr == nil {
-		return false
-	}
-	if lit, ok := expr.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+func isStringExpr(info *types.Info, n *ast.BinaryExpr) bool {
+	if isStringLit(n.X) || isStringLit(n.Y) {
 		return true
 	}
 	if info != nil {
-		if t := info.TypeOf(expr); t != nil {
-			if basic, ok := t.Underlying().(*types.Basic); ok && basic.Info()&types.IsString != 0 {
-				return true
-			}
+		if t := info.TypeOf(n); t != nil {
+			basic, ok := t.Underlying().(*types.Basic)
+			return ok && basic.Info()&types.IsString != 0
 		}
 	}
 	return false
+}
+
+func isStringLit(expr ast.Expr) bool {
+	lit, ok := expr.(*ast.BasicLit)
+	return ok && lit.Kind == token.STRING
 }
