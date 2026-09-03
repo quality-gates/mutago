@@ -358,10 +358,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#install-the-binary" class="md-nav__link">
+  <a href="#homebrew-macos" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install the binary
+        Homebrew (macOS)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#install-the-binary-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install the binary (Go)
       
     </span>
   </a>
@@ -625,10 +636,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#install-the-binary" class="md-nav__link">
+  <a href="#homebrew-macos" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install the binary
+        Homebrew (macOS)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#install-the-binary-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install the binary (Go)
       
     </span>
   </a>
@@ -682,17 +704,21 @@
 <ul>
 <li>Go 1.26 or later</li>
 </ul>
-<h2 id="install-the-binary">Install the binary<a class="headerlink" href="#install-the-binary" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>install<span class="w"> </span>github.com/quality-gates/mutago/v2/cmd/mutago@latest
+<h2 id="homebrew-macos">Homebrew (macOS)<a class="headerlink" href="#homebrew-macos" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>brew<span class="w"> </span>install<span class="w"> </span>quality-gates/tap/mutago
+</code></pre></div>
+<p>After <code>brew tap quality-gates/tap</code>, you can also install with <code>brew install mutago</code>.</p>
+<h2 id="install-the-binary-go">Install the binary (Go)<a class="headerlink" href="#install-the-binary-go" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>go<span class="w"> </span>install<span class="w"> </span>github.com/quality-gates/mutago/v2/cmd/mutago@latest
 </code></pre></div>
 <p>The binary is placed in <code>$(go env GOPATH)/bin</code>. Make sure that directory is on your <code>PATH</code>.</p>
 <h2 id="build-from-source">Build from source<a class="headerlink" href="#build-from-source" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/quality-gates/mutago.git
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>mutago
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>go<span class="w"> </span>build<span class="w"> </span>-o<span class="w"> </span>mutago<span class="w"> </span>./cmd/mutago
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/quality-gates/mutago.git
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">cd</span><span class="w"> </span>mutago
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>go<span class="w"> </span>build<span class="w"> </span>-o<span class="w"> </span>mutago<span class="w"> </span>./cmd/mutago
 </code></pre></div>
 <h2 id="verify">Verify<a class="headerlink" href="#verify" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>mutago<span class="w"> </span>--help
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>mutago<span class="w"> </span>--help
 </code></pre></div>
 
 

@@ -2,50 +2,54 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://quality-gates.github.io/mutago/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/ci/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/cli/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/config/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/custom-mutators/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
+    </url>
+    <url>
+         <loc>https://quality-gates.github.io/mutago/homebrew-release/</loc>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/install/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/json-outputs/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/mutators/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/quickstart/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/agents/domain/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/agents/issue-tracker/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
     <url>
          <loc>https://quality-gates.github.io/mutago/agents/triage-labels/</loc>
-         <lastmod>2026-09-01</lastmod>
+         <lastmod>2026-09-03</lastmod>
     </url>
 </urlset>
