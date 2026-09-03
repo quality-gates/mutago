@@ -30,6 +30,10 @@ mutago --quiet --coverage --logger-github ./...
 ## Install
 
 ```console
+# Homebrew (macOS)
+brew install quality-gates/tap/mutago
+
+# Go install
 go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
 mutago --version
 ```

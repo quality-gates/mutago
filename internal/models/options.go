@@ -15,6 +15,7 @@ type Options struct {
 		Workers              int    `long:"workers" description:"Number of parallel workers for mutation execution (0 = all CPUs). Forced to 1 when --exec is set." default:"0"`
 		Config               string `long:"config" description:"Path to config file"`
 		HTMLOutput           bool   `long:"html-output" description:"Generates a mutago-report.html file after testing is complete"`
+		Version              bool   `long:"version" short:"v" description:"Show version"`
 	} `group:"General options"`
 
 	Files struct {
