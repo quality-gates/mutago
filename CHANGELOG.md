@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.9.5] — 2026-09-03
 
 ### Fixed
 - `arithmetic/base` and `arithmetic/assign_invert` no longer mutate string concatenation (`+`) or addition assignment (`+=`), avoiding uncompilable string subtraction operations.
@@ -532,3 +532,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.9.2]: https://github.com/quality-gates/mutago/compare/v2.9.1...v2.9.2
 [v2.9.3]: https://github.com/quality-gates/mutago/compare/v2.9.2...v2.9.3
 [v2.9.4]: https://github.com/quality-gates/mutago/compare/v2.9.3...v2.9.4
+[v2.9.5]: https://github.com/quality-gates/mutago/compare/v2.9.4...v2.9.5
