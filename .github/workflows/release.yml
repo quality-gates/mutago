@@ -58,11 +58,26 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
       - run: go test ./...
-      - name: Build and verify mutago CLI
+      - name: Build mutago
+        run: go build -o /tmp/mutago ./cmd/mutago
+      - name: Run mutation quality gates
         run: |
-          go build -o mutago ./cmd/mutago
-          ./mutago --version
-          ./mutago --help >/dev/null
+          /tmp/mutago \
+            --exec-timeout 30 --coverage --min-msi 75 --min-covered-msi 80 \
+            github.com/quality-gates/mutago/v2/mutator/arithmetic \
+            github.com/quality-gates/mutago/v2/mutator/branch \
+            github.com/quality-gates/mutago/v2/mutator/composite \
+            github.com/quality-gates/mutago/v2/mutator/concurrency \
+            github.com/quality-gates/mutago/v2/mutator/conditional \
+            github.com/quality-gates/mutago/v2/mutator/expression \
+            github.com/quality-gates/mutago/v2/mutator/loop \
+            github.com/quality-gates/mutago/v2/mutator/numbers \
+            github.com/quality-gates/mutago/v2/mutator/select \
+            github.com/quality-gates/mutago/v2/mutator/statement \
+            github.com/quality-gates/mutago/v2/internal/filter \
+            github.com/quality-gates/mutago/v2/internal/coverage \
+            github.com/quality-gates/mutago/v2/internal/gitdiff \
+            github.com/quality-gates/mutago/v2/internal/models
 
   build:
     name: Build darwin/${{ matrix.arch }}
@@ -171,7 +186,7 @@ jobs:
           (cd dist && shasum -a 256 -c checksums.txt)
           tar -xzf "dist/mutago_${VERSION}_darwin_${{ matrix.arch }}.tar.gz" -C dist
           test "$(dist/mutago --version)" = "mutago $VERSION"
-          dist/mutago --help >/dev/null
+          dist/mutago --dry-run example >/dev/null
 
   publish:
     name: Publish the immutable release and Homebrew formula

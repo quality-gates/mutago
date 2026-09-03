@@ -78,8 +78,8 @@ func isCompletion() bool {
 	return len(os.Getenv("GO_FLAGS_COMPLETION")) > 0
 }
 
-// handleEarlyExitFlags handles --version, --help, and --list-mutators, which print and exit
-// before any mutation work. Returns (true, exitCode) when one applied.
+// handleEarlyExitFlags prints metadata and exits before mutation work.
+// Returns (true, exitCode) when an early-exit flag was handled.
 func handleEarlyExitFlags(opts *models.Options, p *flags.Parser, args []string) (bool, int) {
 	if opts.General.Version {
 		fmt.Printf("mutago %s\n", version.Version)
