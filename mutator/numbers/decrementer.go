@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 	"strconv"
+	"strings"
 
 	"github.com/quality-gates/mutago/v2/mutator"
 )
@@ -22,16 +23,12 @@ func MutatorNumbersDecrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 
 	if n.Kind == token.INT {
 		original := n.Value
-		originalInt, err := strconv.Atoi(n.Value)
-		if err != nil {
+		info, ok := parseIntLiteral(n.Value)
+		if !ok {
 			return nil
 		}
 
-		originalInt--
-		mutated := strconv.Itoa(originalInt)
-		if originalInt < 0 {
-			mutated = "(" + mutated + ")"
-		}
+		mutated := formatIntLiteral(info.val-1, info)
 
 		return []mutator.Mutation{
 			{
@@ -48,7 +45,8 @@ func MutatorNumbersDecrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 
 	if n.Kind == token.FLOAT {
 		original := n.Value
-		originalFloat, err := strconv.ParseFloat(n.Value, 64)
+		cleaned := strings.ReplaceAll(n.Value, "_", "")
+		originalFloat, err := strconv.ParseFloat(cleaned, 64)
 		if err != nil {
 			return nil
 		}

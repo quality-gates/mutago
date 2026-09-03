@@ -128,7 +128,7 @@ func isAlreadyZero(expr ast.Expr) bool {
 			}
 		case token.STRING:
 			switch n.Value {
-			case `""`:
+			case `""`, "``":
 				return true
 			}
 		}

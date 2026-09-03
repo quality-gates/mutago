@@ -59,6 +59,8 @@ func MutatorRemoveStatement(pkg *types.Package, info *types.Info, node ast.Node)
 		l = n.List
 	case *ast.CaseClause:
 		l = n.Body
+	case *ast.CommClause:
+		l = n.Body
 	}
 
 	var mutations []mutator.Mutation

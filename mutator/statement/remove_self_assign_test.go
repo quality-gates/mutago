@@ -162,3 +162,14 @@ func TestStmtExprEqual_Unknown(t *testing.T) {
 	call := &ast.CallExpr{}
 	assert.False(t, stmtExprEqual(call, call))
 }
+
+func TestMutatorRemoveSelfAssign_CommClause(t *testing.T) {
+	stmt := &ast.AssignStmt{
+		Lhs: []ast.Expr{ast.NewIdent("x")},
+		Tok: token.ASSIGN,
+		Rhs: []ast.Expr{ast.NewIdent("x")},
+	}
+	comm := &ast.CommClause{Body: []ast.Stmt{stmt}}
+	muts := MutatorRemoveSelfAssign(nil, nil, comm)
+	assert.Len(t, muts, 1)
+}

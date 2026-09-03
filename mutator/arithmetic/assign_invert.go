@@ -27,9 +27,13 @@ var assignInvertMutations = map[token.Token]token.Token{
 }
 
 // MutatorArithmeticAssignInvert implements a mutator to invert change assign statements.
-func MutatorArithmeticAssignInvert(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorArithmeticAssignInvert(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	n, ok := node.(*ast.AssignStmt)
 	if !ok {
+		return nil
+	}
+
+	if n.Tok == token.ADD_ASSIGN && isStringAssign(info, n) {
 		return nil
 	}
 
@@ -50,4 +54,17 @@ func MutatorArithmeticAssignInvert(_ *types.Package, _ *types.Info, node ast.Nod
 			},
 		},
 	}
+}
+
+func isStringAssign(info *types.Info, n *ast.AssignStmt) bool {
+	if len(n.Rhs) > 0 && isStringLit(n.Rhs[0]) {
+		return true
+	}
+	if info != nil && len(n.Lhs) > 0 {
+		if t := info.TypeOf(n.Lhs[0]); t != nil {
+			basic, ok := t.Underlying().(*types.Basic)
+			return ok && basic.Info()&types.IsString != 0
+		}
+	}
+	return false
 }

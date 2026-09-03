@@ -54,3 +54,29 @@ func TestMutatorNumbersDecrementerParenthesizesNegativeValues(t *testing.T) {
 		})
 	}
 }
+
+func TestMutatorNumbersDecrementer_ModernLiterals(t *testing.T) {
+	testCases := []struct {
+		original string
+		mutated  string
+	}{
+		{original: "1_000", mutated: "999"},
+		{original: "0x10", mutated: "0xf"},
+		{original: "0b1010", mutated: "0b1001"},
+		{original: "0o755", mutated: "0o754"},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.original, func(t *testing.T) {
+			literal := &ast.BasicLit{Kind: token.INT, Value: tt.original}
+			mutations := MutatorNumbersDecrementer(nil, nil, literal)
+			require.Len(t, mutations, 1)
+
+			mutations[0].Change()
+			assert.Equal(t, tt.mutated, literal.Value)
+
+			mutations[0].Reset()
+			assert.Equal(t, tt.original, literal.Value)
+		})
+	}
+}
