@@ -34,8 +34,9 @@ func MutatorRemoveTerm(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 	x := n.X
 	y := n.Y
 
-	return []mutator.Mutation{
-		{
+	var mutations []mutator.Mutation
+	if !isIdent(x, r.Name) {
+		mutations = append(mutations, mutator.Mutation{
 			Position: x.Pos(),
 			Change: func() {
 				n.X = r
@@ -43,8 +44,10 @@ func MutatorRemoveTerm(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 			Reset: func() {
 				n.X = x
 			},
-		},
-		{
+		})
+	}
+	if !isIdent(y, r.Name) {
+		mutations = append(mutations, mutator.Mutation{
 			Position: y.Pos(),
 			Change: func() {
 				n.Y = r
@@ -52,6 +55,13 @@ func MutatorRemoveTerm(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 			Reset: func() {
 				n.Y = y
 			},
-		},
+		})
 	}
+
+	return mutations
+}
+
+func isIdent(expr ast.Expr, name string) bool {
+	ident, ok := expr.(*ast.Ident)
+	return ok && ident.Name == name
 }

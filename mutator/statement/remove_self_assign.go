@@ -21,6 +21,8 @@ func MutatorRemoveSelfAssign(_ *types.Package, _ *types.Info, node ast.Node) []m
 		l = n.List
 	case *ast.CaseClause:
 		l = n.Body
+	case *ast.CommClause:
+		l = n.Body
 	}
 	if l == nil {
 		return nil

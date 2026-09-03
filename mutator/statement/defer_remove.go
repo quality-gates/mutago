@@ -21,6 +21,8 @@ func MutatorDeferRemove(_ *types.Package, _ *types.Info, node ast.Node) []mutato
 	switch n := node.(type) {
 	case *ast.BlockStmt:
 		l = n.List
+	case *ast.CaseClause:
+		l = n.Body
 	case *ast.CommClause:
 		l = n.Body
 	default:

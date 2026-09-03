@@ -4,6 +4,16 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `arithmetic/base` and `arithmetic/assign_invert` no longer mutate string concatenation (`+`) or addition assignment (`+=`), avoiding uncompilable string subtraction operations.
+- `statement/return` no longer produces equivalent mutants for empty raw string literals (`` ` ``).
+- `statement/remove` and `statement/remove-self-assign` now recognize statements inside `select` cases (`*ast.CommClause`).
+- `statement/defer-remove` and `concurrency/goroutine-remove` now recognize `defer` and `go` statements inside `switch` cases (`*ast.CaseClause`).
+- `expression/remove` no longer produces diff-less equivalent mutants when operands in `&&` are already `true` or in `||` are already `false`.
+- `numbers/decrementer` and `numbers/incrementer` now support modern numeric literals (digit separators `_`, hex `0x`, binary `0b`, and octal `0o`).
+
 ## [v2.9.4] — 2026-09-03
 
 ### Fixed
