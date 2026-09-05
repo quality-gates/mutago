@@ -1,0 +1,4 @@
+.git/
+.worktrees/
+engine.test
+report.json
