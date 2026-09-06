@@ -4,11 +4,12 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.10.0] — 2026-09-06
 
 ### Added
 - `--version` (`-v`) CLI flag to print mutago version and exit 0.
 - Homebrew deployment pipeline publishing macOS darwin archives to `quality-gates/homebrew-tap`.
+- Production (`Dockerfile`) and development (`dev.Dockerfile`) Dockerfiles.
 
 ## [v2.9.5] — 2026-09-03
 
@@ -538,5 +539,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.9.2]: https://github.com/quality-gates/mutago/compare/v2.9.1...v2.9.2
 [v2.9.3]: https://github.com/quality-gates/mutago/compare/v2.9.2...v2.9.3
 [v2.9.4]: https://github.com/quality-gates/mutago/compare/v2.9.3...v2.9.4
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.9.5...HEAD
 [v2.9.5]: https://github.com/quality-gates/mutago/compare/v2.9.4...v2.9.5
+[v2.10.0]: https://github.com/quality-gates/mutago/compare/v2.9.5...v2.10.0
