@@ -574,7 +574,7 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 		r.mu.Unlock()
 		return
 	}
-	checksum := stableMutationEditKey(originalSourceCode, edit)
+	checksum := stableMutationEditKey(toRelPath(fc.absFile, r.moduleRoot), originalSourceCode, edit)
 	if _, duplicate := r.blacklist[checksum]; duplicate {
 		r.mu.Lock()
 		r.report.Stats.DuplicatedCount++
@@ -652,7 +652,7 @@ func printDryRunReport(stdout io.Writer, total int, totals map[string]int) {
 		}
 	}
 	fmt.Fprintf(stdout, "\nTotal: %d mutation(s) would be generated. No files written, no tests run.\n", total)
-	fmt.Fprintln(stdout, "Note: this count is an upper bound. Identical mutations across files are deduplicated during an actual run.")
+	fmt.Fprintln(stdout, "Note: this count is an upper bound. Mutations that produce byte-identical edits at the same location are deduplicated during an actual run.")
 }
 
 func parseExecFlags(opts *models.Options) (execs []string, extraTestFlags []string) {
@@ -1221,8 +1221,14 @@ func (e mutationEdit) materialize(original []byte) ([]byte, error) {
 	return mutated, nil
 }
 
-func stableMutationEditKey(original []byte, edit mutationEdit) string {
+// stableMutationEditKey hashes the file identity, the edit's byte offsets, the
+// original text and the replacement, so two mutants are deduplicated only when
+// they produce byte-identical edits at the same location in the same file
+// (#103). Keys are 32-char MD5 hex strings to stay compatible with the
+// --blacklist file format.
+func stableMutationEditKey(file string, original []byte, edit mutationEdit) string {
 	h := md5.New()
+	fmt.Fprintf(h, "%s\x00%d\x00", file, edit.start)
 	h.Write(original[edit.start:edit.end])
 	h.Write([]byte{0})
 	h.Write(edit.replacement)
