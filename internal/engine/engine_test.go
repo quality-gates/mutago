@@ -93,6 +93,30 @@ func TestMutationEditMaterializesChangedNode(t *testing.T) {
 	}
 }
 
+func TestStableMutationEditKeyIsPositionAware(t *testing.T) {
+	source := []byte("package sample\n\nfunc a() int { return 0 }\n\nfunc b() int { return 0 }\n")
+	editA := mutationEdit{start: 32, end: 33, replacement: []byte("1")}
+	editB := mutationEdit{start: 61, end: 62, replacement: []byte("1")}
+
+	keyA := stableMutationEditKey("sample.go", source, editA)
+	keyB := stableMutationEditKey("sample.go", source, editB)
+	if keyA == keyB {
+		t.Fatal("expected identical text at different offsets to produce different dedup keys")
+	}
+	if again := stableMutationEditKey("sample.go", source, editA); again != keyA {
+		t.Fatal("expected the same edit to produce the same dedup key")
+	}
+	if keyA != stableMutationEditKey("sample.go", source, mutationEdit{start: 32, end: 33, replacement: []byte("1")}) {
+		t.Fatal("expected an equal edit at the same offset to produce an equal dedup key")
+	}
+	if keyA == stableMutationEditKey("other.go", source, editA) {
+		t.Fatal("expected the same edit in a different file to produce a different dedup key")
+	}
+	if len(keyA) != 32 {
+		t.Fatalf("expected 32-char MD5 hex key for blacklist compatibility, got %d chars", len(keyA))
+	}
+}
+
 func TestEngineDryRun(t *testing.T) {
 	opts := &models.Options{}
 	opts.General.DryRun = true
