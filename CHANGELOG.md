@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.10.1] — 2026-09-08
 
 ### Fixed
 - `branch/if`, `branch/else`, and `branch/case`: emptying a terminating branch no longer yields a `missing return` compile error (#104). When the branch is part of the enclosing function's terminating statement, the mutant keeps a zero-value `return` so tests can still catch the no-op path instead of reporting a false kill.
@@ -13,6 +13,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Translate standard test runtime flags to `-test.` prefixed flags when executing compiled test binaries for `--per-test` coverage profiling (#98). Previously flags like `-count=1` or `-failfast` passed via `--test-flags` were forwarded without the mandatory `-test.` prefix, causing the test binary to exit with an error and silently breaking `--per-test` profiling.
 - `expression/recover-clear`: rewrite `recover()` to `func() any { return nil }()` instead of `any(nil)`, preventing invalid Go type conversion compile errors in `defer` and `go` statements that caused unexercised mutations to be falsely reported as killed.
 - Mutant test runs now pass `-vet=off` to `go test` by default (#106). `go test` runs a `go vet` subset that exits 1 on any diagnostic, so a mutant that merely tripped vet (such as `expression/logical` producing a suspect `&&`) was reported as KILLED even though no test failed. Pass `-vet` via `--test-flags` to re-enable it; the baseline pre-flight and coverage runs (original code) still run vet.
+- Release workflow: install Go via `actions/setup-go` in smoke test jobs so that smoke testing packaged binaries on macOS runners can locate `go` during package loading.
 
 ## [v2.10.0] — 2026-09-06
 
@@ -551,5 +552,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.9.4]: https://github.com/quality-gates/mutago/compare/v2.9.3...v2.9.4
 [v2.9.5]: https://github.com/quality-gates/mutago/compare/v2.9.4...v2.9.5
 [v2.10.0]: https://github.com/quality-gates/mutago/compare/v2.9.5...v2.10.0
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.0...HEAD
+[v2.10.1]: https://github.com/quality-gates/mutago/compare/v2.10.0...v2.10.1
 
