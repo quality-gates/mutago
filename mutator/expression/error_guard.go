@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 
+	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -31,7 +32,7 @@ func MutatorErrorGuard(_ *types.Package, info *types.Info, node ast.Node) []muta
 	if bin.Op != token.NEQ && bin.Op != token.EQL {
 		return nil
 	}
-	if !isErrorNilComparison(info, bin) {
+	if !isErrorNilComparison(info, bin) || !astutil.IsSafeToRemove(info, bin) {
 		return nil
 	}
 

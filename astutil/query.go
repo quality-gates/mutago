@@ -49,6 +49,7 @@ var identifierIndexes sync.Map
 // ClearIdentifierCache releases per-type-check identifier indexes between runs.
 func ClearIdentifierCache() {
 	identifierIndexes = sync.Map{}
+	ClearSafetyCache()
 }
 
 func (idx *identifierIndex) query(info *types.Info, stmts []ast.Stmt) []ast.Expr {

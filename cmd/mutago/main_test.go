@@ -621,6 +621,65 @@ func TestUnrelated(t *testing.T) {
 	assert.Contains(t, out, "0 killed, 1 escaped")
 }
 
+func TestMainUnusedVariablesCompileAndDoNotFalseKill(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/repro\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), `enable_mutators:
+  - statement/return
+  - composite/field-clear
+  - expression/remove
+  - expression/error-guard
+`)
+	writeFixtureFile(t, filepath.Join(root, "repro.go"), `package repro
+
+import "strings"
+
+type P struct{ Name string }
+
+func Ret(a int) int {
+	b := a * 2
+	return b
+}
+
+func Field(name string) P {
+	n := strings.TrimSpace(name)
+	return P{Name: n}
+}
+
+func ExprRemove(s string) bool {
+	b := len(s) > 0
+	return b && len(s) < 100
+}
+
+func Guard() error {
+	err := check()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GuardOnlyUse() {
+	err := check()
+	if err != nil {
+		println("error happened")
+	}
+}
+
+func check() error { return nil }
+`)
+	writeFixtureFile(t, filepath.Join(root, "repro_test.go"), `package repro
+
+import "testing"
+
+func TestUnrelated(t *testing.T) {
+}
+`)
+
+	out := testMain(t, root, []string{"--config", filepath.Join(root, "mutago.yml"), "--exec-timeout", "5"}, returnOk, "mutation score")
+	assert.NotContains(t, out, "KILLED")
+}
+
 func testMain(t *testing.T, root string, exec []string, expectedExitCode int, contains string) string {
 	// Clear the parser cache so each test loads files fresh from disk.
 	// Without this, TestMainMatch's exec script (which writes to the original

@@ -22,6 +22,6 @@ func main() {
 	}
 	err2 := mayFail(false)
 	if err2 == nil {
-		fmt.Println("ok")
+		fmt.Println("ok", err2)
 	}
 }

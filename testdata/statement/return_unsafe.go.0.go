@@ -7,6 +7,7 @@ import "unsafe"
 
 func makeUnsafe() unsafe.Pointer {
 	x := 42
+	_ = x
 	return nil
 }
 
