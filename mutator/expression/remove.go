@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 
+	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -12,53 +13,51 @@ func init() {
 	mutator.Register("expression/remove", MutatorRemoveTerm)
 }
 
-// MutatorRemoveTerm implements a mutator to remove expression terms.
-func MutatorRemoveTerm(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorRemoveTerm(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	n, ok := node.(*ast.BinaryExpr)
 	if !ok {
 		return nil
 	}
-	if n.Op != token.LAND && n.Op != token.LOR {
+	r := replacementForOp(n.Op)
+	if r == nil {
 		return nil
 	}
 
-	var r *ast.Ident
-
-	switch n.Op {
-	case token.LAND:
-		r = ast.NewIdent("true")
-	case token.LOR:
-		r = ast.NewIdent("false")
-	}
-
-	x := n.X
-	y := n.Y
-
 	var mutations []mutator.Mutation
-	if !isIdent(x, r.Name) {
-		mutations = append(mutations, mutator.Mutation{
-			Position: x.Pos(),
-			Change: func() {
-				n.X = r
-			},
-			Reset: func() {
-				n.X = x
-			},
-		})
+	if m, ok := tryMutateOperand(info, &n.X, r); ok {
+		mutations = append(mutations, m)
 	}
-	if !isIdent(y, r.Name) {
-		mutations = append(mutations, mutator.Mutation{
-			Position: y.Pos(),
-			Change: func() {
-				n.Y = r
-			},
-			Reset: func() {
-				n.Y = y
-			},
-		})
+	if m, ok := tryMutateOperand(info, &n.Y, r); ok {
+		mutations = append(mutations, m)
 	}
-
 	return mutations
+}
+
+func replacementForOp(op token.Token) *ast.Ident {
+	switch op {
+	case token.LAND:
+		return ast.NewIdent("true")
+	case token.LOR:
+		return ast.NewIdent("false")
+	default:
+		return nil
+	}
+}
+
+func tryMutateOperand(info *types.Info, target *ast.Expr, replacement *ast.Ident) (mutator.Mutation, bool) {
+	orig := *target
+	if isIdent(orig, replacement.Name) || !astutil.IsSafeToRemove(info, orig) {
+		return mutator.Mutation{}, false
+	}
+	return mutator.Mutation{
+		Position: orig.Pos(),
+		Change: func() {
+			*target = replacement
+		},
+		Reset: func() {
+			*target = orig
+		},
+	}, true
 }
 
 func isIdent(expr ast.Expr, name string) bool {

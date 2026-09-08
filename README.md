@@ -662,7 +662,7 @@ Replaces a float literal with its negation. Catches missing sign-handling in ari
 
 ### Composite mutators
 #### composite/field-clear
-Drops one keyed field from a composite literal (struct, map, or keyed array/slice literal), letting it fall back to its zero value. Targets fields that are set to a meaningful value but never asserted by a test — e.g. an options or config struct populated in full where only one or two fields actually matter to the suite. Fields already set to a zero value (`0`, `""`, `false`, `nil`) and positional (unkeyed) elements are skipped to avoid no-op mutations.
+Drops one keyed field from a composite literal (struct, map, or keyed array/slice literal), letting it fall back to its zero value. Targets fields that are set to a meaningful value but never asserted by a test — e.g. an options or config struct populated in full where only one or two fields actually matter to the suite. Fields already set to a zero value (`0`, `""`, `false`, `nil`), positional (unkeyed) elements, and fields whose removal would leave a local variable or import unused are skipped to avoid uncompilable mutants.
 
 | Name       | Original                          | Mutated              |
 | :--------- | :-------------------------------- | :------------------- |
@@ -740,7 +740,7 @@ Name	      | Original | Mutated
 | LogicalOr  | &#124;&#124; | &&
 
 #### expression/remove
-Searches for `&&` and <code>\|\|</code> operators and makes each term of the operator irrelevant by using `true` or `false` as replacements.
+Searches for `&&` and <code>\|\|</code> operators and makes each term of the operator irrelevant by using `true` or `false` as replacements. Operands whose removal would leave a local variable or import unused are skipped to avoid uncompilable mutants.
 
 #### expression/context-nil
 Replaces `context.Context` arguments at call sites with `nil`. Finds code paths that silently ignore a nil context instead of propagating it.
@@ -750,7 +750,7 @@ Replaces `context.Context` arguments at call sites with `nil`. Finds code paths 
 | ContextNil | f(ctx, x)         | f(nil, x)      |
 
 #### expression/error-guard
-Replaces the condition of `if err != nil` and `if err == nil` guards with a boolean constant. Finds error-handling branches that tests never exercise.
+Replaces the condition of `if err != nil` and `if err == nil` guards with a boolean constant. Finds error-handling branches that tests never exercise. Error guards whose condition is the only use of the error variable or import are skipped to avoid uncompilable mutants.
 
 | Name       | Original          | Mutated         |
 | :--------- | :---------------- | :-------------- |
@@ -786,7 +786,7 @@ Removes assignment, increment, decrement and expression statements.
 Removes self-assignment statements (`a = a`). These are typically dead code; this mutator confirms the surrounding tests don't accidentally rely on them.
 
 #### statement/return
-Replaces each return value with the zero value for its type (`false` for bool, `0` for int, `""` for string, `nil` for pointers and interfaces). Uses `go/types` for type resolution. Finds functions whose return values tests never validate.
+Replaces each return value with the zero value for its type (`false` for bool, `0` for int, `""` for string, `nil` for pointers and interfaces). Uses `go/types` for type resolution. When zeroing a return value whose only use was a local variable, emits a preceding `_ = x` assignment to keep the variable used and ensure the mutant compiles. Skips mutations that would leave an imported package unused. Finds functions whose return values tests never validate.
 
 #### statement/defer-remove
 Removes the `defer` keyword, turning deferred calls into immediate calls. Tests whether the timing of cleanup matters — e.g. mutex unlocks and file closes that must happen after the function body, not during it.

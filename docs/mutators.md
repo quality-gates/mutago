@@ -90,7 +90,7 @@ Replaces a float literal with its negation.
 ## Composite
 
 ### composite/field-clear
-Drops one keyed field from a composite literal (struct, map, or keyed array/slice literal), letting it fall back to its zero value. Targets fields set to a meaningful value that no test asserts — e.g. a config or options struct populated in full where only a couple of fields matter to the suite. Fields already at a zero value (`0`, `""`, `false`, `nil`) and positional elements are skipped.
+Drops one keyed field from a composite literal (struct, map, or keyed array/slice literal), letting it fall back to its zero value. Targets fields set to a meaningful value that no test asserts — e.g. a config or options struct populated in full where only a couple of fields matter to the suite. Fields already at a zero value (`0`, `""`, `false`, `nil`), positional elements, and fields whose removal would leave a local variable or import unused are skipped.
 
 | Original | Mutated |
 | :------- | :------ |
@@ -153,7 +153,7 @@ Shifts comparison operators by one step — `>` becomes `>=`, `>=` becomes `>`. 
 Swaps `&&` and `||` operators.
 
 ### expression/remove
-Makes each operand of `&&` and `||` irrelevant by replacing it with `true` or `false`.
+Makes each operand of `&&` and `||` irrelevant by replacing it with `true` or `false`. Operands whose removal would leave a local variable or import unused are skipped to avoid uncompilable mutants.
 
 ### expression/context-nil
 Replaces `context.Context` arguments at call sites with `nil`. Finds code paths that silently accept a nil context instead of propagating a real one.
@@ -163,7 +163,7 @@ Replaces `context.Context` arguments at call sites with `nil`. Finds code paths 
 | `f(ctx, x)` | `f(nil, x)` |
 
 ### expression/error-guard
-Replaces the condition of `if err != nil` / `if err == nil` guards with a boolean constant. Finds error-handling branches that tests never enter.
+Replaces the condition of `if err != nil` / `if err == nil` guards with a boolean constant. Finds error-handling branches that tests never enter. Error guards whose condition is the only use of the error variable or import are skipped to avoid uncompilable mutants.
 
 | Original | Mutated |
 | :------- | :------ |
@@ -200,7 +200,7 @@ Removes assignment, increment, decrement, and expression statements.
 Removes self-assignment statements (`a = a`). These are typically dead code; this mutator confirms tests don't accidentally rely on them.
 
 ### statement/return
-Replaces each return value with the zero value for its type (`false` for bool, `0` for int, `""` for string, `nil` for pointers and interfaces). Uses `go/types` for type resolution. Finds functions whose return values tests never validate.
+Replaces each return value with the zero value for its type (`false` for bool, `0` for int, `""` for string, `nil` for pointers and interfaces). Uses `go/types` for type resolution. When zeroing a return value whose only use was a local variable, emits a preceding `_ = x` assignment to keep the variable used and ensure the mutant compiles. Skips mutations that would leave an imported package unused. Finds functions whose return values tests never validate.
 
 ### statement/defer-remove
 Removes the `defer` keyword, turning deferred calls into immediate calls. Tests whether the timing of cleanup matters — e.g. mutex unlocks and file closes that must happen after the function body, not during it.

@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"go/types"
 
+	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -30,7 +31,7 @@ func init() {
 // always survive and add noise rather than signal. Positional (unkeyed)
 // elements are skipped too, since removing one shifts the remaining elements
 // and changes meaning unpredictably.
-func MutatorFieldClear(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorFieldClear(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	lit, ok := node.(*ast.CompositeLit)
 	if !ok || len(lit.Elts) == 0 {
 		return nil
@@ -42,7 +43,7 @@ func MutatorFieldClear(_ *types.Package, _ *types.Info, node ast.Node) []mutator
 	var scratch []ast.Expr
 	for i, elt := range lit.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
-		if !ok || isZeroish(kv.Value) {
+		if !ok || isZeroish(kv.Value) || !astutil.IsSafeToRemove(info, kv.Value) {
 			continue
 		}
 

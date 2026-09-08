@@ -5,6 +5,7 @@ package main
 
 func makeIntPtr() *int {
 	x := 42
+	_ = x
 	return nil
 }
 
