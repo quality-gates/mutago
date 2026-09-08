@@ -224,3 +224,158 @@ func firstIfStatement(t *testing.T, file *ast.File) *ast.IfStmt {
 
 	return found
 }
+
+func TestCreateNoopOfStatementsFieldSelector(t *testing.T) {
+	tests := []struct {
+		name         string
+		source       string
+		wantContains string
+		dontContain  string
+	}{
+		{
+			name: "slice field selector",
+			source: `package example
+
+type Record struct {
+	items []int
+}
+
+var sink int
+
+func mutate(enabled bool, r Record) {
+	if enabled {
+		sink = r.items[0]
+	}
+}
+`,
+			wantContains: "_, _ = sink, r.items",
+			dontContain:  "r.items{}",
+		},
+		{
+			name: "map field selector",
+			source: `package example
+
+type Record struct {
+	lookup map[string]int
+}
+
+var sink int
+
+func mutate(enabled bool, r Record) {
+	if enabled {
+		sink = r.lookup["key"]
+	}
+}
+`,
+			wantContains: "_, _ = sink, r.lookup",
+			dontContain:  "r.lookup{}",
+		},
+		{
+			name: "array field selector",
+			source: `package example
+
+type Record struct {
+	matrix [3]int
+}
+
+var sink int
+
+func mutate(enabled bool, r Record) {
+	if enabled {
+		sink = r.matrix[0]
+	}
+}
+`,
+			wantContains: "_, _ = sink, r.matrix",
+			dontContain:  "r.matrix{}",
+		},
+		{
+			name: "struct field selector",
+			source: `package example
+
+type Child struct {
+	val int
+}
+
+type Record struct {
+	child Child
+}
+
+var sink int
+
+func mutate(enabled bool, r Record) {
+	if enabled {
+		sink = r.child.val
+	}
+}
+`,
+			wantContains: "_, _ = sink, r.child.val",
+			dontContain:  "r.child{}",
+		},
+		{
+			name: "nested composite field selector",
+			source: `package example
+
+type Inner struct {
+	items []int
+}
+
+type Record struct {
+	inner Inner
+}
+
+var sink int
+
+func mutate(enabled bool, r Record) {
+	if enabled {
+		sink = r.inner.items[0]
+	}
+}
+`,
+			wantContains: "_, _ = sink, r.inner.items",
+			dontContain:  "r.inner.items{}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fset, file, pkg, info := parseAndTypeCheck(t, tt.source)
+			ifStmt := firstIfStatement(t, file)
+			noop := CreateNoopOfStatements(pkg, info, ifStmt.Body.List)
+			ifStmt.Body.List = []ast.Stmt{noop}
+			mutated := printFile(t, fset, file)
+
+			if !strings.Contains(mutated, tt.wantContains) {
+				t.Errorf("mutated source does not contain %q:\n%s", tt.wantContains, mutated)
+			}
+			if strings.Contains(mutated, tt.dontContain) {
+				t.Errorf("mutated source contains invalid %q:\n%s", tt.dontContain, mutated)
+			}
+			parseAndTypeCheck(t, mutated)
+		})
+	}
+}
+
+func TestCreateNoopOfStatementsPackageCompositeType(t *testing.T) {
+	source := `package example
+
+import "sync"
+
+var sink any
+
+func mutate(enabled bool, v any) {
+	if enabled {
+		sink = v.(sync.Mutex)
+	}
+}
+`
+	fset, file, pkg, info := parseAndTypeCheck(t, source)
+	ifStmt := firstIfStatement(t, file)
+	noop := CreateNoopOfStatements(pkg, info, ifStmt.Body.List)
+	ifStmt.Body.List = []ast.Stmt{noop}
+	mutated := printFile(t, fset, file)
+	if !strings.Contains(mutated, "sync.Mutex{}") {
+		t.Fatalf("expected sync.Mutex{} composite literal, got:\n%s", mutated)
+	}
+	parseAndTypeCheck(t, mutated)
+}
