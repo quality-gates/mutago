@@ -580,15 +580,23 @@ func TestTestBinaryFlags(t *testing.T) {
 		"-tags",
 	}))
 
-	// Preserving --test. flags and non-flag tokens.
+	// Preserving --test. flags and non-flag tokens (including tokens matching flag names).
 	assert.Equal(t, []string{
 		"--test.count=2",
 		"--test.v",
 		"positional",
+		"race",
+		"-test.run=TestFoo",
+		"-test.bench=BenchmarkBar",
+		"-test.skip=TestBaz",
 	}, testBinaryFlags([]string{
 		"--test.count=2",
 		"--test.v",
 		"positional",
+		"race",
+		"-run", "TestFoo",
+		"-bench=BenchmarkBar",
+		"-skip", "TestBaz",
 	}))
 }
 

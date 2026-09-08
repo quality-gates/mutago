@@ -373,70 +373,53 @@ func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, bina
 	}
 }
 
-var buildOnlyValueFlags = map[string]bool{
-	"tags":     true,
-	"vet":      true,
-	"gcflags":  true,
-	"asmflags": true,
-	"ldflags":  true,
-	"compiler": true,
-	"coverpkg": true,
-	"pkgdir":   true,
-	"mod":      true,
-	"modfile":  true,
-	"overlay":  true,
-	"p":        true,
-	"buildvcs": true,
+func isBuildFlag(name string) bool {
+	switch name {
+	case "race", "trimpath", "tags", "vet", "gcflags", "asmflags":
+		return true
+	default:
+		return false
+	}
 }
 
-var buildOnlyBoolFlags = map[string]bool{
-	"race":     true,
-	"trimpath": true,
-	"work":     true,
+func isBuildValue(name string) bool {
+	switch name {
+	case "tags", "vet", "gcflags", "asmflags":
+		return true
+	default:
+		return false
+	}
 }
 
-var testRunnerBoolFlags = map[string]bool{
-	"v":            true,
-	"verbose":      true,
-	"short":        true,
-	"failfast":     true,
-	"benchmem":     true,
-	"fullpath":     true,
-	"paniconexit0": true,
-	"fuzzworker":   true,
-	"artifacts":    true,
+func isRunnerBool(name string) bool {
+	switch name {
+	case "v", "verbose", "short", "failfast":
+		return true
+	default:
+		return false
+	}
 }
 
-var testRunnerValueFlags = map[string]bool{
-	"bench":                true,
-	"benchtime":            true,
-	"blockprofile":         true,
-	"blockprofilerate":     true,
-	"count":                true,
-	"coverprofile":         true,
-	"cpu":                  true,
-	"cpuprofile":           true,
-	"fuzz":                 true,
-	"fuzzcachedir":         true,
-	"fuzzminimizetime":     true,
-	"fuzztime":             true,
-	"gocoverdir":           true,
-	"list":                 true,
-	"memprofile":           true,
-	"memprofilerate":       true,
-	"mutexprofile":         true,
-	"mutexprofilefraction": true,
-	"outputdir":            true,
-	"parallel":             true,
-	"run":                  true,
-	"shuffle":              true,
-	"skip":                 true,
-	"testlogfile":          true,
-	"timeout":              true,
-	"trace":                true,
+func isRunnerValue(name string) bool {
+	switch name {
+	case "count", "parallel", "shuffle", "cpu", "timeout", "run", "bench", "skip":
+		return true
+	default:
+		return false
+	}
 }
 
-func formatTestRunnerBool(name, val string, hasEqual bool) string {
+func hasNextValue(args []string, i int) bool {
+	if i+1 >= len(args) {
+		return false
+	}
+	if strings.HasPrefix(args[i+1], "-") {
+		return false
+	}
+	return true
+}
+
+func formatRunnerBool(name, val string, hasEqual bool) string {
 	if name == "verbose" {
 		name = "v"
 	}
@@ -446,61 +429,58 @@ func formatTestRunnerBool(name, val string, hasEqual bool) string {
 	return fmt.Sprintf("-test.%s=true", name)
 }
 
-func formatTestRunnerValue(name, val string, hasEqual bool, nextArg string, hasNext bool) (string, bool) {
+func formatRunnerValue(args []string, i int, name, val string, hasEqual bool) (int, string, bool) {
 	if hasEqual {
-		return fmt.Sprintf("-test.%s=%s", name, val), false
+		return 0, fmt.Sprintf("-test.%s=%s", name, val), true
 	}
-	if hasNext && !strings.HasPrefix(nextArg, "-") {
-		return fmt.Sprintf("-test.%s=%s", name, nextArg), true
+	if hasNextValue(args, i) {
+		return 1, fmt.Sprintf("-test.%s=%s", name, args[i+1]), true
 	}
-	return fmt.Sprintf("-test.%s", name), false
+	return 0, fmt.Sprintf("-test.%s", name), true
 }
 
-func skipBuildValueFlag(hasEqual bool, nextArg string, hasNext bool) bool {
-	return !hasEqual && hasNext && !strings.HasPrefix(nextArg, "-")
+func skipBuildFlag(args []string, i int, name string, hasEqual bool) int {
+	if hasEqual {
+		return 0
+	}
+	if !isBuildValue(name) {
+		return 0
+	}
+	if hasNextValue(args, i) {
+		return 1
+	}
+	return 0
+}
+
+func translateFlag(args []string, i int) (int, string, bool) {
+	arg := args[i]
+	if !strings.HasPrefix(arg, "-") {
+		return 0, arg, true
+	}
+
+	raw := strings.TrimPrefix(strings.TrimPrefix(arg, "--"), "-")
+	name, val, hasEqual := strings.Cut(raw, "=")
+
+	if isBuildFlag(name) {
+		return skipBuildFlag(args, i, name, hasEqual), "", false
+	}
+	if isRunnerBool(name) {
+		return 0, formatRunnerBool(name, val, hasEqual), true
+	}
+	if isRunnerValue(name) {
+		return formatRunnerValue(args, i, name, val, hasEqual)
+	}
+	return 0, arg, true
 }
 
 func testBinaryFlags(extraTestFlags []string) []string {
 	flags := make([]string, 0, len(extraTestFlags))
 	for i := 0; i < len(extraTestFlags); i++ {
-		arg := extraTestFlags[i]
-		if strings.HasPrefix(arg, "-test.") || strings.HasPrefix(arg, "--test.") || !strings.HasPrefix(arg, "-") {
-			flags = append(flags, arg)
-			continue
+		advance, flag, keep := translateFlag(extraTestFlags, i)
+		i += advance
+		if keep {
+			flags = append(flags, flag)
 		}
-
-		rawName := strings.TrimPrefix(strings.TrimPrefix(arg, "--"), "-")
-		name, val, hasEqual := strings.Cut(rawName, "=")
-
-		hasNext := i+1 < len(extraTestFlags)
-		var nextArg string
-		if hasNext {
-			nextArg = extraTestFlags[i+1]
-		}
-
-		if buildOnlyBoolFlags[name] {
-			continue
-		}
-		if buildOnlyValueFlags[name] {
-			if skipBuildValueFlag(hasEqual, nextArg, hasNext) {
-				i++
-			}
-			continue
-		}
-		if testRunnerBoolFlags[name] {
-			flags = append(flags, formatTestRunnerBool(name, val, hasEqual))
-			continue
-		}
-		if testRunnerValueFlags[name] {
-			formatted, consumed := formatTestRunnerValue(name, val, hasEqual, nextArg, hasNext)
-			if consumed {
-				i++
-			}
-			flags = append(flags, formatted)
-			continue
-		}
-
-		flags = append(flags, arg)
 	}
 	return flags
 }
