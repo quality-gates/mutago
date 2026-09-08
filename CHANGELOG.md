@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- `astutil`: only initialize selector expressions as composite literals if the selector resolves to a type name (#97). Struct field selectors whose underlying types are composite (such as slice, map, array, or struct) are now preserved as ordinary value expressions (e.g. `_ = r.items` instead of `_ = r.items{}`), preventing uncompilable mutants that resulted in false kills.
 - Translate standard test runtime flags to `-test.` prefixed flags when executing compiled test binaries for `--per-test` coverage profiling (#98). Previously flags like `-count=1` or `-failfast` passed via `--test-flags` were forwarded without the mandatory `-test.` prefix, causing the test binary to exit with an error and silently breaking `--per-test` profiling.
 - `expression/recover-clear`: rewrite `recover()` to `func() any { return nil }()` instead of `any(nil)`, preventing invalid Go type conversion compile errors in `defer` and `go` statements that caused unexercised mutations to be falsely reported as killed.
 

@@ -341,6 +341,10 @@ func shouldInitializeSelector(info *types.Info, n *ast.SelectorExpr) bool {
 		return false
 	}
 
+	if _, isType := obj.(*types.TypeName); !isType {
+		return false
+	}
+
 	switch obj.Type().Underlying().(type) {
 	case *types.Array, *types.Map, *types.Slice, *types.Struct:
 		return true
