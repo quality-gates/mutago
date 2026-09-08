@@ -9,6 +9,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -600,5 +601,29 @@ func TestCheckCoveredMsiGate_FloatPrecision(t *testing.T) {
 	}
 	if !checkCoveredMsiGate(reportBelow, 58.0) {
 		t.Fatalf("checkCoveredMsiGate expected to fail for 57%% when min is 58%%")
+	}
+}
+
+func vetArgs(args []string) []string {
+	vets := make([]string, 0, 2)
+	for _, arg := range args {
+		if arg == "-vet" || arg == "--vet" || strings.HasPrefix(arg, "-vet=") || strings.HasPrefix(arg, "--vet=") {
+			vets = append(vets, arg)
+		}
+	}
+	return vets
+}
+
+func TestMutantGoTestArgsDisablesVetByDefault(t *testing.T) {
+	args := mutantGoTestArgs("overlay.json", 60, nil, "", "example")
+	if got := vetArgs(args); len(got) != 1 || got[0] != "-vet=off" {
+		t.Fatalf("expected exactly one -vet argument (-vet=off), got %v in %v", got, args)
+	}
+}
+
+func TestMutantGoTestArgsUserVetWins(t *testing.T) {
+	args := mutantGoTestArgs("overlay.json", 60, []string{"-vet=atomic"}, "", "example")
+	if got := vetArgs(args); len(got) != 1 || got[0] != "-vet=atomic" {
+		t.Fatalf("user -vet must win with exactly one -vet argument, got %v in %v", got, args)
 	}
 }
