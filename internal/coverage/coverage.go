@@ -373,23 +373,134 @@ func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, bina
 	}
 }
 
+var buildOnlyValueFlags = map[string]bool{
+	"tags":     true,
+	"vet":      true,
+	"gcflags":  true,
+	"asmflags": true,
+	"ldflags":  true,
+	"compiler": true,
+	"coverpkg": true,
+	"pkgdir":   true,
+	"mod":      true,
+	"modfile":  true,
+	"overlay":  true,
+	"p":        true,
+	"buildvcs": true,
+}
+
+var buildOnlyBoolFlags = map[string]bool{
+	"race":     true,
+	"trimpath": true,
+	"work":     true,
+}
+
+var testRunnerBoolFlags = map[string]bool{
+	"v":            true,
+	"verbose":      true,
+	"short":        true,
+	"failfast":     true,
+	"benchmem":     true,
+	"fullpath":     true,
+	"paniconexit0": true,
+	"fuzzworker":   true,
+	"artifacts":    true,
+}
+
+var testRunnerValueFlags = map[string]bool{
+	"bench":                true,
+	"benchtime":            true,
+	"blockprofile":         true,
+	"blockprofilerate":     true,
+	"count":                true,
+	"coverprofile":         true,
+	"cpu":                  true,
+	"cpuprofile":           true,
+	"fuzz":                 true,
+	"fuzzcachedir":         true,
+	"fuzzminimizetime":     true,
+	"fuzztime":             true,
+	"gocoverdir":           true,
+	"list":                 true,
+	"memprofile":           true,
+	"memprofilerate":       true,
+	"mutexprofile":         true,
+	"mutexprofilefraction": true,
+	"outputdir":            true,
+	"parallel":             true,
+	"run":                  true,
+	"shuffle":              true,
+	"skip":                 true,
+	"testlogfile":          true,
+	"timeout":              true,
+	"trace":                true,
+}
+
+func formatTestRunnerBool(name, val string, hasEqual bool) string {
+	if name == "verbose" {
+		name = "v"
+	}
+	if hasEqual {
+		return fmt.Sprintf("-test.%s=%s", name, val)
+	}
+	return fmt.Sprintf("-test.%s=true", name)
+}
+
+func formatTestRunnerValue(name, val string, hasEqual bool, nextArg string, hasNext bool) (string, bool) {
+	if hasEqual {
+		return fmt.Sprintf("-test.%s=%s", name, val), false
+	}
+	if hasNext && !strings.HasPrefix(nextArg, "-") {
+		return fmt.Sprintf("-test.%s=%s", name, nextArg), true
+	}
+	return fmt.Sprintf("-test.%s", name), false
+}
+
+func skipBuildValueFlag(hasEqual bool, nextArg string, hasNext bool) bool {
+	return !hasEqual && hasNext && !strings.HasPrefix(nextArg, "-")
+}
+
 func testBinaryFlags(extraTestFlags []string) []string {
 	flags := make([]string, 0, len(extraTestFlags))
-	for _, flag := range extraTestFlags {
-		switch {
-		case flag == "-short" || flag == "--short":
-			flags = append(flags, "-test.short=true")
-		case strings.HasPrefix(flag, "-test."):
-			flags = append(flags, flag)
-		case flag == "-v" || flag == "--verbose":
-			flags = append(flags, "-test.v=true")
-		case strings.HasPrefix(flag, "-race"), strings.HasPrefix(flag, "-tags"),
-			strings.HasPrefix(flag, "-vet"), strings.HasPrefix(flag, "-gcflags"),
-			strings.HasPrefix(flag, "-asmflags"), strings.HasPrefix(flag, "-trimpath"):
-			// Build-only flags were already applied by go test -c.
-		default:
-			flags = append(flags, flag)
+	for i := 0; i < len(extraTestFlags); i++ {
+		arg := extraTestFlags[i]
+		if strings.HasPrefix(arg, "-test.") || strings.HasPrefix(arg, "--test.") || !strings.HasPrefix(arg, "-") {
+			flags = append(flags, arg)
+			continue
 		}
+
+		rawName := strings.TrimPrefix(strings.TrimPrefix(arg, "--"), "-")
+		name, val, hasEqual := strings.Cut(rawName, "=")
+
+		hasNext := i+1 < len(extraTestFlags)
+		var nextArg string
+		if hasNext {
+			nextArg = extraTestFlags[i+1]
+		}
+
+		if buildOnlyBoolFlags[name] {
+			continue
+		}
+		if buildOnlyValueFlags[name] {
+			if skipBuildValueFlag(hasEqual, nextArg, hasNext) {
+				i++
+			}
+			continue
+		}
+		if testRunnerBoolFlags[name] {
+			flags = append(flags, formatTestRunnerBool(name, val, hasEqual))
+			continue
+		}
+		if testRunnerValueFlags[name] {
+			formatted, consumed := formatTestRunnerValue(name, val, hasEqual, nextArg, hasNext)
+			if consumed {
+				i++
+			}
+			flags = append(flags, formatted)
+			continue
+		}
+
+		flags = append(flags, arg)
 	}
 	return flags
 }
