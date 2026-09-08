@@ -11,14 +11,14 @@ func init() {
 	mutator.Register("expression/recover-clear", MutatorRecoverClear)
 }
 
-// MutatorRecoverClear neutralises a recover() call by turning it into a typed
-// nil:
+// MutatorRecoverClear neutralises a recover() call by turning it into a function
+// call returning nil:
 //
-//	if r := recover(); r != nil { ... }  →  if r := any(nil); r != nil { ... }
+//	if r := recover(); r != nil { ... }  →  if r := func() any { return nil }(); r != nil { ... }
 //
-// recover() returns any, and so does any(nil), so the rewrite type-checks in
-// every context recover() can appear in (assignment, comparison, bare call).
-// The difference is behavioural: the recovered value is always nil, so the
+// recover() returns any, and so does func() any { return nil }(), so the rewrite
+// compiles in every context recover() can appear in (defer, go, assignment, comparison,
+// bare call). The difference is behavioural: the recovered value is always nil, so the
 // guarded recovery branch never runs and a panic propagates instead of being
 // swallowed. Deferred recover blocks are classic untested defensive code —
 // generated "just in case" and never exercised. If this mutant survives, the
@@ -39,8 +39,25 @@ func MutatorRecoverClear(_ *types.Package, _ *types.Info, node ast.Node) []mutat
 		{
 			Position: call.Pos(),
 			Change: func() {
-				call.Fun = ast.NewIdent("any")
-				call.Args = []ast.Expr{ast.NewIdent("nil")}
+				call.Fun = &ast.FuncLit{
+					Type: &ast.FuncType{
+						Func:   call.Fun.Pos(),
+						Params: &ast.FieldList{},
+						Results: &ast.FieldList{
+							List: []*ast.Field{
+								{Type: ast.NewIdent("any")},
+							},
+						},
+					},
+					Body: &ast.BlockStmt{
+						List: []ast.Stmt{
+							&ast.ReturnStmt{
+								Results: []ast.Expr{ast.NewIdent("nil")},
+							},
+						},
+					},
+				}
+				call.Args = nil
 			},
 			Reset: func() {
 				call.Fun = originalFun

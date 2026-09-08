@@ -764,11 +764,11 @@ Downgrades the error-wrapping verb in `Errorf`-style calls from `%w` to `%v`. Th
 | ErrorfWrap | `fmt.Errorf("load: %w", err)` | `fmt.Errorf("load: %v", err)` |
 
 #### expression/recover-clear
-Neutralises a `recover()` call by turning it into `any(nil)`. Because both expressions have type `any`, the rewrite type-checks in every context, but the recovered value is always nil, so the guarded recovery branch never runs and a panic propagates. Finds deferred recovery blocks that no test exercises.
+Neutralises a `recover()` call by rewriting it to `func() any { return nil }()`. Because both expressions have type `any` and an immediately invoked function call is valid in statement, defer, and expression contexts, the rewrite compiles cleanly everywhere while ensuring the recovered value is always nil. The guarded recovery branch never runs and a panic propagates. Finds deferred recovery blocks that no test exercises.
 
-| Name         | Original                      | Mutated                      |
-| :----------- | :---------------------------- | :--------------------------- |
-| RecoverClear | `if r := recover(); r != nil` | `if r := any(nil); r != nil` |
+| Name         | Original                      | Mutated                                          |
+| :----------- | :---------------------------- | :----------------------------------------------- |
+| RecoverClear | `if r := recover(); r != nil` | `if r := func() any { return nil }(); r != nil` |
 
 #### expression/string-literal
 Replaces non-empty string literals in `==` and `!=` comparisons with `""`. Finds code that compares against a specific string value that tests never assert on — e.g. `if err.Error() == "not found"` where an empty-string match would still pass.

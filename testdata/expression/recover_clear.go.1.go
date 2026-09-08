@@ -16,12 +16,17 @@ func guarded() {
 
 func bare() {
 	defer func() {
-		_ = any(nil)
+		_ = func() any { return nil }()
 	}()
 	panic("boom")
+}
+
+func direct() {
+	defer recover()
 }
 
 func main() {
 	guarded()
 	bare()
+	direct()
 }
