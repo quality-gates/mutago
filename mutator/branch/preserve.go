@@ -36,7 +36,7 @@ func mutateBranchBody(pkg *types.Package, info *types.Info, node ast.Node, old [
 
 func terminatingReturn(pkg *types.Package, info *types.Info, node ast.Node, empty, restore func()) (ast.Stmt, bool) {
 	body, sig := astutil.EnclosingFunc(info, node.Pos())
-	if body == nil || sig == nil || sig.Results().Len() == 0 {
+	if !hasResults(sig) {
 		return nil, false
 	}
 	empty()
@@ -52,22 +52,17 @@ func terminatingReturn(pkg *types.Package, info *types.Info, node ast.Node, empt
 	return ret, false
 }
 
+func hasResults(sig *types.Signature) bool {
+	return sig != nil && sig.Results().Len() > 0
+}
+
 func noopWithReturn(pkg *types.Package, info *types.Info, old []ast.Stmt, ret ast.Stmt, pos token.Pos) []ast.Stmt {
 	noop := astutil.CreateNoopOfStatements(pkg, info, old)
 	if ret == nil {
 		return []ast.Stmt{noop}
 	}
-	anchorReturn(ret, pos)
-	if _, empty := noop.(*ast.EmptyStmt); empty {
-		return []ast.Stmt{ret}
+	if rs, ok := ret.(*ast.ReturnStmt); ok {
+		rs.Return = pos
 	}
 	return []ast.Stmt{noop, ret}
-}
-
-func anchorReturn(ret ast.Stmt, pos token.Pos) {
-	rs, ok := ret.(*ast.ReturnStmt)
-	if !ok || !pos.IsValid() {
-		return
-	}
-	rs.Return = pos
 }

@@ -103,6 +103,16 @@ func mutate(enabled bool, outer int) {
 	}
 }
 
+func TestMutatorIfWithEmptyInfoStillMutates(t *testing.T) {
+	node := &ast.IfStmt{
+		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: ast.NewIdent("x")}}},
+	}
+	got := MutatorIf(nil, &types.Info{}, node)
+	if len(got) != 1 {
+		t.Fatalf("got %d mutations, want 1", len(got))
+	}
+}
+
 func TestBranchMutatorsSkipEmptyBodies(t *testing.T) {
 	tests := []struct {
 		name    string
