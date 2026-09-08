@@ -1956,11 +1956,11 @@
 </table>
 <h2 id="branch">Branch<a class="headerlink" href="#branch" title="Permanent link">&para;</a></h2>
 <h3 id="branchcase">branch/case<a class="headerlink" href="#branchcase" title="Permanent link">&para;</a></h3>
-<p>Empties <code>case</code> bodies in <code>switch</code> statements.</p>
+<p>Empties <code>case</code> bodies in <code>switch</code> statements. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value <code>return</code> so it still compiles.</p>
 <h3 id="branchif">branch/if<a class="headerlink" href="#branchif" title="Permanent link">&para;</a></h3>
-<p>Empties the body of <code>if</code> and <code>else if</code> branches.</p>
+<p>Empties the body of <code>if</code> and <code>else if</code> branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value <code>return</code> so it still compiles.</p>
 <h3 id="branchelse">branch/else<a class="headerlink" href="#branchelse" title="Permanent link">&para;</a></h3>
-<p>Empties the body of <code>else</code> branches.</p>
+<p>Empties the body of <code>else</code> branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value <code>return</code> so it still compiles.</p>
 <h2 id="expression">Expression<a class="headerlink" href="#expression" title="Permanent link">&para;</a></h2>
 <h3 id="expressioncomparison">expression/comparison<a class="headerlink" href="#expressioncomparison" title="Permanent link">&para;</a></h3>
 <p>Shifts comparison operators by one step — <code>&gt;</code> becomes <code>&gt;=</code>, <code>&gt;=</code> becomes <code>&gt;</code>. Catches off-by-one boundary errors.</p>
