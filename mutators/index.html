@@ -1878,7 +1878,7 @@
 </table>
 <h2 id="composite">Composite<a class="headerlink" href="#composite" title="Permanent link">&para;</a></h2>
 <h3 id="compositefield-clear">composite/field-clear<a class="headerlink" href="#compositefield-clear" title="Permanent link">&para;</a></h3>
-<p>Drops one keyed field from a composite literal (struct, map, or keyed array/slice literal), letting it fall back to its zero value. Targets fields set to a meaningful value that no test asserts — e.g. a config or options struct populated in full where only a couple of fields matter to the suite. Fields already at a zero value (<code>0</code>, <code>""</code>, <code>false</code>, <code>nil</code>) and positional elements are skipped.</p>
+<p>Drops one keyed field from a composite literal (struct, map, or keyed array/slice literal), letting it fall back to its zero value. Targets fields set to a meaningful value that no test asserts — e.g. a config or options struct populated in full where only a couple of fields matter to the suite. Fields already at a zero value (<code>0</code>, <code>""</code>, <code>false</code>, <code>nil</code>), positional elements, and fields whose removal would leave a local variable or import unused are skipped.</p>
 <table>
 <thead>
 <tr>
@@ -1967,7 +1967,7 @@
 <h3 id="expressionlogical">expression/logical<a class="headerlink" href="#expressionlogical" title="Permanent link">&para;</a></h3>
 <p>Swaps <code>&amp;&amp;</code> and <code>||</code> operators.</p>
 <h3 id="expressionremove">expression/remove<a class="headerlink" href="#expressionremove" title="Permanent link">&para;</a></h3>
-<p>Makes each operand of <code>&amp;&amp;</code> and <code>||</code> irrelevant by replacing it with <code>true</code> or <code>false</code>.</p>
+<p>Makes each operand of <code>&amp;&amp;</code> and <code>||</code> irrelevant by replacing it with <code>true</code> or <code>false</code>. Operands whose removal would leave a local variable or import unused are skipped to avoid uncompilable mutants.</p>
 <h3 id="expressioncontext-nil">expression/context-nil<a class="headerlink" href="#expressioncontext-nil" title="Permanent link">&para;</a></h3>
 <p>Replaces <code>context.Context</code> arguments at call sites with <code>nil</code>. Finds code paths that silently accept a nil context instead of propagating a real one.</p>
 <table>
@@ -1985,7 +1985,7 @@
 </tbody>
 </table>
 <h3 id="expressionerror-guard">expression/error-guard<a class="headerlink" href="#expressionerror-guard" title="Permanent link">&para;</a></h3>
-<p>Replaces the condition of <code>if err != nil</code> / <code>if err == nil</code> guards with a boolean constant. Finds error-handling branches that tests never enter.</p>
+<p>Replaces the condition of <code>if err != nil</code> / <code>if err == nil</code> guards with a boolean constant. Finds error-handling branches that tests never enter. Error guards whose condition is the only use of the error variable or import are skipped to avoid uncompilable mutants.</p>
 <table>
 <thead>
 <tr>
@@ -2058,7 +2058,7 @@
 <h3 id="statementremove-self-assign">statement/remove-self-assign<a class="headerlink" href="#statementremove-self-assign" title="Permanent link">&para;</a></h3>
 <p>Removes self-assignment statements (<code>a = a</code>). These are typically dead code; this mutator confirms tests don't accidentally rely on them.</p>
 <h3 id="statementreturn">statement/return<a class="headerlink" href="#statementreturn" title="Permanent link">&para;</a></h3>
-<p>Replaces each return value with the zero value for its type (<code>false</code> for bool, <code>0</code> for int, <code>""</code> for string, <code>nil</code> for pointers and interfaces). Uses <code>go/types</code> for type resolution. Finds functions whose return values tests never validate.</p>
+<p>Replaces each return value with the zero value for its type (<code>false</code> for bool, <code>0</code> for int, <code>""</code> for string, <code>nil</code> for pointers and interfaces). Uses <code>go/types</code> for type resolution. When zeroing a return value whose only use was a local variable, emits a preceding <code>_ = x</code> assignment to keep the variable used and ensure the mutant compiles. Skips mutations that would leave an imported package unused. Finds functions whose return values tests never validate.</p>
 <h3 id="statementdefer-remove">statement/defer-remove<a class="headerlink" href="#statementdefer-remove" title="Permanent link">&para;</a></h3>
 <p>Removes the <code>defer</code> keyword, turning deferred calls into immediate calls. Tests whether the timing of cleanup matters — e.g. mutex unlocks and file closes that must happen after the function body, not during it.</p>
 <table>
