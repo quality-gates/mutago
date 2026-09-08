@@ -373,21 +373,112 @@ func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, bina
 	}
 }
 
+func isBuildFlag(name string) bool {
+	switch name {
+	case "race", "trimpath", "tags", "vet", "gcflags", "asmflags":
+		return true
+	default:
+		return false
+	}
+}
+
+func isBuildValue(name string) bool {
+	switch name {
+	case "tags", "vet", "gcflags", "asmflags":
+		return true
+	default:
+		return false
+	}
+}
+
+func isRunnerBool(name string) bool {
+	switch name {
+	case "v", "verbose", "short", "failfast":
+		return true
+	default:
+		return false
+	}
+}
+
+func isRunnerValue(name string) bool {
+	switch name {
+	case "count", "parallel", "shuffle", "cpu", "timeout", "run", "bench", "skip":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasNextValue(args []string, i int) bool {
+	if i+1 >= len(args) {
+		return false
+	}
+	if strings.HasPrefix(args[i+1], "-") {
+		return false
+	}
+	return true
+}
+
+func formatRunnerBool(name, val string, hasEqual bool) string {
+	if name == "verbose" {
+		name = "v"
+	}
+	if hasEqual {
+		return fmt.Sprintf("-test.%s=%s", name, val)
+	}
+	return fmt.Sprintf("-test.%s=true", name)
+}
+
+func formatRunnerValue(args []string, i int, name, val string, hasEqual bool) (int, string, bool) {
+	if hasEqual {
+		return 0, fmt.Sprintf("-test.%s=%s", name, val), true
+	}
+	if hasNextValue(args, i) {
+		return 1, fmt.Sprintf("-test.%s=%s", name, args[i+1]), true
+	}
+	return 0, fmt.Sprintf("-test.%s", name), true
+}
+
+func skipBuildFlag(args []string, i int, name string, hasEqual bool) int {
+	if hasEqual {
+		return 0
+	}
+	if !isBuildValue(name) {
+		return 0
+	}
+	if hasNextValue(args, i) {
+		return 1
+	}
+	return 0
+}
+
+func translateFlag(args []string, i int) (int, string, bool) {
+	arg := args[i]
+	if !strings.HasPrefix(arg, "-") {
+		return 0, arg, true
+	}
+
+	raw := strings.TrimPrefix(strings.TrimPrefix(arg, "--"), "-")
+	name, val, hasEqual := strings.Cut(raw, "=")
+
+	if isBuildFlag(name) {
+		return skipBuildFlag(args, i, name, hasEqual), "", false
+	}
+	if isRunnerBool(name) {
+		return 0, formatRunnerBool(name, val, hasEqual), true
+	}
+	if isRunnerValue(name) {
+		return formatRunnerValue(args, i, name, val, hasEqual)
+	}
+	return 0, arg, true
+}
+
 func testBinaryFlags(extraTestFlags []string) []string {
 	flags := make([]string, 0, len(extraTestFlags))
-	for _, flag := range extraTestFlags {
-		switch {
-		case flag == "-short" || flag == "--short":
-			flags = append(flags, "-test.short=true")
-		case strings.HasPrefix(flag, "-test."):
-			flags = append(flags, flag)
-		case flag == "-v" || flag == "--verbose":
-			flags = append(flags, "-test.v=true")
-		case strings.HasPrefix(flag, "-race"), strings.HasPrefix(flag, "-tags"),
-			strings.HasPrefix(flag, "-vet"), strings.HasPrefix(flag, "-gcflags"),
-			strings.HasPrefix(flag, "-asmflags"), strings.HasPrefix(flag, "-trimpath"):
-			// Build-only flags were already applied by go test -c.
-		default:
+	for i := 0; i < len(extraTestFlags); i++ {
+		advance, flag, keep := translateFlag(extraTestFlags, i)
+		i += advance
+		if keep {
 			flags = append(flags, flag)
 		}
 	}

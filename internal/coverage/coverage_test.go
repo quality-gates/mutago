@@ -416,6 +416,29 @@ func TestBuildPerTestProfile_RealPackage(t *testing.T) {
 	}
 }
 
+func TestBuildPerTestProfile_CountFlagSupported(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow: runs per-test coverage profiling")
+	}
+	tmp := t.TempDir()
+	prof, err := BuildPerTestProfile(
+		"github.com/quality-gates/mutago/v2/mutator/arithmetic",
+		"github.com/quality-gates/mutago/v2",
+		tmp, 30, 1, []string{"-count=1"},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, prof)
+
+	var found bool
+	for l := 1; l <= 100; l++ {
+		if len(prof.CoveringTests("/abs/mutator/arithmetic/assignment.go", l)) > 0 {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "profile should contain covering tests even when -count=1 is passed in extraTestFlags")
+}
+
 func TestBuildPerTestProfile_EmptyPackage(t *testing.T) {
 	// A package with no tests returns nil, nil.
 	tmp := t.TempDir()
@@ -477,7 +500,21 @@ func TestTestBinaryFlags(t *testing.T) {
 		"-test.count=2",
 		"-test.v=true",
 		"-test.v=true",
-		"-count=3",
+		"-test.count=3",
+		"-test.count=4",
+		"-test.count=5",
+		"-test.failfast=true",
+		"-test.failfast=true",
+		"-test.parallel=4",
+		"-test.parallel=8",
+		"-test.shuffle=on",
+		"-test.shuffle=123",
+		"-test.cpu=1,2",
+		"-test.cpu=4",
+		"-test.timeout=10s",
+		"-test.timeout=20s",
+		"-custom-flag",
+		"-custom=value",
 	}, testBinaryFlags([]string{
 		"-short",
 		"--short",
@@ -485,12 +522,81 @@ func TestTestBinaryFlags(t *testing.T) {
 		"-v",
 		"--verbose",
 		"-race",
+		"--race",
 		"-tags=integration",
+		"-tags", "unit",
 		"-vet=off",
+		"-vet", "all",
 		"-gcflags=all=-N",
+		"-gcflags", "all=-l",
 		"-asmflags=all=-trimpath=/tmp",
+		"-asmflags", "all=-trimpath=/var",
 		"-trimpath",
+		"--trimpath",
 		"-count=3",
+		"-count", "4",
+		"--count=5",
+		"-failfast",
+		"--failfast",
+		"-parallel=4",
+		"-parallel", "8",
+		"-shuffle=on",
+		"-shuffle", "123",
+		"-cpu=1,2",
+		"-cpu", "4",
+		"-timeout=10s",
+		"-timeout", "20s",
+		"-custom-flag",
+		"-custom=value",
+	}))
+
+	// Boolean flags with explicit values.
+	assert.Equal(t, []string{
+		"-test.short=false",
+		"-test.v=false",
+		"-test.failfast=false",
+	}, testBinaryFlags([]string{
+		"-short=false",
+		"--verbose=false",
+		"-failfast=false",
+	}))
+
+	// Value flags without following value or followed by another flag.
+	assert.Equal(t, []string{
+		"-test.count",
+	}, testBinaryFlags([]string{
+		"-count",
+	}))
+	assert.Equal(t, []string{
+		"-test.count",
+		"-test.failfast=true",
+	}, testBinaryFlags([]string{
+		"-count",
+		"-failfast",
+	}))
+
+	// Build flag at end of args without value.
+	assert.Equal(t, []string{}, testBinaryFlags([]string{
+		"-tags",
+	}))
+
+	// Preserving --test. flags and non-flag tokens (including tokens matching flag names).
+	assert.Equal(t, []string{
+		"--test.count=2",
+		"--test.v",
+		"positional",
+		"race",
+		"-test.run=TestFoo",
+		"-test.bench=BenchmarkBar",
+		"-test.skip=TestBaz",
+	}, testBinaryFlags([]string{
+		"--test.count=2",
+		"--test.v",
+		"positional",
+		"race",
+		"-run", "TestFoo",
+		"-bench=BenchmarkBar",
+		"-skip", "TestBaz",
 	}))
 }
 
