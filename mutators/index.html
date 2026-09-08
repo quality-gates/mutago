@@ -2021,7 +2021,7 @@
 </tbody>
 </table>
 <h3 id="expressionrecover-clear">expression/recover-clear<a class="headerlink" href="#expressionrecover-clear" title="Permanent link">&para;</a></h3>
-<p>Neutralises a <code>recover()</code> call by rewriting it to <code>any(nil)</code>. The recovered value is always nil, so the recovery branch never runs and a panic propagates. Finds deferred recovery blocks that no test exercises.</p>
+<p>Neutralises a <code>recover()</code> call by rewriting it to <code>func() any { return nil }()</code>. The recovered value is always nil, so the recovery branch never runs and a panic propagates. Finds deferred recovery blocks that no test exercises.</p>
 <table>
 <thead>
 <tr>
@@ -2032,7 +2032,7 @@
 <tbody>
 <tr>
 <td style="text-align: left;"><code>if r := recover(); r != nil</code></td>
-<td style="text-align: left;"><code>if r := any(nil); r != nil</code></td>
+<td style="text-align: left;"><code>if r := func() any { return nil }(); r != nil</code></td>
 </tr>
 </tbody>
 </table>
