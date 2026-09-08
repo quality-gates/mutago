@@ -1441,6 +1441,33 @@ func prepareOverlay(file, mutationFile string) (string, int) {
 	return overlayName, 0
 }
 
+// mutantGoTestArgs assembles the `go test` argument list for a mutant run.
+// Mutants are not meant to be lint-clean, so `go vet` is disabled by default
+// (see #106): `go test` runs a vet subset that exits 1 on any diagnostic, and
+// mapTestExitToResult would count such a mutant as KILLED even though no test
+// failed. An explicit -vet in the user's extra test flags wins.
+func mutantGoTestArgs(overlayName string, timeoutSeconds uint, extraTestFlags []string, runFilter, pkgName string) []string {
+	args := []string{"test", "-overlay=" + overlayName, "-timeout", fmt.Sprintf("%ds", timeoutSeconds)}
+	args = append(args, extraTestFlags...)
+	if !hasVetFlag(extraTestFlags) {
+		args = append(args, "-vet=off")
+	}
+	if runFilter != "" {
+		args = append(args, "-run", runFilter)
+	}
+	args = append(args, pkgName)
+	return args
+}
+
+func hasVetFlag(testFlags []string) bool {
+	for _, flag := range testFlags {
+		if flag == "-vet" || flag == "--vet" || strings.HasPrefix(flag, "-vet=") || strings.HasPrefix(flag, "--vet=") {
+			return true
+		}
+	}
+	return false
+}
+
 func runGoTest(opts *models.Options, pkg *types.Package, overlayName string, perTestProf *coverage.PerTestProfile, absFile string, startLine int, extraTestFlags []string) int {
 	pkgName := pkg.Path()
 	if opts.Test.Recursive {
@@ -1449,14 +1476,7 @@ func runGoTest(opts *models.Options, pkg *types.Package, overlayName string, per
 
 	runFilter := perTestRunFilter(perTestProf, absFile, startLine)
 
-	goTestArgs := []string{"test", "-overlay=" + overlayName, "-timeout", fmt.Sprintf("%ds", opts.Exec.Timeout)}
-	goTestArgs = append(goTestArgs, extraTestFlags...)
-	if runFilter != "" {
-		goTestArgs = append(goTestArgs, "-run", runFilter)
-	}
-	goTestArgs = append(goTestArgs, pkgName)
-
-	goTestCmd := exec.Command("go", goTestArgs...)
+	goTestCmd := exec.Command("go", mutantGoTestArgs(overlayName, opts.Exec.Timeout, extraTestFlags, runFilter, pkgName)...)
 	goTestCmd.Env = os.Environ()
 	test, err := goTestCmd.CombinedOutput()
 

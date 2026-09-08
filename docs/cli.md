@@ -55,6 +55,10 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | `--per-test` | Build a per-test coverage map and run only the tests that cover each mutation. Best for packages with slow tests. Pairs well with `--coverage`. |
 | `--test-flags` | Extra flags passed to every `go test` call (e.g. `--test-flags=-short`). Use the `=` form for values starting with a dash. Adaptive timeout preserves a positive `-count=N`, adds `-count=1` when absent, and rejects `-count=0`. Ignored when `--exec` is set. |
 
+## Vet
+
+Mutant test runs pass `-vet=off` to `go test` by default. A mutant is not meant to be lint-clean, and a `go vet` diagnostic on mutated code would fail the run and be miscounted as KILLED. Pass your own `-vet` via `--test-flags` to re-enable it (e.g. `--test-flags=-vet=all`); your flag wins and no duplicate is added. The baseline pre-flight and coverage runs execute the original, unmutated code, so vet stays on there.
+
 ## Filtering
 
 | Flag | Description |

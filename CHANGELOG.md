@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - `astutil`: only initialize selector expressions as composite literals if the selector resolves to a type name (#97). Struct field selectors whose underlying types are composite (such as slice, map, array, or struct) are now preserved as ordinary value expressions (e.g. `_ = r.items` instead of `_ = r.items{}`), preventing uncompilable mutants that resulted in false kills.
 - Translate standard test runtime flags to `-test.` prefixed flags when executing compiled test binaries for `--per-test` coverage profiling (#98). Previously flags like `-count=1` or `-failfast` passed via `--test-flags` were forwarded without the mandatory `-test.` prefix, causing the test binary to exit with an error and silently breaking `--per-test` profiling.
 - `expression/recover-clear`: rewrite `recover()` to `func() any { return nil }()` instead of `any(nil)`, preventing invalid Go type conversion compile errors in `defer` and `go` statements that caused unexercised mutations to be falsely reported as killed.
+- Mutant test runs now pass `-vet=off` to `go test` by default (#106). `go test` runs a `go vet` subset that exits 1 on any diagnostic, so a mutant that merely tripped vet (such as `expression/logical` producing a suspect `&&`) was reported as KILLED even though no test failed. Pass `-vet` via `--test-flags` to re-enable it; the baseline pre-flight and coverage runs (original code) still run vet.
 
 ## [v2.10.0] — 2026-09-06
 

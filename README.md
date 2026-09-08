@@ -101,6 +101,7 @@ Beyond finding escaped mutants, mutago can enforce quality gates in CI — faili
 | Compact stats JSON for badges/dashboards | `--logger-summary-json` |
 | Per-mutator allowlist / denylist in config | `enable_mutators`, `disable_mutators` |
 | Extra flags for every `go test` call | `--test-flags` |
+| Vet disabled for mutant runs (`-vet=off`) | `--test-flags=-vet=all` to re-enable |
 | Fine-grained output filter | `--output-statuses` |
 | Quiet mode — suppress killed/skip noise | `--quiet` |
 | Suppress diff output | `--no-diffs` |
@@ -180,7 +181,7 @@ mutago parse.go example/ github.com/quality-gates/mutago/v2/mutator/...
 Every mutation has to be tested using an [exec command](#write-mutation-exec-commands). By default the built-in exec command is used, which tests a mutation using the following steps:
 
 - Replace the original file with the mutation.
-- Execute all tests of the package of the mutated file.
+- Execute all tests of the package of the mutated file, with `go vet` disabled (`-vet=off`) so a vet diagnostic on mutated code is not miscounted as a kill. Pass your own `-vet` via `--test-flags` to re-enable it.
 - Report if the mutation was killed.
 
 Alternatively the `--exec` argument can be used to invoke an external exec command. The [/scripts/exec](/scripts/exec) directory holds basic exec commands for Go projects. The [test-mutated-package.sh](/scripts/exec/test-mutated-package.sh) script implements all steps and almost all features of the built-in exec command. It can be for example used to test the [github.com/quality-gates/mutago/v2/example](/example) package.
