@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/types"
 
-	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -21,21 +20,7 @@ func MutatorCase(pkg *types.Package, info *types.Info, node ast.Node) []mutator.
 	if len(n.Body) == 0 {
 		return nil
 	}
-
-	old := n.Body
-	position := statementPosition(n.Body[0])
-
-	return []mutator.Mutation{
-		{
-			Position: position,
-			Change: func() {
-				n.Body = []ast.Stmt{
-					astutil.CreateNoopOfStatements(pkg, info, n.Body),
-				}
-			},
-			Reset: func() {
-				n.Body = old
-			},
-		},
-	}
+	return mutateBranchBody(pkg, info, n, n.Body, func(stmts []ast.Stmt) {
+		n.Body = stmts
+	}, statementPosition(n.Body[0]))
 }

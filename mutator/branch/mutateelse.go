@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/types"
 
-	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -18,23 +17,11 @@ func MutatorElse(pkg *types.Package, info *types.Info, node ast.Node) []mutator.
 	if !ok {
 		return nil
 	}
-	// We ignore else ifs, nil blocks, and already-empty else bodies.
 	block, ok := n.Else.(*ast.BlockStmt)
-	if !ok || len(block.List) == 0 {
+	if !ok {
 		return nil
 	}
-
-	old := n.Else
-
-	return []mutator.Mutation{
-		{
-			Position: statementPosition(old),
-			Change: func() {
-				n.Else = astutil.CreateNoopOfStatement(pkg, info, old)
-			},
-			Reset: func() {
-				n.Else = old
-			},
-		},
-	}
+	return mutateBranchBody(pkg, info, n, block.List, func(stmts []ast.Stmt) {
+		block.List = stmts
+	}, statementPosition(block))
 }

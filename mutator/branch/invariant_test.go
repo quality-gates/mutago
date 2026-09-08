@@ -138,6 +138,238 @@ func TestBranchMutatorsSkipEmptyBodies(t *testing.T) {
 	}
 }
 
+func TestBranchMutatorsTerminatingBranchesCompile(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutator mutator.Mutator
+		source  string
+	}{
+		{
+			name:    "if",
+			mutator: MutatorIf,
+			source: `package example
+
+func IfElse(c bool) int {
+	if c {
+		return 1
+	} else {
+		return 2
+	}
+}
+`,
+		},
+		{
+			name:    "else",
+			mutator: MutatorElse,
+			source: `package example
+
+func IfElse(c bool) int {
+	if c {
+		return 1
+	} else {
+		return 2
+	}
+}
+`,
+		},
+		{
+			name:    "case",
+			mutator: MutatorCase,
+			source: `package example
+
+func Switch(n int) string {
+	switch n {
+	case 1:
+		return "one"
+	default:
+		return "other"
+	}
+}
+`,
+		},
+		{
+			name:    "if named results",
+			mutator: MutatorIf,
+			source: `package example
+
+func Named(c bool) (n int) {
+	if c {
+		return 1
+	} else {
+		return 2
+	}
+}
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fset, file, pkg, info := parseBranchSource(t, tt.source)
+			var mutations []mutator.Mutation
+			ast.Inspect(file, func(node ast.Node) bool {
+				mutations = append(mutations, tt.mutator(pkg, info, node)...)
+				return true
+			})
+			if len(mutations) == 0 {
+				t.Fatal("mutator produced no mutations")
+			}
+			for i, mutation := range mutations {
+				mutation.Change()
+				mutated := printBranchSource(t, fset, file)
+				mutation.Reset()
+				if err := typeCheckSource(t, mutated); err != nil {
+					t.Errorf("mutation %d does not compile:\n%s\n%v", i, mutated, err)
+				}
+			}
+		})
+	}
+}
+
+func TestBranchMutatorsLeaveNonTerminatingAndNoResultBodiesUnchanged(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutator mutator.Mutator
+		source  string
+	}{
+		{
+			name:    "if without results",
+			mutator: MutatorIf,
+			source: `package example
+
+func NoResult(c bool) {
+	if c {
+		sink = 1
+	} else {
+		sink = 2
+	}
+}
+
+var sink int
+`,
+		},
+		{
+			name:    "else without results",
+			mutator: MutatorElse,
+			source: `package example
+
+func NoResult(c bool) {
+	if c {
+		sink = 1
+	} else {
+		sink = 2
+	}
+}
+
+var sink int
+`,
+		},
+		{
+			name:    "case without results",
+			mutator: MutatorCase,
+			source: `package example
+
+func NoResult(n int) {
+	switch n {
+	case 1:
+		sink = 1
+	default:
+		sink = 2
+	}
+}
+
+var sink int
+`,
+		},
+		{
+			name:    "if non-terminating",
+			mutator: MutatorIf,
+			source: `package example
+
+func NonTerm(c bool) int {
+	if c {
+		sink = 1
+	}
+	return 2
+}
+
+var sink int
+`,
+		},
+		{
+			name:    "else non-terminating",
+			mutator: MutatorElse,
+			source: `package example
+
+func NonTerm(c bool) int {
+	if c {
+		sink = 1
+	} else {
+		sink = 2
+	}
+	return 3
+}
+
+var sink int
+`,
+		},
+		{
+			name:    "case non-terminating",
+			mutator: MutatorCase,
+			source: `package example
+
+func NonTerm(n int) int {
+	switch n {
+	case 1:
+		sink = 1
+	default:
+		sink = 2
+	}
+	return 3
+}
+
+var sink int
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fset, file, pkg, info := parseBranchSource(t, tt.source)
+			var mutations []mutator.Mutation
+			ast.Inspect(file, func(node ast.Node) bool {
+				mutations = append(mutations, tt.mutator(pkg, info, node)...)
+				return true
+			})
+			if len(mutations) == 0 {
+				t.Fatal("mutator produced no mutations")
+			}
+			for i, mutation := range mutations {
+				mutation.Change()
+				mutated := printBranchSource(t, fset, file)
+				mutation.Reset()
+				if strings.Count(mutated, "return") != strings.Count(tt.source, "return") {
+					t.Errorf("mutation %d added or removed a return:\n%s", i, mutated)
+				}
+				if err := typeCheckSource(t, mutated); err != nil {
+					t.Errorf("mutation %d does not compile:\n%s\n%v", i, mutated, err)
+				}
+			}
+		})
+	}
+}
+
+func typeCheckSource(t *testing.T, source string) error {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "example.go", source, 0)
+	if err != nil {
+		return err
+	}
+	_, err = (&types.Config{Importer: importer.Default()}).Check("example", fset, []*ast.File{file}, nil)
+	return err
+}
+
 func BenchmarkNestedIfMutationAnalysis(b *testing.B) {
 	var statement ast.Stmt = &ast.ExprStmt{X: ast.NewIdent("external")}
 	for range 500 {

@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/types"
 
-	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -18,23 +17,7 @@ func MutatorIf(pkg *types.Package, info *types.Info, node ast.Node) []mutator.Mu
 	if !ok {
 		return nil
 	}
-	if len(n.Body.List) == 0 {
-		return nil
-	}
-
-	old := n.Body.List
-
-	return []mutator.Mutation{
-		{
-			Position: statementPosition(n.Body),
-			Change: func() {
-				n.Body.List = []ast.Stmt{
-					astutil.CreateNoopOfStatement(pkg, info, n.Body),
-				}
-			},
-			Reset: func() {
-				n.Body.List = old
-			},
-		},
-	}
+	return mutateBranchBody(pkg, info, n, n.Body.List, func(stmts []ast.Stmt) {
+		n.Body.List = stmts
+	}, statementPosition(n.Body))
 }
