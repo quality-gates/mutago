@@ -136,13 +136,13 @@ Removes the `!` operator from negated conditions in `if`, `for`, and `&&`/`||` e
 ## Branch
 
 ### branch/case
-Empties `case` bodies in `switch` statements.
+Empties `case` bodies in `switch` statements. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles.
 
 ### branch/if
-Empties the body of `if` and `else if` branches.
+Empties the body of `if` and `else if` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles.
 
 ### branch/else
-Empties the body of `else` branches.
+Empties the body of `else` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles.
 
 ## Expression
 

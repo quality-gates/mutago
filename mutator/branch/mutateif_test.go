@@ -16,6 +16,15 @@ func TestMutatorIf(t *testing.T) {
 	)
 }
 
+func TestMutatorIfTerminating(t *testing.T) {
+	test.Mutator(
+		t,
+		MutatorIf,
+		"../../testdata/branch/mutateif_terminating.go",
+		1,
+	)
+}
+
 func TestMutatorIfRegistered(t *testing.T) {
 	if _, err := mutator.New("branch/if"); err != nil {
 		t.Fatalf("mutator not registered: %v", err)

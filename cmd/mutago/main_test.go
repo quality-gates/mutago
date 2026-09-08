@@ -680,6 +680,40 @@ func TestUnrelated(t *testing.T) {
 	assert.NotContains(t, out, "KILLED")
 }
 
+func TestMainTerminatingBranchMutantsCompileAndDoNotFalseKill(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/term\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), `enable_mutators:
+  - branch/if
+  - branch/else
+  - branch/case
+`)
+	writeFixtureFile(t, filepath.Join(root, "t.go"), `package term
+
+func IfElse(c bool) int {
+	if c {
+		return 1
+	} else {
+		return 2
+	}
+}
+
+func Switch(n int) string {
+	switch n {
+	case 1:
+		return "one"
+	default:
+		return "other"
+	}
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "t_test.go"), "package term\n")
+
+	out := testMain(t, root, []string{"--config", filepath.Join(root, "mutago.yml"), "--exec-timeout", "5"}, returnOk, "mutation score")
+	assert.Contains(t, out, "ESCAPED")
+	assert.NotContains(t, out, "KILLED")
+}
+
 func testMain(t *testing.T, root string, exec []string, expectedExitCode int, contains string) string {
 	// Clear the parser cache so each test loads files fresh from disk.
 	// Without this, TestMainMatch's exec script (which writes to the original
