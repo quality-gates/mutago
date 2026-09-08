@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `expression/recover-clear`: rewrite `recover()` to `func() any { return nil }()` instead of `any(nil)`, preventing invalid Go type conversion compile errors in `defer` and `go` statements that caused unexercised mutations to be falsely reported as killed.
+
 ## [v2.10.0] — 2026-09-06
 
 ### Added
@@ -541,3 +546,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.9.4]: https://github.com/quality-gates/mutago/compare/v2.9.3...v2.9.4
 [v2.9.5]: https://github.com/quality-gates/mutago/compare/v2.9.4...v2.9.5
 [v2.10.0]: https://github.com/quality-gates/mutago/compare/v2.9.5...v2.10.0
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.0...HEAD
+

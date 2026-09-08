@@ -597,6 +597,30 @@ func TestJitter(t *testing.T) {
 	assert.NotContains(t, out, "INTERNAL ERROR")
 }
 
+func TestMainRecoverClearDeferCompilesAndEscapesWhenUntested(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/repro\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - expression/recover-clear\n")
+	writeFixtureFile(t, filepath.Join(root, "repro.go"), `package repro
+
+func Safe() {
+	defer recover()
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "repro_test.go"), `package repro
+
+import "testing"
+
+func TestUnrelated(t *testing.T) {
+}
+`)
+
+	out := testMain(t, root, []string{"--config", filepath.Join(root, "mutago.yml"), "--exec-timeout", "5"}, returnOk, "mutation score")
+	assert.Contains(t, out, "ESCAPED")
+	assert.NotContains(t, out, "KILLED")
+	assert.Contains(t, out, "0 killed, 1 escaped")
+}
+
 func testMain(t *testing.T, root string, exec []string, expectedExitCode int, contains string) string {
 	// Clear the parser cache so each test loads files fresh from disk.
 	// Without this, TestMainMatch's exec script (which writes to the original

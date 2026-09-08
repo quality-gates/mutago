@@ -178,11 +178,11 @@ Downgrades the error-wrapping verb in `Errorf`-style calls from `%w` to `%v`. Th
 | `fmt.Errorf("load: %w", err)` | `fmt.Errorf("load: %v", err)` |
 
 ### expression/recover-clear
-Neutralises a `recover()` call by rewriting it to `any(nil)`. The recovered value is always nil, so the recovery branch never runs and a panic propagates. Finds deferred recovery blocks that no test exercises.
+Neutralises a `recover()` call by rewriting it to `func() any { return nil }()`. The recovered value is always nil, so the recovery branch never runs and a panic propagates. Finds deferred recovery blocks that no test exercises.
 
 | Original | Mutated |
 | :------- | :------ |
-| `if r := recover(); r != nil` | `if r := any(nil); r != nil` |
+| `if r := recover(); r != nil` | `if r := func() any { return nil }(); r != nil` |
 
 ### expression/string-literal
 Replaces non-empty string literals in `==` and `!=` comparisons with `""`. Finds code that compares against a specific string value that tests never assert on.

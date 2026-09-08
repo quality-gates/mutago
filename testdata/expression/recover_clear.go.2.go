@@ -22,7 +22,7 @@ func bare() {
 }
 
 func direct() {
-	defer recover()
+	defer func() any { return nil }()
 }
 
 func main() {

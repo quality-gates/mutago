@@ -35,7 +35,7 @@ var mutatorDescriptions = map[string]string{
 	"expression/context-nil":       "Replaces a context argument with nil, bypassing deadline and cancellation propagation",
 	"expression/error-guard":       "Removes an error-guard block so the function continues even on error",
 	"expression/errorf-wrap":       "Downgrades an error-wrapping %w verb to %v, so the returned error no longer wraps its cause",
-	"expression/recover-clear":     "Neutralises a recover() call (recover() becomes any(nil)) so a panic propagates instead of being recovered",
+	"expression/recover-clear":     "Neutralises a recover() call so a panic propagates instead of being recovered",
 	"expression/string-literal":    "Replaces a non-empty string literal in an == or != comparison with an empty string",
 	"expression/logical":           "Swaps a logical operator (&& becomes ||, or vice versa)",
 	"expression/remove":            "Removes an expression statement entirely, dropping its side effect",
