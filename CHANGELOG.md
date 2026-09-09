@@ -4,6 +4,12 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [v2.10.3] — 2026-09-09
+
+### Changed
+- Bump Go module dependencies, including `golang.org/x/tools` 0.45.0 → 0.49.0 and `github.com/stretchr/testify` 1.11.1 → 1.12.1 (#40).
+- Bump GitHub Actions used in CI and the release workflow (#96).
+
 ## [v2.10.2] — 2026-09-08
 
 ### Fixed
@@ -562,4 +568,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.0]: https://github.com/quality-gates/mutago/compare/v2.9.5...v2.10.0
 [v2.10.1]: https://github.com/quality-gates/mutago/compare/v2.10.0...v2.10.1
 [v2.10.2]: https://github.com/quality-gates/mutago/compare/v2.10.1...v2.10.2
+[v2.10.3]: https://github.com/quality-gates/mutago/compare/v2.10.2...v2.10.3
 
