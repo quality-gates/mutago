@@ -58,6 +58,8 @@ go build -o /tmp/mutago ./cmd/mutago
 
 Exit code 4 means the gate failed (escaped mutants). Exit code 0 means all gates passed.
 
+Every mutant compiles into `$GOCACHE`, so one run adds tens of GB and can fill the disk. End any script or session that launches a mutation run with `go clean -cache`, or run it under a disposable cache (`GOCACHE=$(mktemp -d)`) and delete that directory afterwards.
+
 ## Definition of Ready
 
 This repo ships committed git hook scripts under `githooks/` that mirror the CI checks
