@@ -4,15 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
-### Fixed
-- `statement/return` and terminating branch fallbacks now preserve local aliases for imported struct zero values (#116). Mutants that fail to build are skipped instead of reported as test-killed.
-
 ## [v2.10.4] — 2026-09-10
 
 ### Fixed
 - Package discovery now includes cgo-backed Go source files (#115).
+- `statement/return` and terminating branch fallbacks now preserve local aliases for imported struct zero values (#116). Mutants that fail to build are skipped instead of reported as test-killed.
 
 ## [v2.10.3] — 2026-09-09
 
@@ -542,7 +538,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ### Changed
 - Module path renamed from `github.com/avito-tech/mutago` to `github.com/quality-gates/mutago/v2`.
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.3...HEAD
 [v2.4.0]: https://github.com/quality-gates/mutago/releases/tag/v2.4.0
 
 ---
