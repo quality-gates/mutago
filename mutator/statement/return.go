@@ -67,7 +67,7 @@ func mutateReturnResult(pkg *types.Package, info *types.Info, l []ast.Stmt, stmt
 		return mutator.Mutation{}, false
 	}
 
-	zero := astutil.ZeroExprForType(t, pkg)
+	zero := astutil.ZeroExprForTypeAt(t, pkg, info, result.Pos())
 	if zero == nil || isAlreadyZero(result) || astutil.HasUnsafeImport(info, result) {
 		return mutator.Mutation{}, false
 	}

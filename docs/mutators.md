@@ -136,13 +136,13 @@ Removes the `!` operator from negated conditions in `if`, `for`, and `&&`/`||` e
 ## Branch
 
 ### branch/case
-Empties `case` bodies in `switch` statements. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles.
+Empties `case` bodies in `switch` statements. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases.
 
 ### branch/if
-Empties the body of `if` and `else if` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles.
+Empties the body of `if` and `else if` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases.
 
 ### branch/else
-Empties the body of `else` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles.
+Empties the body of `else` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases.
 
 ## Expression
 
@@ -200,7 +200,7 @@ Removes assignment, increment, decrement, and expression statements.
 Removes self-assignment statements (`a = a`). These are typically dead code; this mutator confirms tests don't accidentally rely on them.
 
 ### statement/return
-Replaces each return value with the zero value for its type (`false` for bool, `0` for int, `""` for string, `nil` for pointers and interfaces). Uses `go/types` for type resolution. When zeroing a return value whose only use was a local variable, emits a preceding `_ = x` assignment to keep the variable used and ensure the mutant compiles. Skips mutations that would leave an imported package unused. Finds functions whose return values tests never validate.
+Replaces each return value with the zero value for its type (`false` for bool, `0` for int, `""` for string, `nil` for pointers and interfaces). Uses `go/types` for type resolution and preserves the package name local to the source file, including aliases, for imported struct types. When zeroing a return value whose only use was a local variable, emits a preceding `_ = x` assignment to keep the variable used and ensure the mutant compiles. Skips mutations that would leave an imported package unused. Finds functions whose return values tests never validate.
 
 ### statement/defer-remove
 Removes the `defer` keyword, turning deferred calls into immediate calls. Tests whether the timing of cleanup matters — e.g. mutex unlocks and file closes that must happen after the function body, not during it.

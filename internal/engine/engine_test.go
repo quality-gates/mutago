@@ -651,3 +651,19 @@ func TestMutantGoTestArgsUserVetWins(t *testing.T) {
 		t.Fatalf("user -vet must win with exactly one -vet argument, got %v in %v", got, args)
 	}
 }
+
+func TestClassifyGoTestBuildFailureAsSkipped(t *testing.T) {
+	buildFailure := []byte("# example.com/aliasbug\nalias.go:8:9: undefined: url\nFAIL\texample.com/aliasbug [build failed]\n")
+	if got := classifyGoTestResult(1, buildFailure); got != 2 {
+		t.Fatalf("expected build failure to be skipped, got exit code %d", got)
+	}
+
+	testFailure := []byte("--- FAIL: TestValue (0.00s)\nFAIL\texample.com/aliasbug\t0.001s\n")
+	if got := classifyGoTestResult(1, testFailure); got != 1 {
+		t.Fatalf("expected test failure to remain a killed result, got exit code %d", got)
+	}
+
+	if got := classifyGoTestResult(0, buildFailure); got != 0 {
+		t.Fatalf("expected successful go test to remain successful, got exit code %d", got)
+	}
+}

@@ -45,7 +45,7 @@ func terminatingReturn(pkg *types.Package, info *types.Info, node ast.Node, empt
 	if still {
 		return nil, false
 	}
-	ret := astutil.ZeroReturnForSignature(pkg, sig)
+	ret := astutil.ZeroReturnForSignatureAt(pkg, sig, info, node.Pos())
 	if ret == nil {
 		return nil, true
 	}

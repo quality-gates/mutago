@@ -1495,6 +1495,16 @@ func runGoTest(opts *models.Options, pkg *types.Package, overlayName string, per
 	if opts.General.Debug {
 		fmt.Printf("%s\n", test)
 	}
+	return classifyGoTestResult(execExitCode, test)
+}
+
+// classifyGoTestResult distinguishes a test failure from a package build
+// failure. Both make `go test` exit 1, but a mutant that never compiled was
+// not killed by a test and must be skipped instead.
+func classifyGoTestResult(execExitCode int, output []byte) int {
+	if execExitCode == 1 && bytes.Contains(output, []byte("[build failed]")) {
+		return 2
+	}
 	return execExitCode
 }
 

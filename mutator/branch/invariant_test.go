@@ -236,6 +236,44 @@ func Named(c bool) (n int) {
 	}
 }
 
+func TestBranchMutatorPreservesImportedPackageAlias(t *testing.T) {
+	const source = `package example
+
+import u "net/url"
+
+func Value(c bool) u.URL {
+	if c {
+		return u.URL{Scheme: "https"}
+	} else {
+		return u.URL{Host: "example"}
+	}
+}
+`
+	fset, file, pkg, info := parseBranchSource(t, source)
+	var mutation mutator.Mutation
+	ast.Inspect(file, func(node ast.Node) bool {
+		mutations := MutatorIf(pkg, info, node)
+		if len(mutations) == 0 {
+			return true
+		}
+		mutation = mutations[0]
+		return false
+	})
+	if mutation.Change == nil {
+		t.Fatal("mutator produced no mutation")
+	}
+
+	mutation.Change()
+	mutated := printBranchSource(t, fset, file)
+	mutation.Reset()
+	if err := typeCheckSource(t, mutated); err != nil {
+		t.Fatalf("mutation does not compile:\n%s\n%v", mutated, err)
+	}
+	if !strings.Contains(mutated, "u.URL{}") {
+		t.Fatalf("mutation did not preserve the imported package alias:\n%s", mutated)
+	}
+}
+
 func TestBranchMutatorsLeaveNonTerminatingAndNoResultBodiesUnchanged(t *testing.T) {
 	tests := []struct {
 		name    string

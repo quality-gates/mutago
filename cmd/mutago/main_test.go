@@ -680,6 +680,45 @@ func TestUnrelated(t *testing.T) {
 	assert.NotContains(t, out, "KILLED")
 }
 
+func TestMainStatementReturnPreservesImportedPackageAlias(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/aliasbug\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - statement/return\n")
+	writeFixtureFile(t, filepath.Join(root, "alias.go"), `package aliasbug
+
+import u "net/url"
+
+func Value() u.URL {
+	return u.URL{Scheme: "https", Host: "example"}
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "alias_test.go"), `package aliasbug
+
+import "testing"
+
+func TestValue(t *testing.T) {
+	got := Value()
+	if got.Scheme != "https" || got.Host != "example" {
+		t.Fatalf("Value() = %#v, want https://example", got)
+	}
+}
+`)
+
+	out := testMain(t, root, []string{
+		"--debug",
+		"--no-diffs",
+		"--workers",
+		"1",
+		"--exec-timeout",
+		"10",
+		"--config",
+		filepath.Join(root, "mutago.yml"),
+		".",
+	}, returnOk, "mutation score")
+	assert.Contains(t, out, "KILLED")
+	assert.NotContains(t, out, "undefined: url")
+}
+
 func TestMainTerminatingBranchMutantsCompileAndDoNotFalseKill(t *testing.T) {
 	root := t.TempDir()
 	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/term\n\ngo 1.26.5\n")
