@@ -314,6 +314,8 @@ The final summary includes a per-mutator breakdown so you can see which mutation
 
 By default mutago runs the test suite once without any mutations first (the baseline pre-flight check). If the clean suite already fails — the package does not compile, or a test is red — mutago exits immediately with a tool error (exit 3) rather than producing meaningless results. The `--noop` flag is kept for backward compatibility but has no effect; the check is always on for normal runs (it is skipped under `--coverage`, `--no-exec`, `--dry-run`, or a custom `--exec`).
 
+If a generated mutant does not compile, it is skipped rather than counted as killed by a test.
+
 Use `--timeout-coefficient` to scale the per-mutation timeout relative to an uncached baseline test-suite run (e.g. `--timeout-coefficient 3` allows each mutation up to 3× the clean run). Mutago adds `-count=1` unless `--test-flags` already contains a positive `-count=N`. More reliable than a fixed `--exec-timeout` on machines with variable load.
 
 When `--coverage` is enabled, a failed clean coverage run stops Mutago with exit code 3. A partial coverage profile from failed tests is never used to classify mutants.
@@ -712,13 +714,13 @@ Removes the `!` operator from negated conditions in `if`, `for`, and `&&`/`||` e
 
 ### Branch mutators
 #### branch/case
-Empties case bodies. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles.
+Empties case bodies. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases.
 
 #### branch/if
-Empties branches of `if` and `else if` statements. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles.
+Empties branches of `if` and `else if` statements. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases.
 
 #### branch/else
-Empties branches of `else` statements. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles.
+Empties branches of `else` statements. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases.
 
 ### Expression mutators
 #### expression/comparison
@@ -786,7 +788,7 @@ Removes assignment, increment, decrement and expression statements.
 Removes self-assignment statements (`a = a`). These are typically dead code; this mutator confirms the surrounding tests don't accidentally rely on them.
 
 #### statement/return
-Replaces each return value with the zero value for its type (`false` for bool, `0` for int, `""` for string, `nil` for pointers and interfaces). Uses `go/types` for type resolution. When zeroing a return value whose only use was a local variable, emits a preceding `_ = x` assignment to keep the variable used and ensure the mutant compiles. Skips mutations that would leave an imported package unused. Finds functions whose return values tests never validate.
+Replaces each return value with the zero value for its type (`false` for bool, `0` for int, `""` for string, `nil` for pointers and interfaces). Uses `go/types` for type resolution and preserves the package name local to the source file, including aliases, for imported struct types. When zeroing a return value whose only use was a local variable, emits a preceding `_ = x` assignment to keep the variable used and ensure the mutant compiles. Skips mutations that would leave an imported package unused. Finds functions whose return values tests never validate.
 
 #### statement/defer-remove
 Removes the `defer` keyword, turning deferred calls into immediate calls. Tests whether the timing of cleanup matters — e.g. mutex unlocks and file closes that must happen after the function body, not during it.

@@ -59,6 +59,8 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 
 Mutant test runs pass `-vet=off` to `go test` by default. A mutant is not meant to be lint-clean, and a `go vet` diagnostic on mutated code would fail the run and be miscounted as KILLED. Pass your own `-vet` via `--test-flags` to re-enable it (e.g. `--test-flags=-vet=all`); your flag wins and no duplicate is added. The baseline pre-flight and coverage runs execute the original, unmutated code, so vet stays on there.
 
+If a generated mutant does not compile, it is skipped rather than counted as killed by a test.
+
 ## Filtering
 
 | Flag | Description |
