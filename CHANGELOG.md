@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.10.6] — 2026-09-10
 
 ### Changed
 - Bump Go toolchain pin from 1.26.5 to 1.26.6 in `go.mod` and the release workflow, clearing three reachable standard-library vulnerabilities (GO-2026-6091, GO-2026-6090, GO-2026-5972) (#118).
@@ -587,3 +587,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.3]: https://github.com/quality-gates/mutago/compare/v2.10.2...v2.10.3
 [v2.10.5]: https://github.com/quality-gates/mutago/compare/v2.10.4...v2.10.5
 [v2.10.4]: https://github.com/quality-gates/mutago/compare/v2.10.3...v2.10.4
+[v2.10.6]: https://github.com/quality-gates/mutago/compare/v2.10.5...v2.10.6
