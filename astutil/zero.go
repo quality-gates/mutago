@@ -86,12 +86,12 @@ func structTypeExpr(obj *types.TypeName, currentPkg *types.Package, info *types.
 }
 
 func localPackageName(info *types.Info, pos token.Pos, imported *types.Package) (string, bool) {
-	if info == nil || !pos.IsValid() || imported == nil {
+	if !canResolveLocalPackageName(info, pos, imported) {
 		return "", false
 	}
 	for node := range info.Scopes {
-		file, ok := node.(*ast.File)
-		if !ok || pos < file.Pos() || pos > file.End() {
+		file, ok := sourceFileAtPosition(node, pos)
+		if !ok {
 			continue
 		}
 		for _, imp := range file.Imports {
@@ -103,6 +103,18 @@ func localPackageName(info *types.Info, pos token.Pos, imported *types.Package) 
 		}
 	}
 	return "", false
+}
+
+func sourceFileAtPosition(node ast.Node, pos token.Pos) (*ast.File, bool) {
+	file, ok := node.(*ast.File)
+	if !ok || pos < file.Pos() || pos > file.End() {
+		return nil, false
+	}
+	return file, true
+}
+
+func canResolveLocalPackageName(info *types.Info, pos token.Pos, imported *types.Package) bool {
+	return info != nil && pos.IsValid() && imported != nil
 }
 
 // ZeroReturnForSignature returns a return of zero values for sig. If a zero
