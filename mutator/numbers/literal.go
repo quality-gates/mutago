@@ -43,7 +43,8 @@ func formatIntLiteral(val int64, info intLiteralInfo) string {
 		if info.base == 10 {
 			return "(" + strconv.FormatInt(val, 10) + ")"
 		}
-		return "(-" + info.prefix + strconv.FormatInt(-val, info.base) + ")"
+		magnitude := uint64(-(val + 1)) + 1
+		return "(-" + info.prefix + strconv.FormatUint(magnitude, info.base) + ")"
 	}
 
 	return info.prefix + strconv.FormatInt(val, info.base)
