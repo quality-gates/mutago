@@ -33,6 +33,7 @@ func TestMutatorNumbersIncrementer_ModernLiterals(t *testing.T) {
 	}{
 		{original: "1_000", mutated: "1001"},
 		{original: "0x10", mutated: "0x11"},
+		{original: "0x7fffffffffffffff", mutated: "(-0x8000000000000000)"},
 		{original: "0b1010", mutated: "0b1011"},
 		{original: "0o755", mutated: "0o756"},
 	}

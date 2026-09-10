@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `numbers/incrementer` now emits valid non-decimal literals at the `int64` maximum boundary (#117).
+
 ## [v2.10.4] — 2026-09-10
 
 ### Fixed
