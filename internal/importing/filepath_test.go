@@ -42,6 +42,14 @@ func TestFilesOfArgs(t *testing.T) {
 	}
 }
 
+func TestFilesOfArgsIncludesCgoFiles(t *testing.T) {
+	var opts = &models.Options{}
+
+	got := FilesOfArgs([]string{"./cgofixture"}, opts)
+
+	assert.Equal(t, []string{"cgofixture/cgo.go"}, got)
+}
+
 func TestPackagesWithFilesOfArgs(t *testing.T) {
 	for _, test := range []struct {
 		args   []string

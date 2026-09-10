@@ -227,6 +227,7 @@ func checkImportedPackage(pkg *build.Package, err error) []string {
 	var files []string
 
 	files = append(files, pkg.GoFiles...)
+	files = append(files, pkg.CgoFiles...)
 
 	joinDirWithFilenames(pkg.Dir, files)
 
