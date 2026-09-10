@@ -1956,11 +1956,11 @@
 </table>
 <h2 id="branch">Branch<a class="headerlink" href="#branch" title="Permanent link">&para;</a></h2>
 <h3 id="branchcase">branch/case<a class="headerlink" href="#branchcase" title="Permanent link">&para;</a></h3>
-<p>Empties <code>case</code> bodies in <code>switch</code> statements. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value <code>return</code> so it still compiles.</p>
+<p>Empties <code>case</code> bodies in <code>switch</code> statements. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value <code>return</code> so it still compiles. Imported struct return types use the package name local to the source file, including aliases.</p>
 <h3 id="branchif">branch/if<a class="headerlink" href="#branchif" title="Permanent link">&para;</a></h3>
-<p>Empties the body of <code>if</code> and <code>else if</code> branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value <code>return</code> so it still compiles.</p>
+<p>Empties the body of <code>if</code> and <code>else if</code> branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value <code>return</code> so it still compiles. Imported struct return types use the package name local to the source file, including aliases.</p>
 <h3 id="branchelse">branch/else<a class="headerlink" href="#branchelse" title="Permanent link">&para;</a></h3>
-<p>Empties the body of <code>else</code> branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value <code>return</code> so it still compiles.</p>
+<p>Empties the body of <code>else</code> branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value <code>return</code> so it still compiles. Imported struct return types use the package name local to the source file, including aliases.</p>
 <h2 id="expression">Expression<a class="headerlink" href="#expression" title="Permanent link">&para;</a></h2>
 <h3 id="expressioncomparison">expression/comparison<a class="headerlink" href="#expressioncomparison" title="Permanent link">&para;</a></h3>
 <p>Shifts comparison operators by one step — <code>&gt;</code> becomes <code>&gt;=</code>, <code>&gt;=</code> becomes <code>&gt;</code>. Catches off-by-one boundary errors.</p>
@@ -2058,7 +2058,7 @@
 <h3 id="statementremove-self-assign">statement/remove-self-assign<a class="headerlink" href="#statementremove-self-assign" title="Permanent link">&para;</a></h3>
 <p>Removes self-assignment statements (<code>a = a</code>). These are typically dead code; this mutator confirms tests don't accidentally rely on them.</p>
 <h3 id="statementreturn">statement/return<a class="headerlink" href="#statementreturn" title="Permanent link">&para;</a></h3>
-<p>Replaces each return value with the zero value for its type (<code>false</code> for bool, <code>0</code> for int, <code>""</code> for string, <code>nil</code> for pointers and interfaces). Uses <code>go/types</code> for type resolution. When zeroing a return value whose only use was a local variable, emits a preceding <code>_ = x</code> assignment to keep the variable used and ensure the mutant compiles. Skips mutations that would leave an imported package unused. Finds functions whose return values tests never validate.</p>
+<p>Replaces each return value with the zero value for its type (<code>false</code> for bool, <code>0</code> for int, <code>""</code> for string, <code>nil</code> for pointers and interfaces). Uses <code>go/types</code> for type resolution and preserves the package name local to the source file, including aliases, for imported struct types. When zeroing a return value whose only use was a local variable, emits a preceding <code>_ = x</code> assignment to keep the variable used and ensure the mutant compiles. Skips mutations that would leave an imported package unused. Finds functions whose return values tests never validate.</p>
 <h3 id="statementdefer-remove">statement/defer-remove<a class="headerlink" href="#statementdefer-remove" title="Permanent link">&para;</a></h3>
 <p>Removes the <code>defer</code> keyword, turning deferred calls into immediate calls. Tests whether the timing of cleanup matters — e.g. mutex unlocks and file closes that must happen after the function body, not during it.</p>
 <table>
