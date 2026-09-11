@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/jessevdk/go-flags"
@@ -66,6 +68,8 @@ func checkArguments(args []string, opts *models.Options) (bool, int) {
 		opts.General.Verbose = true
 	}
 
+	opts.ApplyConfigDefaults()
+
 	if handled, code := loadConfigFile(opts); handled {
 		return true, code
 	}
@@ -113,7 +117,7 @@ func loadConfigFile(opts *models.Options) (bool, int) {
 	}
 	dec := yaml.NewDecoder(bytes.NewReader(yamlFile))
 	dec.KnownFields(true)
-	if err := dec.Decode(&opts.Config); err != nil {
+	if err := dec.Decode(&opts.Config); err != nil && !errors.Is(err, io.EOF) {
 		return true, exitError("Could not parse config file %q: %v", opts.General.Config, err)
 	}
 	return false, 0
@@ -130,7 +134,7 @@ func exitError(format string, args ...interface{}) int {
 }
 
 func mainCmd(args []string) int {
-	opts := &models.Options{}
+	opts := models.NewOptions()
 
 	if exit, exitCode := checkArguments(args, opts); exit {
 		return exitCode

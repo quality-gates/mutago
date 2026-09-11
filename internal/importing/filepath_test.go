@@ -139,11 +139,20 @@ func TestFilesWithSkipWithBuildTagsTests(t *testing.T) {
 			[]string{"filepathfixtures/second.go"},
 		},
 	} {
-		var opts = &models.Options{}
+		var opts = models.NewOptions()
 		opts.Config.SkipFileWithBuildTag = true
 		got := FilesOfArgs(test.args, opts)
 		assert.Equal(t, test.expect, got, fmt.Sprintf("With args: %#v", test.args))
 	}
+}
+
+func TestFilesWithBuildTagsOnlyDoesNotSkipUntestedFiles(t *testing.T) {
+	var opts = &models.Options{}
+	opts.Config.SkipFileWithoutTest = false
+	opts.Config.SkipFileWithBuildTag = true
+
+	got := FilesOfArgs([]string{"./filepathfixtures"}, opts)
+	assert.Equal(t, []string{"filepathfixtures/first.go", "filepathfixtures/second.go"}, got)
 }
 
 func TestFilesWithExcludedDirs(t *testing.T) {

@@ -107,11 +107,11 @@ func skipForMissingOrTaggedTest(filename string, opts *models.Options) bool {
 	}
 	nameSize := len(filename)
 	if nameSize <= 3 {
-		return true
+		return opts.Config.SkipFileWithoutTest
 	}
 	testName := filename[:nameSize-3] + testFileSuffix
 	if !exists(testName) {
-		return true
+		return opts.Config.SkipFileWithoutTest
 	}
 	return opts.Config.SkipFileWithBuildTag && regexpSearchInFile(testName, buildTagRegex)
 }
