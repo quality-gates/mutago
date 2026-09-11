@@ -575,6 +575,7 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 		return
 	}
 	checksum := stableMutationEditKey(toRelPath(fc.absFile, r.moduleRoot), originalSourceCode, edit)
+	mutant.Checksum = checksum
 	if _, duplicate := r.blacklist[checksum]; duplicate {
 		r.mu.Lock()
 		r.report.Stats.DuplicatedCount++
@@ -1315,7 +1316,7 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 	if notCovered {
 		mu.Lock()
 		defer mu.Unlock()
-		recordNotCovered(opts, stats, mutant, mutantLocation(mutant))
+		recordNotCovered(opts, stats, mutant, mutantLocation(opts, mutant))
 		return
 	}
 
@@ -1342,16 +1343,19 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 
 	mu.Lock()
 	defer mu.Unlock()
-	recordMutantResult(opts, stats, mutant, execExitCode, mutantLocation(mutant))
+	recordMutantResult(opts, stats, mutant, execExitCode, mutantLocation(opts, mutant))
 }
 
-func mutantLocation(mutant models.Mutant) string {
+func mutantLocation(opts *models.Options, mutant models.Mutant) string {
 	loc := mutant.Mutator.OriginalFilePath
 	if rel, err := filepath.Rel(".", loc); err == nil {
 		loc = filepath.ToSlash(rel)
 	}
 	if mutant.Mutator.OriginalStartLine > 0 {
 		loc = fmt.Sprintf("%s:%d", loc, mutant.Mutator.OriginalStartLine)
+	}
+	if (opts.General.Debug || opts.General.Verbose) && mutant.Checksum != "" {
+		return fmt.Sprintf("%s (%s) [checksum: %s]", loc, mutant.Mutator.MutatorName, mutant.Checksum)
 	}
 	return fmt.Sprintf("%s (%s)", loc, mutant.Mutator.MutatorName)
 }
