@@ -9,6 +9,7 @@ set -eu
 
 ROOT_DIR=$(git rev-parse --show-toplevel)
 cd "$ROOT_DIR"
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
 
 FAIL=0
 

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -24,6 +25,12 @@ import (
 // consider line 4 (func B) "changed", because two-dot diff attributes main's
 // own commit to the feature branch.
 func TestParseChangedLines_StaleBranchExcludesTargetChanges(t *testing.T) {
+	for _, k := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_QUARANTINE_PATH"} {
+		if _, ok := os.LookupEnv(k); ok {
+			t.Setenv(k, "")
+			os.Unsetenv(k)
+		}
+	}
 	dir := t.TempDir()
 
 	runGit(t, dir, "init", "-q", "-b", "main")
@@ -102,10 +109,21 @@ func TestParseChangedLines_StaleBranchExcludesTargetChanges(t *testing.T) {
 	}
 }
 
+func cleanGitEnv() []string {
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GIT_") {
+			env = append(env, e)
+		}
+	}
+	return env
+}
+
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	cmd.Env = cleanGitEnv()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}

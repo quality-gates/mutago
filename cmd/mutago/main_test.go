@@ -479,10 +479,22 @@ func writeFixtureFile(t *testing.T, path, contents string) {
 	require.NoError(t, os.WriteFile(path, []byte(contents), 0644))
 }
 
+func cleanGitEnv() []string {
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GIT_") {
+			env = append(env, e)
+		}
+	}
+	return env
+}
+
 func runGit(t *testing.T, root string, args ...string) {
 	t.Helper()
 	cmdArgs := append([]string{"-C", root}, args...)
-	out, err := exec.Command("git", cmdArgs...).CombinedOutput()
+	cmd := exec.Command("git", cmdArgs...)
+	cmd.Env = cleanGitEnv()
+	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 }
 
