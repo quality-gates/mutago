@@ -25,6 +25,12 @@ import (
 // consider line 4 (func B) "changed", because two-dot diff attributes main's
 // own commit to the feature branch.
 func TestParseChangedLines_StaleBranchExcludesTargetChanges(t *testing.T) {
+	for _, k := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_QUARANTINE_PATH"} {
+		if _, ok := os.LookupEnv(k); ok {
+			t.Setenv(k, "")
+			os.Unsetenv(k)
+		}
+	}
 	dir := t.TempDir()
 
 	runGit(t, dir, "init", "-q", "-b", "main")
