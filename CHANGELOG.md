@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.10.11] — 2026-09-11
 
 ### Added
 - Resource-safe mutation guidance in `CLAUDE.md` for Fleet runs: set `GOMAXPROCS=1`, pass `--workers=1`, use a finite `--exec-timeout`, and cap CPU/memory in development containers (#123).
@@ -611,3 +611,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.7]: https://github.com/quality-gates/mutago/compare/v2.10.5...v2.10.7
 [v2.10.8]: https://github.com/quality-gates/mutago/compare/v2.10.7...v2.10.8
 [v2.10.10]: https://github.com/quality-gates/mutago/compare/v2.10.8...v2.10.10
+[v2.10.11]: https://github.com/quality-gates/mutago/compare/v2.10.10...v2.10.11
