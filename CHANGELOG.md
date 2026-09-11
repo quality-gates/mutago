@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Expose mutation checksums in debug output and JSON reports so `--blacklist` files can be populated from a run (#131).
+
 ## [v2.10.8] — 2026-09-11
 
 ### Fixed
@@ -558,6 +563,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.8...HEAD
 [v2.6.7]: https://github.com/quality-gates/mutago/releases/tag/v2.6.7
 [v2.6.10]: https://github.com/quality-gates/mutago/compare/v2.6.9...v2.6.10
 [v2.6.11]: https://github.com/quality-gates/mutago/compare/v2.6.10...v2.6.11

@@ -30,7 +30,7 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | `--output-statuses` | Show only listed result statuses in the terminal: `k`=killed `e`=escaped `s`=skipped `n`=not-covered `x`=errored (e.g. `--output-statuses=ke`). Does not affect JSON reports. Overrides `--quiet` when set. |
 | `--quiet` | Suppress killed/skipped lines; show only escaped mutants and summary (equivalent to `--output-statuses=e`) |
 | `--verbose` | Print full test output for each mutation |
-| `--debug` | Print internal debug information |
+| `--debug` | Print internal debug information, including each mutation's 32-character blacklist checksum |
 | `--logger-github` | Emit escaped mutants as `::warning` GitHub Actions annotations |
 | `--logger-gitlab` | Write `mutago-gitlab.json` in GitLab Code Quality format |
 | `--logger-summary-json` | Write compact stats to `mutago-summary.json` |

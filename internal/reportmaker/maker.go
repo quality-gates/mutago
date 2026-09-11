@@ -193,6 +193,7 @@ func closeReportFile(file *os.File, filename string) {
 // AgenticMutant describes one escaped mutant for LLM consumption.
 type AgenticMutant struct {
 	ID               string   `json:"id"`
+	Checksum         string   `json:"checksum"`
 	File             string   `json:"file"`
 	Line             int64    `json:"line"`
 	Mutator          string   `json:"mutator"`
@@ -290,6 +291,7 @@ func MakeAgenticJSONReport(report models.Report, moduleRoot string) error {
 		}
 		mutants = append(mutants, AgenticMutant{
 			ID:               id,
+			Checksum:         m.Checksum,
 			File:             relFile,
 			Line:             m.Mutator.OriginalStartLine,
 			Mutator:          m.Mutator.MutatorName,

@@ -180,6 +180,69 @@ func TestMainJSONReport(t *testing.T) {
 	}
 }
 
+func TestMainExposesMutationChecksums(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/checksum\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "json_output: true\nenable_mutators:\n  - statement/return\n")
+	writeFixtureFile(t, filepath.Join(root, "value.go"), "package checksum\n\nfunc Value() int {\n\treturn 42\n}\n")
+	writeFixtureFile(t, filepath.Join(root, "value_test.go"), "package checksum\n")
+
+	reportPath := filepath.Join(root, "report.json")
+	agenticReportPath := filepath.Join(root, "mutago-agentic.json")
+	previousReportFileName := models.ReportFileName
+	previousAgenticReportFileName := models.ReportAgenticJSONFileName
+	models.ReportFileName = reportPath
+	models.ReportAgenticJSONFileName = agenticReportPath
+	t.Cleanup(func() {
+		models.ReportFileName = previousReportFileName
+		models.ReportAgenticJSONFileName = previousAgenticReportFileName
+	})
+
+	runArgs := []string{
+		"--debug",
+		"--no-diffs",
+		"--workers",
+		"1",
+		"--exec-timeout",
+		"5",
+		"--logger-agentic-json",
+		"--config",
+		filepath.Join(root, "mutago.yml"),
+		".",
+	}
+	out := testMain(t, root, runArgs, returnOk, "mutation score")
+
+	var report struct {
+		Escaped []struct {
+			Checksum string `json:"checksum"`
+		} `json:"escaped"`
+	}
+	reportData, err := os.ReadFile(reportPath)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(reportData, &report))
+	require.NotEmpty(t, report.Escaped)
+	checksum := report.Escaped[0].Checksum
+	assert.Regexp(t, `^[0-9a-f]{32}$`, checksum)
+	assert.Contains(t, out, checksum)
+
+	var agenticReport struct {
+		Mutants []struct {
+			Checksum string `json:"checksum"`
+		} `json:"mutants"`
+	}
+	agenticData, err := os.ReadFile(agenticReportPath)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(agenticData, &agenticReport))
+	require.NotEmpty(t, agenticReport.Mutants)
+	assert.Equal(t, checksum, agenticReport.Mutants[0].Checksum)
+
+	blacklistPath := filepath.Join(root, "example.blacklist")
+	writeFixtureFile(t, blacklistPath, checksum+"\n")
+	blacklistArgs := append([]string{"--blacklist", blacklistPath}, runArgs...)
+	blacklistedOut := testMain(t, root, blacklistArgs, returnOk, "mutation score")
+	assert.NotContains(t, blacklistedOut, "ESCAPED")
+}
+
 func TestMainReportsOriginalASTLines(t *testing.T) {
 	tmpDir := t.TempDir()
 	reportPath := tmpDir + "/line-position-report.json"

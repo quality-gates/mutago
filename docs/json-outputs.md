@@ -8,6 +8,8 @@ Set `json_output: true` in the configuration file to write `report.json`. Its
 top-level `sources` object maps each source-file path to its original text.
 Mutants refer to that path through `mutator.originalFilePath`, so consumers can
 look up the source once instead of receiving a duplicate copy for every mutant.
+Each mutant also includes a `checksum` field containing the 32-character
+lowercase checksum accepted by `--blacklist`.
 
 The legacy `mutator.originalSourceCode` and `mutator.mutatedSourceCode` fields
 remain accepted by the Go model for compatibility, but new reports omit them.
@@ -59,6 +61,7 @@ Writes `mutago-agentic.json`. A richer payload designed for LLM consumption. Eac
   "mutants": [
     {
       "id": "abc123",
+      "checksum": "a1b2c3d4e5f60123456789abcdef0123",
       "file": "pkg/foo/foo.go",
       "line": 42,
       "mutator": "branch/if",
@@ -80,6 +83,7 @@ Writes `mutago-agentic.json`. A richer payload designed for LLM consumption. Eac
 | `escaped_count` | int | Number of survived mutants |
 | `reminder` | string | A plain-English reminder about how to interpret mutants — useful context when feeding the file to an LLM |
 | `mutants[].id` | string | Stable hash of file + mutator + diff — survives refactors that shift line numbers |
+| `mutants[].checksum` | string | 32-character checksum accepted by `--blacklist` |
 | `mutants[].file` | string | Path to the mutated file, relative to the module root |
 | `mutants[].line` | int | Line number of the mutation |
 | `mutants[].mutator` | string | Mutator name (e.g. `branch/if`, `statement/return`) |

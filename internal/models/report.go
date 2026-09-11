@@ -56,6 +56,7 @@ type MutatorStats struct {
 
 // Mutant is the result of one mutation attempt.
 type Mutant struct {
+	Checksum      string  `json:"checksum,omitempty"`
 	Mutator       Mutator `json:"mutator"`
 	Diff          string  `json:"diff"`
 	ProcessOutput string  `json:"processOutput,omitempty"`
