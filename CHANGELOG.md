@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Clean up temporary mutation directories and overlay files upon process interruption (SIGINT / SIGTERM) unless `--do-not-remove-tmp-folder` is set (#134).
 - Emit an informative diagnostic and usage hint when a value-taking string flag consumes what looks like a target package, directory, or Go file, leaving positional targets empty (#130).
 - Respect the documented `json_output: false` default when no config file is supplied, so normal runs do not write `report.json` (#133).
 - Apply documented `true` defaults for `skip_without_test` and `skip_with_build_tags` when running unconfigured or when omitted from a configuration file (#132).

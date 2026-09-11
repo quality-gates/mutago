@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/jessevdk/go-flags"
 	"gopkg.in/yaml.v3"
@@ -303,7 +305,14 @@ func runMutationTesting(opts *models.Options, bl *baseline.File, targets importi
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 	}
-	res, err := e.RunResolved(context.Background(), opts, bl, targets)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+
+	res, err := e.RunResolved(ctx, opts, bl, targets)
 	if err != nil {
 		return exitError(err.Error())
 	}

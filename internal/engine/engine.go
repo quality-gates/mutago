@@ -91,6 +91,7 @@ type execJob struct {
 	perTestProf    *coverage.PerTestProfile
 	extraTestFlags []string
 	runMutantID    string
+	tmpDir         string
 	source         mutationSource
 	// packageLevelDecl is true when the mutation sits inside a package-level
 	// const/var/type/import declaration. Such declarations are not executable
@@ -151,6 +152,9 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 		return Result{ExitCode: returnError}, nil
 	}
 
+	cleanup := newRunCleanup(opts, jobs, jobWg, stopProgress, progressWg, run.tmpDir)
+	defer cleanup()
+
 	report := run.report
 	if exitCode := runBaselineChecks(opts, pkgs, run.execs, run.extraTestFlags); exitCode != 0 {
 		return Result{Report: report, ExitCode: exitCode}, nil
@@ -158,18 +162,18 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 
 	coverageProfiles, err := configureAdaptiveTimeoutAndCoverage(opts, pkgs, run)
 	if err != nil {
-		shutdownAndCleanup(opts, jobs, jobWg, stopProgress, progressWg, run.tmpDir)
 		return Result{Report: report, ExitCode: returnError}, err
 	}
 
 	dryRunTotal, dryRunMutatorTotals, loopCode := mutateAll(run, pkgs, coverageProfiles)
 
-	if !opts.General.DryRun {
-		shutdownAndCleanup(opts, jobs, jobWg, stopProgress, progressWg, run.tmpDir)
-	}
+	cleanup()
 
 	if loopCode != returnOk {
-		return Result{Report: report, ExitCode: loopCode}, nil
+		return Result{Report: report, ExitCode: loopCode}, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{Report: report, ExitCode: returnError}, err
 	}
 
 	if opts.General.DryRun {
@@ -181,6 +185,19 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	report.Calculate()
 	exitCode := finalizeResults(e.Stdout, e.Stderr, opts, report, bl, run.moduleRoot)
 	return Result{Report: report, ExitCode: exitCode}, nil
+}
+
+func newRunCleanup(opts *models.Options, jobs chan execJob, jobWg *sync.WaitGroup, stopProgress chan struct{}, progressWg *sync.WaitGroup, tmpDir string) func() {
+	if opts.General.DryRun {
+		return func() {}
+	}
+	var cleanedUp bool
+	return func() {
+		if !cleanedUp {
+			cleanedUp = true
+			shutdownAndCleanup(opts, jobs, jobWg, stopProgress, progressWg, tmpDir)
+		}
+	}
 }
 
 func (e *Engine) initDefaults() {
@@ -371,12 +388,18 @@ func mutateAll(r *mutationRun, pkgs []importing.Package, coverageProfiles []*cov
 		dryRunMutatorTotals = make(map[string]int)
 	}
 	for i, importPkg := range pkgs {
+		if r.ctx.Err() != nil {
+			return dryRunTotal, dryRunMutatorTotals, returnError
+		}
 		var coverProfile *coverage.Profile
 		if coverageProfiles != nil {
 			coverProfile = coverageProfiles[i]
 		}
 		perTestProf := perTestForPackage(r, importPkg)
 		for _, file := range importPkg.Files {
+			if r.ctx.Err() != nil {
+				return dryRunTotal, dryRunMutatorTotals, returnError
+			}
 			count, code := processFile(r, file, coverProfile, perTestProf, dryRunMutatorTotals)
 			if code != 0 {
 				return dryRunTotal, dryRunMutatorTotals, code
@@ -531,6 +554,9 @@ func applyMutator(r *mutationRun, m mutatorItem, fc *fileContext, node ast.Node,
 	changed := mutago.MutateWalkWithPositions(fc.pkg, fc.info, node, mutatorAnnotated)
 
 	for {
+		if r.ctx.Err() != nil {
+			break
+		}
 		mutation, ok := <-changed
 		if !ok {
 			break
@@ -602,6 +628,7 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 		perTestProf:    fc.perTestProf,
 		extraTestFlags: r.extraTestFlags,
 		runMutantID:    r.opts.Exec.RunMutantID,
+		tmpDir:         r.tmpDir,
 		source: mutationSource{
 			originalFile: fc.sourceFile,
 			mutationFile: mutationFile,
@@ -615,7 +642,11 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 		directiveShifted: directiveShifted,
 		adjRelFile:       toRelPath(filepath.Join(r.moduleRoot, adjPos.Filename), r.moduleRoot),
 	}
-	r.jobs <- job
+	select {
+	case <-r.ctx.Done():
+		return
+	case r.jobs <- job:
+	}
 }
 
 func countDryRunMutation(name string, dryRunCounts, dryRunGlobalTotals map[string]int) {
@@ -894,6 +925,9 @@ func startWorkerPool(opts *models.Options, numWorkers int, report *models.Report
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
+				if job.ctx != nil && job.ctx.Err() != nil {
+					continue
+				}
 				runExecJob(job, report, mu, stdout, gitChangedLines)
 			}
 		}()
@@ -1405,25 +1439,28 @@ func runBuiltinExec(job execJob, mutant *models.Mutant) int {
 	opts := job.opts
 	console.Debug(opts, "Execute built-in exec command for mutation")
 
-	diff, code := computeDiff(job.source.originalFile, job.source.mutationFile, mutant)
+	diff, code := computeDiff(job.ctx, job.source.originalFile, job.source.mutationFile, mutant)
 	if code != 0 {
 		return code
 	}
 
-	overlayName, code := prepareOverlay(job.source.originalFile, job.source.mutationFile)
+	overlayName, code := prepareOverlay(job.tmpDir, job.source.originalFile, job.source.mutationFile)
 	if code != 0 {
 		return code
 	}
 	defer os.Remove(overlayName)
 
-	execExitCode := runGoTest(opts, job.pkg, overlayName, job.perTestProf, job.source.absFile, int(mutant.Mutator.OriginalStartLine), job.extraTestFlags)
+	execExitCode := runGoTest(job.ctx, opts, job.pkg, overlayName, job.perTestProf, job.source.absFile, int(mutant.Mutator.OriginalStartLine), job.extraTestFlags)
 
 	mutant.Diff = string(diff)
 	return mapTestExitToResult(execExitCode)
 }
 
-func computeDiff(file, mutationFile string, mutant *models.Mutant) ([]byte, int) {
-	diff, err := exec.Command("diff", "--label=Original", "--label=New", "-u", file, mutationFile).CombinedOutput()
+func computeDiff(ctx context.Context, file, mutationFile string, mutant *models.Mutant) ([]byte, int) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	diff, err := exec.CommandContext(ctx, "diff", "--label=Original", "--label=New", "-u", file, mutationFile).CombinedOutput()
 	if mutant.Mutator.OriginalStartLine <= 0 {
 		mutant.Mutator.OriginalStartLine = parser.FindOriginalStartLine(diff)
 	}
@@ -1440,10 +1477,10 @@ func computeDiff(file, mutationFile string, mutant *models.Mutant) ([]byte, int)
 	return diff, 0
 }
 
-func prepareOverlay(file, mutationFile string) (string, int) {
+func prepareOverlay(tmpDir, file, mutationFile string) (string, int) {
 	absOrig, _ := filepath.Abs(file)
 	absMut, _ := filepath.Abs(mutationFile)
-	overlayName, err := writeOverlayFile(absOrig, absMut)
+	overlayName, err := writeOverlayFile(tmpDir, absOrig, absMut)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mutago: cannot create overlay file: %v\n", err)
 		return "", 3
@@ -1478,7 +1515,7 @@ func hasVetFlag(testFlags []string) bool {
 	return false
 }
 
-func runGoTest(opts *models.Options, pkg *types.Package, overlayName string, perTestProf *coverage.PerTestProfile, absFile string, startLine int, extraTestFlags []string) int {
+func runGoTest(ctx context.Context, opts *models.Options, pkg *types.Package, overlayName string, perTestProf *coverage.PerTestProfile, absFile string, startLine int, extraTestFlags []string) int {
 	pkgName := pkg.Path()
 	if opts.Test.Recursive {
 		pkgName += "/..."
@@ -1486,7 +1523,10 @@ func runGoTest(opts *models.Options, pkg *types.Package, overlayName string, per
 
 	runFilter := perTestRunFilter(perTestProf, absFile, startLine)
 
-	goTestCmd := exec.Command("go", mutantGoTestArgs(overlayName, opts.Exec.Timeout, extraTestFlags, runFilter, pkgName)...)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	goTestCmd := exec.CommandContext(ctx, "go", mutantGoTestArgs(overlayName, opts.Exec.Timeout, extraTestFlags, runFilter, pkgName)...)
 	goTestCmd.Env = os.Environ()
 	test, err := goTestCmd.CombinedOutput()
 
@@ -1574,7 +1614,7 @@ func commandExitCode(err error) (code int, ok bool) {
 	return 0, false
 }
 
-func writeOverlayFile(absOrig, absMut string) (string, error) {
+func writeOverlayFile(tmpDir, absOrig, absMut string) (string, error) {
 	overlayData, err := json.Marshal(struct {
 		Replace map[string]string `json:"Replace"`
 	}{Replace: map[string]string{absOrig: absMut}})
@@ -1582,7 +1622,7 @@ func writeOverlayFile(absOrig, absMut string) (string, error) {
 		return "", err
 	}
 
-	f, err := os.CreateTemp("", "mutago-overlay-*.json")
+	f, err := os.CreateTemp(tmpDir, "mutago-overlay-*.json")
 	if err != nil {
 		return "", err
 	}
