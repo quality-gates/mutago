@@ -120,7 +120,11 @@ func loadConfigFile(opts *models.Options) (bool, int) {
 }
 
 func exitError(format string, args ...interface{}) int {
-	_, _ = fmt.Fprintf(os.Stderr, format+"\n", args...)
+	if len(args) == 0 {
+		_, _ = fmt.Fprintln(os.Stderr, format)
+	} else {
+		_, _ = fmt.Fprintf(os.Stderr, format+"\n", args...)
+	}
 
 	return returnError
 }
