@@ -335,6 +335,22 @@ func TestMainCoverageUsesSingleBaselineForAdaptiveTimeout(t *testing.T) {
 	assert.Contains(t, cleanTestRuns[0], "-count=1", "adaptive timeout baseline must bypass the test cache")
 }
 
+func TestMainCoveragePassesTimeoutFlag(t *testing.T) {
+	root, goLog := adaptiveTimeoutFixture(t, "example.com/coveragetimeoutflag")
+
+	testMain(
+		t,
+		root,
+		[]string{"--coverage", "--exec-timeout", "7", "--config", "mutago.yml", "add.go"},
+		returnOk,
+		"mutation score",
+	)
+
+	cleanTestRuns := cleanGoTestRuns(t, goLog)
+	require.NotEmpty(t, cleanTestRuns, "expected baseline test run")
+	assert.Contains(t, cleanTestRuns[0], "-timeout 7s", "coverage baseline must pass configured execution timeout")
+}
+
 func TestMainAdaptiveTimeoutBypassesTestCacheWithoutCoverage(t *testing.T) {
 	root, goLog := adaptiveTimeoutFixture(t, "example.com/adaptivenocoverage")
 
@@ -459,6 +475,37 @@ func TestValue(t *testing.T) {
 		returnError,
 		"coverage test failed",
 	)
+}
+
+func TestMainCoverageTimeoutFailsFast(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/coveragetimeout\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "value.go"), `package coveragetimeout
+
+func Value() int { return 1 }
+`)
+	writeFixtureFile(t, filepath.Join(root, "value_test.go"), `package coveragetimeout
+
+import (
+	"testing"
+	"time"
+)
+
+func TestValue(t *testing.T) {
+	time.Sleep(2 * time.Second)
+	_ = Value()
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - numbers/incrementer\n")
+
+	out := testMain(
+		t,
+		root,
+		[]string{"--exec-timeout", "1", "--coverage", "--config", "mutago.yml", "value.go"},
+		returnError,
+		"coverage test failed",
+	)
+	assert.Contains(t, out, "panic: test timed out")
 }
 
 func TestMainPerTestFlag(t *testing.T) {

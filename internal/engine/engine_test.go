@@ -255,6 +255,65 @@ func TestEngineCoverageHonorsTestFlags(t *testing.T) {
 	}
 }
 
+// TestEngineCoverageTimeoutFailsBaseline ensures --coverage passes the execution timeout
+// to the initial coverage collection step and fails fast if the unmutated test suite times out (#129).
+func TestEngineCoverageTimeoutFailsBaseline(t *testing.T) {
+	_ = os.MkdirAll("./testdata", 0755)
+	tempDir, err := os.MkdirTemp("./testdata", "covtimeout-*")
+	if err != nil {
+		t.Fatalf("failed to create temp package: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	src := `package covtimeout
+
+func Foo() int { return 42 }
+`
+	testSrc := `package covtimeout
+
+import (
+	"testing"
+	"time"
+)
+
+func TestFoo(t *testing.T) {
+	time.Sleep(2 * time.Second)
+	_ = Foo()
+}
+`
+	if err := os.WriteFile(filepath.Join(tempDir, "pkg.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("failed to write pkg.go: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "pkg_test.go"), []byte(testSrc), 0644); err != nil {
+		t.Fatalf("failed to write pkg_test.go: %v", err)
+	}
+
+	opts := &models.Options{}
+	opts.Exec.Coverage = true
+	opts.Exec.Timeout = 1
+	opts.Remaining.Targets = []string{tempDir}
+
+	var stdout, stderr bytes.Buffer
+	e := &Engine{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+
+	res, err := e.Run(context.Background(), opts, nil)
+	if err == nil {
+		t.Fatal("expected baseline coverage timeout to return error, got nil")
+	}
+	if res.ExitCode != 3 {
+		t.Fatalf("expected exit code 3 on baseline coverage timeout, got %d", res.ExitCode)
+	}
+	if !strings.Contains(err.Error(), "coverage test failed") {
+		t.Fatalf("expected error to contain 'coverage test failed', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected error to mention 'timed out', got: %v", err)
+	}
+}
+
 // TestEngineCoverageSkipsExecForUncoveredMutants ensures --coverage does not run
 // the exec command for mutants on uncovered lines.
 func TestEngineCoverageSkipsExecForUncoveredMutants(t *testing.T) {
