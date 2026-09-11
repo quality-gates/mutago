@@ -60,6 +60,10 @@ Exit code 4 means the gate failed (escaped mutants). Exit code 0 means all gates
 
 Every mutant compiles into `$GOCACHE`, so one run adds tens of GB and can fill the disk. End any script or session that launches a mutation run with `go clean -cache`, or run it under a disposable cache (`GOCACHE=$(mktemp -d)`) and delete that directory afterwards.
 
+### Resource-safe mutation runs
+
+Fleet runs many repositories concurrently on an 8-core macOS host. For every local mutation run, set `GOMAXPROCS=1`, pass `--workers=1`, and set a finite `--exec-timeout`. When you use a development container, add CPU and memory caps such as `--cpus=2 --memory=2g` before the image name.
+
 ## Definition of Ready
 
 This repo ships committed git hook scripts under `githooks/` that mirror the CI checks
