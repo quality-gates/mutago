@@ -241,6 +241,63 @@ func TestMainJSONReport(t *testing.T) {
 	}
 }
 
+func TestMainJSONReportDisabledWithoutConfig(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/reportoutput\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "value.go"), `package reportoutput
+
+func Value() int { return 42 }
+`)
+	writeFixtureFile(t, filepath.Join(root, "value_test.go"), `package reportoutput
+
+import "testing"
+
+func TestValue(t *testing.T) {
+	if got := Value(); got != 42 {
+		t.Fatalf("Value() = %d, want 42", got)
+	}
+}
+`)
+
+	reportPath := filepath.Join(root, "report.json")
+	previousReportFileName := models.ReportFileName
+	models.ReportFileName = reportPath
+	t.Cleanup(func() { models.ReportFileName = previousReportFileName })
+
+	testMain(t, root, []string{"--exec-timeout", "5"}, returnOk, "mutation score")
+	_, err := os.Stat(reportPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestMainJSONReportDisabledByConfig(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/reportoutput\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "json_output: false\nenable_mutators:\n  - statement/return\n")
+	writeFixtureFile(t, filepath.Join(root, "value.go"), `package reportoutput
+
+func Value() int { return 42 }
+`)
+	writeFixtureFile(t, filepath.Join(root, "value_test.go"), `package reportoutput
+
+import "testing"
+
+func TestValue(t *testing.T) {
+	if got := Value(); got != 42 {
+		t.Fatalf("Value() = %d, want 42", got)
+	}
+}
+`)
+
+	reportPath := filepath.Join(root, "report.json")
+	previousReportFileName := models.ReportFileName
+	models.ReportFileName = reportPath
+	t.Cleanup(func() { models.ReportFileName = previousReportFileName })
+
+	testMain(t, root, []string{"--config", "mutago.yml", "--exec-timeout", "5"}, returnOk, "mutation score")
+	_, err := os.Stat(reportPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
 func TestMainExposesMutationChecksums(t *testing.T) {
 	root := t.TempDir()
 	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/checksum\n\ngo 1.26.6\n")

@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Respect the documented `json_output: false` default when no config file is supplied, so normal runs do not write `report.json` (#133).
 - Apply documented `true` defaults for `skip_without_test` and `skip_with_build_tags` when running unconfigured or when omitted from a configuration file (#132).
 - Expose mutation checksums in debug output and JSON reports so `--blacklist` files can be populated from a run (#131).
 
