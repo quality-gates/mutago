@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
-## [v2.10.9] — 2026-09-11
+## [v2.10.10] — 2026-09-11
 
 ### Fixed
 - Clean up temporary mutation directories and overlay files upon process interruption (SIGINT / SIGTERM) unless `--do-not-remove-tmp-folder` is set (#134).
@@ -607,4 +607,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.4]: https://github.com/quality-gates/mutago/compare/v2.10.3...v2.10.4
 [v2.10.7]: https://github.com/quality-gates/mutago/compare/v2.10.5...v2.10.7
 [v2.10.8]: https://github.com/quality-gates/mutago/compare/v2.10.7...v2.10.8
-[v2.10.9]: https://github.com/quality-gates/mutago/compare/v2.10.8...v2.10.9
+[v2.10.10]: https://github.com/quality-gates/mutago/compare/v2.10.8...v2.10.10
