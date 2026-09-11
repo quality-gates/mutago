@@ -1000,7 +1000,7 @@ func printResultsIfNeeded(stdout io.Writer, opts *models.Options, report *models
 func writeAllReports(stderr io.Writer, opts *models.Options, report *models.Report, moduleRoot string) int {
 	specs := []reportSpec{
 		{
-			enabled:  opts.General.Config == "" || opts.Config.JSONOutput,
+			enabled:  opts.Config.JSONOutput,
 			write:    func() error { return reportmaker.MakeJSONReport(*report) },
 			savedMsg: "Save report into %q", fileName: models.ReportFileName,
 		},
