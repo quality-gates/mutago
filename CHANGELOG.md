@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.10.8] — 2026-09-11
 
 ### Fixed
 - Forward execution timeout to baseline test execution when `--coverage` is enabled (#129). Previously, `go test -coverprofile` inherited Go's default 10-minute test timeout without applying `--exec-timeout`, allowing test suites that exceeded the configured execution timeout to pass the baseline run silently while subsequent mutant runs timed out, causing all mutants to be falsely reported as killed with 100% MSI.
@@ -594,4 +594,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.5]: https://github.com/quality-gates/mutago/compare/v2.10.4...v2.10.5
 [v2.10.4]: https://github.com/quality-gates/mutago/compare/v2.10.3...v2.10.4
 [v2.10.7]: https://github.com/quality-gates/mutago/compare/v2.10.5...v2.10.7
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.7...HEAD
+[v2.10.8]: https://github.com/quality-gates/mutago/compare/v2.10.7...v2.10.8
