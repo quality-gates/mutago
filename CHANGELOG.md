@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.10.9] — 2026-09-11
 
 ### Fixed
 - Respect the documented `json_output: false` default when no config file is supplied, so normal runs do not write `report.json` (#133).
@@ -603,3 +603,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.4]: https://github.com/quality-gates/mutago/compare/v2.10.3...v2.10.4
 [v2.10.7]: https://github.com/quality-gates/mutago/compare/v2.10.5...v2.10.7
 [v2.10.8]: https://github.com/quality-gates/mutago/compare/v2.10.7...v2.10.8
+[v2.10.9]: https://github.com/quality-gates/mutago/compare/v2.10.8...v2.10.9
