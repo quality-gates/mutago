@@ -87,6 +87,67 @@ func TestMainSkipWithoutTest(t *testing.T) {
 	)
 }
 
+func TestMainDefaultSkipWithoutTestAndBuildTags(t *testing.T) {
+	out := testMain(
+		t,
+		"../..",
+		[]string{"--list-files", "internal/importing/filepathfixtures"},
+		returnOk,
+		"internal/importing/filepathfixtures/second.go",
+	)
+	assert.NotContains(t, out, "first.go")
+	assert.NotContains(t, out, "third.go")
+	assert.NotContains(t, out, "fifth.go")
+}
+
+func TestMainConfigUnsetRetainsSkipDefaults(t *testing.T) {
+	cfgFile := filepath.Join(t.TempDir(), "mutago.yml")
+	require.NoError(t, os.WriteFile(cfgFile, []byte("min_msi: 0\n"), 0644))
+
+	out := testMain(
+		t,
+		"../..",
+		[]string{"--config", cfgFile, "--list-files", "internal/importing/filepathfixtures"},
+		returnOk,
+		"internal/importing/filepathfixtures/second.go",
+	)
+	assert.NotContains(t, out, "first.go")
+	assert.NotContains(t, out, "third.go")
+	assert.NotContains(t, out, "fifth.go")
+}
+
+func TestMainConfigExplicitFalseAllowsUntestedFiles(t *testing.T) {
+	cfgFile := filepath.Join(t.TempDir(), "mutago.yml")
+	require.NoError(t, os.WriteFile(cfgFile, []byte("skip_without_test: false\n"), 0644))
+
+	out := testMain(
+		t,
+		"../..",
+		[]string{"--config", cfgFile, "--list-files", "internal/importing/filepathfixtures"},
+		returnOk,
+		"internal/importing/filepathfixtures/first.go",
+	)
+	assert.Contains(t, out, "internal/importing/filepathfixtures/first.go")
+	assert.NotContains(t, out, "third.go")
+	assert.NotContains(t, out, "fifth.go")
+}
+
+func TestMainConfigExplicitFalseAllowsBuildTaggedFiles(t *testing.T) {
+	cfgFile := filepath.Join(t.TempDir(), "mutago.yml")
+	require.NoError(t, os.WriteFile(cfgFile, []byte("skip_with_build_tags: false\n"), 0644))
+
+	out := testMain(
+		t,
+		"../..",
+		[]string{"--config", cfgFile, "--list-files", "internal/importing/filepathfixtures"},
+		returnOk,
+		"internal/importing/filepathfixtures/third.go",
+	)
+	assert.Contains(t, out, "internal/importing/filepathfixtures/third.go")
+	assert.Contains(t, out, "internal/importing/filepathfixtures/fifth.go")
+	assert.NotContains(t, out, "first.go")
+}
+
 func TestMainMinMsiPass(t *testing.T) {
 	testMain(
 		t,

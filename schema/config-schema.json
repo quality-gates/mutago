@@ -8,12 +8,12 @@
   "properties": {
     "skip_without_test": {
       "type": "boolean",
-      "default": false,
+      "default": true,
       "description": "Skip source files that have no corresponding _test.go file."
     },
     "skip_with_build_tags": {
       "type": "boolean",
-      "default": false,
+      "default": true,
       "description": "Skip test files that contain Go build tags."
     },
     "json_output": {

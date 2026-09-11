@@ -97,3 +97,16 @@ type Options struct {
 		IgnoreSourceLines    []string `yaml:"ignore_source_lines"`
 	}
 }
+
+// NewOptions returns an Options struct initialized with documented defaults.
+func NewOptions() *Options {
+	opts := &Options{}
+	opts.ApplyConfigDefaults()
+	return opts
+}
+
+// ApplyConfigDefaults applies documented defaults to unconfigured options.
+func (o *Options) ApplyConfigDefaults() {
+	o.Config.SkipFileWithoutTest = true
+	o.Config.SkipFileWithBuildTag = true
+}
