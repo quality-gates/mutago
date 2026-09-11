@@ -4,6 +4,12 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [v2.10.12] — 2026-09-11
+
+### Fixed
+- Ship the darwin release archives and checksums that v2.10.10 and v2.10.11 lack. Those releases were created by hand before the `Release` workflow ran, and GitHub release immutability prevents attaching assets afterwards. No code changes since v2.10.11.
+- Correct the release step in `CLAUDE.md`: push the tag and let the `Release` workflow create the release; only edit its notes afterwards.
+
 ## [v2.10.11] — 2026-09-11
 
 ### Added
@@ -612,3 +618,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.8]: https://github.com/quality-gates/mutago/compare/v2.10.7...v2.10.8
 [v2.10.10]: https://github.com/quality-gates/mutago/compare/v2.10.8...v2.10.10
 [v2.10.11]: https://github.com/quality-gates/mutago/compare/v2.10.10...v2.10.11
+[v2.10.12]: https://github.com/quality-gates/mutago/compare/v2.10.11...v2.10.12
