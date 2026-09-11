@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/jessevdk/go-flags"
 	"gopkg.in/yaml.v3"
@@ -64,6 +66,12 @@ func checkArguments(args []string, opts *models.Options) (bool, int) {
 		return true, returnBashCompletion
 	}
 
+	if len(opts.Remaining.Targets) == 0 {
+		if flagName, val, ok := findSwallowedTargetFlag(p, args); ok {
+			return true, exitError("flag %q consumed %q as its argument, leaving no targets. Use \"%s=<value>\" or pass targets after the flag value.", flagName, val, flagName)
+		}
+	}
+
 	if opts.General.Debug {
 		opts.General.Verbose = true
 	}
@@ -75,6 +83,117 @@ func checkArguments(args []string, opts *models.Options) (bool, int) {
 	}
 
 	return false, 0
+}
+
+// findSwallowedTargetFlag checks if any value-taking flag in args consumed a value
+// that looks like a target package, directory, or source file.
+func findSwallowedTargetFlag(p *flags.Parser, args []string) (string, string, bool) {
+	optsByLong, optsByShort := indexOptions(p)
+
+	for i, arg := range args {
+		nextArg := ""
+		hasNext := i+1 < len(args)
+		if hasNext {
+			nextArg = args[i+1]
+		}
+		opt, val := parseOptionArg(arg, nextArg, hasNext, optsByLong, optsByShort)
+		if opt != nil && isTargetLike(val) {
+			flagName := "--" + opt.LongName
+			if opt.LongName == "" && opt.ShortName != 0 {
+				flagName = "-" + string(opt.ShortName)
+			}
+			return flagName, val, true
+		}
+	}
+
+	return "", "", false
+}
+
+func indexOptions(p *flags.Parser) (map[string]*flags.Option, map[rune]*flags.Option) {
+	optsByLong := make(map[string]*flags.Option)
+	optsByShort := make(map[rune]*flags.Option)
+
+	var visit func(g *flags.Group)
+	visit = func(g *flags.Group) {
+		for _, o := range g.Options() {
+			if o.LongName != "" {
+				optsByLong[o.LongName] = o
+			}
+			if o.ShortName != 0 {
+				optsByShort[o.ShortName] = o
+			}
+		}
+		for _, sub := range g.Groups() {
+			visit(sub)
+		}
+	}
+	visit(p.Group)
+	return optsByLong, optsByShort
+}
+
+func parseOptionArg(arg, nextArg string, hasNext bool, optsByLong map[string]*flags.Option, optsByShort map[rune]*flags.Option) (*flags.Option, string) {
+	if strings.HasPrefix(arg, "--") {
+		return parseLongOption(strings.TrimPrefix(arg, "--"), nextArg, hasNext, optsByLong)
+	}
+	if strings.HasPrefix(arg, "-") && len(arg) == 2 {
+		return parseShortOption(rune(arg[1]), nextArg, hasNext, optsByShort)
+	}
+	return nil, ""
+}
+
+func parseLongOption(name, nextArg string, hasNext bool, optsByLong map[string]*flags.Option) (*flags.Option, string) {
+	if eqIdx := strings.Index(name, "="); eqIdx != -1 {
+		return getActiveOption(optsByLong[name[:eqIdx]], name[eqIdx+1:])
+	}
+	if hasNext {
+		return getActiveOption(optsByLong[name], nextArg)
+	}
+	return nil, ""
+}
+
+func parseShortOption(r rune, nextArg string, hasNext bool, optsByShort map[rune]*flags.Option) (*flags.Option, string) {
+	if hasNext {
+		return getActiveOption(optsByShort[r], nextArg)
+	}
+	return nil, ""
+}
+
+func getActiveOption(o *flags.Option, val string) (*flags.Option, string) {
+	if o != nil && o.IsSet() && !o.IsSetDefault() {
+		return o, val
+	}
+	return nil, ""
+}
+
+// isTargetLike reports whether val appears to be a target package pattern, directory, or source file.
+func isTargetLike(val string) bool {
+	if val == "" || strings.HasPrefix(val, "-") {
+		return false
+	}
+	if isWildcardPattern(val) || isExistingTarget(val) {
+		return true
+	}
+	if strings.HasSuffix(val, ".go") {
+		return true
+	}
+	return isPotentialPathTarget(val)
+}
+
+func isWildcardPattern(val string) bool {
+	return val == "..." || strings.HasSuffix(val, "/...")
+}
+
+func isExistingTarget(val string) bool {
+	info, err := os.Stat(val)
+	return err == nil && (info.IsDir() || strings.HasSuffix(val, ".go"))
+}
+
+func isPotentialPathTarget(val string) bool {
+	ext := strings.ToLower(filepath.Ext(val))
+	if ext != "" && ext != ".go" {
+		return false
+	}
+	return strings.HasPrefix(val, "./") || strings.HasPrefix(val, "../")
 }
 
 // isCompletion reports whether mutago was invoked for shell completion.
