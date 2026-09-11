@@ -631,6 +631,101 @@ func TestMainAdaptiveTimeoutRejectsZeroTestCount(t *testing.T) {
 	)
 }
 
+func TestMainFlagSwallowsTarget(t *testing.T) {
+	root := t.TempDir()
+
+	t.Run("wildcard pattern ./...", func(t *testing.T) {
+		out := testMain(
+			t,
+			root,
+			[]string{"--baseline", "./..."},
+			returnError,
+			`flag "--baseline" consumed "./..." as its argument`,
+		)
+		assert.Contains(t, out, `leaving no targets`)
+		assert.Contains(t, out, `Use "--baseline=<value>" or pass targets after the flag value`)
+	})
+
+	t.Run("relative path ./mathutil", func(t *testing.T) {
+		out := testMain(
+			t,
+			root,
+			[]string{"--baseline", "./mathutil"},
+			returnError,
+			`flag "--baseline" consumed "./mathutil" as its argument`,
+		)
+		assert.Contains(t, out, `leaving no targets`)
+	})
+
+	t.Run("existing directory name", func(t *testing.T) {
+		pkgDir := filepath.Join(root, "mathutil")
+		require.NoError(t, os.Mkdir(pkgDir, 0755))
+		out := testMain(
+			t,
+			root,
+			[]string{"--baseline", "mathutil"},
+			returnError,
+			`flag "--baseline" consumed "mathutil" as its argument`,
+		)
+		assert.Contains(t, out, `leaving no targets`)
+	})
+
+	t.Run("config flag swallowing target", func(t *testing.T) {
+		pkgDir := filepath.Join(root, "mathutil")
+		require.NoError(t, os.MkdirAll(pkgDir, 0755))
+		out := testMain(
+			t,
+			root,
+			[]string{"--config", "./mathutil"},
+			returnError,
+			`flag "--config" consumed "./mathutil" as its argument`,
+		)
+		assert.Contains(t, out, `leaving no targets`)
+	})
+
+	t.Run("match flag swallowing pattern", func(t *testing.T) {
+		out := testMain(
+			t,
+			root,
+			[]string{"--match", "./..."},
+			returnError,
+			`flag "--match" consumed "./..." as its argument`,
+		)
+		assert.Contains(t, out, `leaving no targets`)
+	})
+}
+
+func TestIsTargetLike(t *testing.T) {
+	tmp := t.TempDir()
+	existingDir := filepath.Join(tmp, "subdir")
+	require.NoError(t, os.Mkdir(existingDir, 0755))
+
+	existingFile := filepath.Join(tmp, "mutago.yml")
+	require.NoError(t, os.WriteFile(existingFile, []byte(""), 0644))
+
+	existingGoFile := filepath.Join(tmp, "main.go")
+	require.NoError(t, os.WriteFile(existingGoFile, []byte("package main"), 0644))
+
+	assert.False(t, isTargetLike(""))
+	assert.False(t, isTargetLike("-short"))
+	assert.False(t, isTargetLike("--baseline"))
+	assert.True(t, isTargetLike("./..."))
+	assert.True(t, isTargetLike("..."))
+	assert.True(t, isTargetLike("foo/..."))
+	assert.True(t, isTargetLike(existingDir))
+	assert.True(t, isTargetLike(existingGoFile))
+	assert.True(t, isTargetLike("main.go"))
+	assert.True(t, isTargetLike("./mathutil"))
+	assert.True(t, isTargetLike("../sibling"))
+	assert.False(t, isTargetLike(existingFile))
+	assert.False(t, isTargetLike("mutago-baseline.json"))
+	assert.False(t, isTargetLike("./mutago-baseline.json"))
+	assert.False(t, isTargetLike("mutago.yml"))
+	assert.False(t, isTargetLike("./mutago.yml"))
+	assert.False(t, isTargetLike("10"))
+	assert.False(t, isTargetLike("origin/main"))
+}
+
 func TestMainCoverageFailureStopsMutationRun(t *testing.T) {
 	root := t.TempDir()
 	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/coveragefailure\n\ngo 1.26.5\n")
