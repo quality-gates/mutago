@@ -1805,7 +1805,7 @@
 </tbody>
 </table>
 <h3 id="arithmeticassignment">arithmetic/assignment<a class="headerlink" href="#arithmeticassignment" title="Permanent link">&para;</a></h3>
-<p>Strips compound assignment operators, replacing them with plain <code>=</code>.</p>
+<p>Strips compound assignment operators, replacing them with plain <code>=</code>. Shift assignments (<code>&lt;&lt;=</code>, <code>&gt;&gt;=</code>) whose right-hand side is not assignable to the left-hand side are skipped to avoid uncompilable mutants.</p>
 <table>
 <thead>
 <tr>
