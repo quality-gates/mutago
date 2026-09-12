@@ -73,3 +73,250 @@ func TestMutatorArithmeticBase_StringLiteralWithoutInfo(t *testing.T) {
 	}
 	assert.Len(t, MutatorArithmeticBase(nil, nil, intBin), 1)
 }
+
+func TestMutatorArithmeticBase_SkipsZeroMultiplication(t *testing.T) {
+	tests := []struct {
+		name      string
+		node      *ast.BinaryExpr
+		wantCount int
+	}{
+		{
+			name: "int 0 literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.BasicLit{Kind: token.INT, Value: "0"},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "float 0.0 literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.BasicLit{Kind: token.FLOAT, Value: "0.0"},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "hex 0x0 literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.BasicLit{Kind: token.INT, Value: "0x0"},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "parenthesized 0 literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.ParenExpr{X: &ast.BasicLit{Kind: token.INT, Value: "0"}},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "unary plus 0 literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.UnaryExpr{Op: token.ADD, X: &ast.BasicLit{Kind: token.INT, Value: "0"}},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "unary minus 0 literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.UnaryExpr{Op: token.SUB, X: &ast.BasicLit{Kind: token.INT, Value: "0"}},
+			},
+			wantCount: 0,
+		},
+		{
+			name: "unary plus 1 non-zero literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.UnaryExpr{Op: token.ADD, X: &ast.BasicLit{Kind: token.INT, Value: "1"}},
+			},
+			wantCount: 1,
+		},
+		{
+			name: "unary minus 1 non-zero literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.UnaryExpr{Op: token.SUB, X: &ast.BasicLit{Kind: token.INT, Value: "1"}},
+			},
+			wantCount: 1,
+		},
+		{
+			name: "unary bitwise not 0 literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.UnaryExpr{Op: token.XOR, X: &ast.BasicLit{Kind: token.INT, Value: "0"}},
+			},
+			wantCount: 1,
+		},
+		{
+			name: "int 1 non-zero literal",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.BasicLit{Kind: token.INT, Value: "1"},
+			},
+			wantCount: 1,
+		},
+		{
+			name: "variable y operand",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  ast.NewIdent("x"),
+				Y:  ast.NewIdent("y"),
+			},
+			wantCount: 1,
+		},
+		{
+			name: "left operand 0, right operand non-zero",
+			node: &ast.BinaryExpr{
+				Op: token.MUL,
+				X:  &ast.BasicLit{Kind: token.INT, Value: "0"},
+				Y:  ast.NewIdent("x"),
+			},
+			wantCount: 1,
+		},
+		{
+			name: "addition with zero operand not skipped",
+			node: &ast.BinaryExpr{
+				Op: token.ADD,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.BasicLit{Kind: token.INT, Value: "0"},
+			},
+			wantCount: 1,
+		},
+		{
+			name: "subtraction with zero operand not skipped",
+			node: &ast.BinaryExpr{
+				Op: token.SUB,
+				X:  ast.NewIdent("x"),
+				Y:  &ast.BasicLit{Kind: token.INT, Value: "0"},
+			},
+			wantCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			muts := MutatorArithmeticBase(nil, nil, tt.node)
+			assert.Len(t, muts, tt.wantCount)
+		})
+	}
+}
+
+func TestMutatorArithmeticBase_SkipsZeroMultiplication_WithTypeInfo(t *testing.T) {
+	src := `package main
+
+const zeroConst = 0
+const nonZeroConst = 5
+
+func calc(x int) int {
+	a := x * 0
+	b := x * 0.0
+	c := x * zeroConst
+	d := x * 1
+	e := x * a
+	f := x + 0
+	g := x * nonZeroConst
+	return a + b + c + d + e + f + g
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+	}
+	_, err = conf.Check("main", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var zeroMutations, nonZeroMutations int
+	ast.Inspect(file, func(n ast.Node) bool {
+		bin, ok := n.(*ast.BinaryExpr)
+		if !ok || bin.Op != token.MUL {
+			return true
+		}
+		muts := MutatorArithmeticBase(nil, info, bin)
+		switch y := bin.Y.(type) {
+		case *ast.BasicLit:
+			if y.Value == "0" || y.Value == "0.0" {
+				zeroMutations += len(muts)
+			} else {
+				nonZeroMutations += len(muts)
+			}
+		case *ast.Ident:
+			if y.Name == "zeroConst" {
+				zeroMutations += len(muts)
+			} else {
+				nonZeroMutations += len(muts)
+			}
+		}
+		return true
+	})
+
+	assert.Equal(t, 0, zeroMutations, "expected 0 mutations on * 0, * 0.0, * zeroConst")
+	assert.Equal(t, 3, nonZeroMutations, "expected 3 mutations on * 1, * a, and * nonZeroConst")
+}
+
+func TestMutatorArithmeticBase_MutantsCompileCleanly(t *testing.T) {
+	src := `package main
+
+const zeroConst = 0
+
+func calc(x int) int {
+	a := x * 0
+	b := x * 0.0
+	c := x * zeroConst
+	d := x * 1
+	e := x * a
+	return a + int(b) + c + d + e
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+	}
+	_, err = conf.Check("main", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var allMutations []mutator.Mutation
+	ast.Inspect(file, func(n ast.Node) bool {
+		muts := MutatorArithmeticBase(nil, info, n)
+		allMutations = append(allMutations, muts...)
+		return true
+	})
+
+	for i, m := range allMutations {
+		m.Change()
+		checkInfo := &types.Info{
+			Types: make(map[ast.Expr]types.TypeAndValue),
+		}
+		_, compileErr := conf.Check("main", fset, []*ast.File{file}, checkInfo)
+		m.Reset()
+		assert.NoError(t, compileErr, "mutant %d failed to compile: %v", i, compileErr)
+	}
+}
