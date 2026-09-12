@@ -31,6 +31,11 @@ func MutatorArithmeticBase(_ *types.Package, info *types.Info, node ast.Node) []
 		return nil
 	}
 
+	// Skip * 0; inverting to / 0 does not compile.
+	if n.Op == token.MUL && (isConstantZero(n.X) || isConstantZero(n.Y)) {
+		return nil
+	}
+
 	original := n.Op
 	mutated, ok := arithmeticMutations[n.Op]
 	if !ok {

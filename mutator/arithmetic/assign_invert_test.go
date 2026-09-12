@@ -56,3 +56,50 @@ func appendStr(a, b string) {
 		t.Fatalf("expected 0 mutations on string +=, got %d", count)
 	}
 }
+
+func TestMutatorArithmeticAssignInvert_SkipsMulAssignZero(t *testing.T) {
+	cases := []string{
+		`package main
+func f(x int) { x *= 0 }`,
+		`package main
+func f(x int) { x *= 0x0 }`,
+		`package main
+func f(x float64) { x *= 0.0 }`,
+		`package main
+func f(x int) { x *= (0) }`,
+	}
+	for _, src := range cases {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "test.go", src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var count int
+		ast.Inspect(file, func(n ast.Node) bool {
+			count += len(MutatorArithmeticAssignInvert(nil, nil, n))
+			return true
+		})
+		if count != 0 {
+			t.Fatalf("expected 0 mutations for %q, got %d", src, count)
+		}
+	}
+}
+
+func TestMutatorArithmeticAssignInvert_KeepsMulAssignNonZero(t *testing.T) {
+	src := `package main
+func f(x int) { x *= 2 }
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	ast.Inspect(file, func(n ast.Node) bool {
+		count += len(MutatorArithmeticAssignInvert(nil, nil, n))
+		return true
+	})
+	if count != 1 {
+		t.Fatalf("expected 1 mutation for x *= 2, got %d", count)
+	}
+}
