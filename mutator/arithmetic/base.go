@@ -2,6 +2,7 @@ package arithmetic
 
 import (
 	"go/ast"
+	"go/constant"
 	"go/token"
 	"go/types"
 
@@ -28,6 +29,10 @@ func MutatorArithmeticBase(_ *types.Package, info *types.Info, node ast.Node) []
 	}
 
 	if n.Op == token.ADD && isStringExpr(info, n) {
+		return nil
+	}
+
+	if n.Op == token.MUL && isZeroExpr(info, n.Y) {
 		return nil
 	}
 
@@ -66,4 +71,33 @@ func isStringExpr(info *types.Info, n *ast.BinaryExpr) bool {
 func isStringLit(expr ast.Expr) bool {
 	lit, ok := expr.(*ast.BasicLit)
 	return ok && lit.Kind == token.STRING
+}
+
+func isZeroExpr(info *types.Info, expr ast.Expr) bool {
+	expr = unwrapParen(expr)
+	if info != nil {
+		if tv, ok := info.Types[expr]; ok && isZeroValue(tv.Value) {
+			return true
+		}
+	}
+	switch e := expr.(type) {
+	case *ast.UnaryExpr:
+		if e.Op == token.ADD || e.Op == token.SUB {
+			return isZeroExpr(info, e.X)
+		}
+	case *ast.BasicLit:
+		return isZeroValue(constant.MakeFromLiteral(e.Value, e.Kind, 0))
+	}
+	return false
+}
+
+func isZeroValue(val constant.Value) bool {
+	if val == nil {
+		return false
+	}
+	switch val.Kind() {
+	case constant.Int, constant.Float:
+		return constant.Sign(val) == 0
+	}
+	return false
 }
