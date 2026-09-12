@@ -43,6 +43,22 @@ fi
 
 clean_up
 
+# go test exits 1 on build/setup failure too (exit 2 is for flag misuse),
+# so treat those as SKIP rather than KILLED.
+if [ $GOMUTESTING_RESULT -ne 0 ]; then
+	if echo "$GOMUTESTING_TEST" | grep -q '\[build failed\]\|\[setup failed\]'; then
+		if [ "$MUTATE_VERBOSE" = true ] ; then
+			echo "Mutation did not compile"
+		fi
+
+		if [ "$MUTATE_DEBUG" = true ] ; then
+			echo "$GOMUTESTING_DIFF"
+		fi
+
+		exit 2
+	fi
+fi
+
 case $GOMUTESTING_RESULT in
 0) # tests passed -> ESCAPED
 	echo "$GOMUTESTING_DIFF"
