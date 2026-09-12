@@ -816,7 +816,7 @@
 <tr>
 <td style="text-align: left;"><code>--timeout-coefficient</code></td>
 <td style="text-align: left;"><code>0</code> (disabled)</td>
-<td style="text-align: left;">Scale per-mutation timeout as a multiple of an uncached baseline test-suite run (e.g. <code>3</code> = 3× the clean run). Overrides <code>--exec-timeout</code> when set.</td>
+<td style="text-align: left;">Scale per-mutation timeout as a multiple of an uncached baseline test-suite run (e.g. <code>3</code> = 3× the clean run). The clean pre-flight/coverage run uses a generous cap so a suite slower than <code>--exec-timeout</code> can still be measured. Overrides <code>--exec-timeout</code> when set.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>--workers</code></td>
