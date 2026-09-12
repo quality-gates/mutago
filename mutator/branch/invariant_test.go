@@ -103,6 +103,79 @@ func mutate(enabled bool, outer int) {
 	}
 }
 
+func TestBranchMutationsGenericCodePreservesASTInvariants(t *testing.T) {
+	const source = `package example
+
+import (
+	"slices"
+	"sync/atomic"
+)
+
+var (
+	sinkSlice []int
+	sinkVal   any
+)
+
+func dummy() {
+	_ = slices.Equal([]int{1}, []int{1})
+	var v atomic.Value
+	_ = v
+}
+
+func mutate(enabled bool, s []int, v any) {
+	if enabled {
+		sinkSlice = slices.Clone(s)
+	} else {
+		sinkVal = v.(atomic.Pointer[int])
+	}
+
+	switch {
+	case enabled:
+		slices.Sort(s)
+	default:
+		sinkVal = v
+	}
+}
+`
+	tests := []struct {
+		name    string
+		mutator mutator.Mutator
+	}{
+		{name: "if", mutator: MutatorIf},
+		{name: "else", mutator: MutatorElse},
+		{name: "case", mutator: MutatorCase},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fset, file, pkg, info := parseBranchSource(t, source)
+			original := printBranchSource(t, fset, file)
+			var mutations []mutator.Mutation
+			ast.Inspect(file, func(node ast.Node) bool {
+				mutations = append(mutations, tt.mutator(pkg, info, node)...)
+				return true
+			})
+			if len(mutations) == 0 {
+				t.Fatal("mutator produced no mutations")
+			}
+
+			for i, mutation := range mutations {
+				mutation.Change()
+				mutated := printBranchSource(t, fset, file)
+				if mutated == original {
+					t.Errorf("mutation %d did not change printed source", i)
+				}
+				parseBranchSource(t, mutated)
+
+				mutation.Reset()
+				if reset := printBranchSource(t, fset, file); reset != original {
+					t.Errorf("mutation %d reset did not restore original source\noriginal:\n%s\nreset:\n%s", i, original, reset)
+				}
+			}
+		})
+	}
+}
+
 func TestMutatorIfWithEmptyInfoStillMutates(t *testing.T) {
 	node := &ast.IfStmt{
 		Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: ast.NewIdent("x")}}},

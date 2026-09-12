@@ -77,6 +77,39 @@ func mutate(outer int) {
 				"// keep block boundary comment",
 			},
 		},
+		{
+			name: "generic functions and types",
+			source: `package example
+
+import (
+	"slices"
+	"sync/atomic"
+)
+
+var (
+	sinkSlice []int
+	sinkVal   any
+)
+
+func dummy() {
+	_ = slices.Equal([]int{1}, []int{1})
+	var v atomic.Value
+	_ = v
+}
+
+func mutate(s []int, v any) {
+	// keep generic function comment
+	sinkSlice = slices.Clone(s)
+
+	// keep generic type comment
+	sinkVal = v.(atomic.Pointer[int])
+}
+`,
+			comments: []string{
+				"// keep generic function comment",
+				"// keep generic type comment",
+			},
+		},
 	}
 
 	for _, tt := range tests {
