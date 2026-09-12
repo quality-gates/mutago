@@ -12,18 +12,20 @@ var statNodesInBlockForLine = make(map[int]map[token.Pos]mutatorInfo)
 // It performs cleanup and transfers collected annotation data to statement nodes within blocks.
 // This is a tactical solution to handle edge cases where mutators only look at nodes inside block statements.
 // A more robust architectural solution should be implemented in future versions.
-func HandleBlockStmt(node ast.Stmt) bool {
+// mutatorName is the registered mutator (e.g. "statement/remove", "statement/return") being applied
+// to node; line and regexp annotations that name that mutator (or "*") cause a skip.
+func HandleBlockStmt(node ast.Stmt, mutatorName string) bool {
 	for _, n := range statNodesInBlockForRegex {
-		if mutatorName, exists := n[node.Pos()]; exists {
-			if shouldSkipMutator(mutatorName, "statement/remove") {
+		if info, exists := n[node.Pos()]; exists {
+			if shouldSkipMutator(info, mutatorName) {
 				return true
 			}
 		}
 	}
 
 	for _, n := range statNodesInBlockForLine {
-		if mutatorName, exists := n[node.Pos()]; exists {
-			if shouldSkipMutator(mutatorName, "statement/remove") {
+		if info, exists := n[node.Pos()]; exists {
+			if shouldSkipMutator(info, mutatorName) {
 				return true
 			}
 		}
