@@ -717,6 +717,11 @@ func TestClassifyGoTestBuildFailureAsSkipped(t *testing.T) {
 		t.Fatalf("expected build failure to be skipped, got exit code %d", got)
 	}
 
+	setupFailure := []byte("FAIL\texample.com/aliasbug [setup failed]\n")
+	if got := classifyGoTestResult(1, setupFailure); got != 2 {
+		t.Fatalf("expected setup failure to be skipped, got exit code %d", got)
+	}
+
 	testFailure := []byte("--- FAIL: TestValue (0.00s)\nFAIL\texample.com/aliasbug\t0.001s\n")
 	if got := classifyGoTestResult(1, testFailure); got != 1 {
 		t.Fatalf("expected test failure to remain a killed result, got exit code %d", got)
