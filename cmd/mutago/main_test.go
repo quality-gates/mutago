@@ -566,6 +566,131 @@ func TestMainAdaptiveTimeoutBypassesTestCacheWithoutCoverage(t *testing.T) {
 	assert.Contains(t, adaptiveBaselineRuns[0], "-count=1", "adaptive timeout baseline must bypass the test cache")
 }
 
+func TestMainTimeoutCoefficientRescuesSlowCleanSuite(t *testing.T) {
+	root, goLog := adaptiveTimeoutFixture(t, "example.com/slowadaptive")
+	writeFixtureFile(t, filepath.Join(root, "add_test.go"), `package adaptive
+
+import (
+	"testing"
+	"time"
+)
+
+func TestAdd(t *testing.T) {
+	time.Sleep(2 * time.Second)
+	if got := Add(1, 2); got != 3 {
+		t.Fatalf("Add(1, 2) = %d, want 3", got)
+	}
+}
+`)
+
+	out := testMain(
+		t,
+		root,
+		[]string{"--verbose", "--timeout-coefficient", "3", "--exec-timeout", "1", "--config", "mutago.yml", "add.go"},
+		returnOk,
+		"mutation score",
+	)
+	assert.NotContains(t, out, "Baseline test failed")
+	assert.Contains(t, out, "Adaptive timeout:")
+	assert.NotContains(t, out, "timed out after 1s")
+
+	goLogBytes, err := os.ReadFile(goLog)
+	require.NoError(t, err)
+	for _, line := range strings.Split(string(goLogBytes), "\n") {
+		if strings.Contains(line, "-overlay=") {
+			assert.NotContains(t, line, "-timeout 1s", "mutant runs must use the derived timeout, not --exec-timeout")
+		}
+	}
+}
+
+func TestMainTimeoutCoefficientStillFailsRedBaseline(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/redadaptive\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "add.go"), `package redadaptive
+
+func Add(a, b int) int { return a + b }
+`)
+	writeFixtureFile(t, filepath.Join(root, "add_test.go"), `package redadaptive
+
+import "testing"
+
+func TestAdd(t *testing.T) {
+	t.Fatal("failing on purpose")
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - arithmetic/base\n")
+
+	testMain(
+		t,
+		root,
+		[]string{"--timeout-coefficient", "3", "--exec-timeout", "1", "--config", "mutago.yml", "add.go"},
+		returnError,
+		"Baseline test failed",
+	)
+}
+
+func TestMainExecTimeoutStillKillsSlowBaselineWithoutCoefficient(t *testing.T) {
+	root, _ := adaptiveTimeoutFixture(t, "example.com/slowfixedtimeout")
+	writeFixtureFile(t, filepath.Join(root, "add_test.go"), `package adaptive
+
+import (
+	"testing"
+	"time"
+)
+
+func TestAdd(t *testing.T) {
+	time.Sleep(2 * time.Second)
+	if got := Add(1, 2); got != 3 {
+		t.Fatalf("Add(1, 2) = %d, want 3", got)
+	}
+}
+`)
+
+	testMain(
+		t,
+		root,
+		[]string{"--exec-timeout", "1", "--config", "mutago.yml", "add.go"},
+		returnError,
+		"timed out after 1s",
+	)
+}
+
+func TestMainCoverageTimeoutCoefficientRescuesSlowCleanSuite(t *testing.T) {
+	root, goLog := adaptiveTimeoutFixture(t, "example.com/slowcoveradaptive")
+	writeFixtureFile(t, filepath.Join(root, "add_test.go"), `package adaptive
+
+import (
+	"testing"
+	"time"
+)
+
+func TestAdd(t *testing.T) {
+	time.Sleep(2 * time.Second)
+	if got := Add(1, 2); got != 3 {
+		t.Fatalf("Add(1, 2) = %d, want 3", got)
+	}
+}
+`)
+
+	out := testMain(
+		t,
+		root,
+		[]string{"--verbose", "--coverage", "--timeout-coefficient", "3", "--exec-timeout", "1", "--config", "mutago.yml", "add.go"},
+		returnOk,
+		"mutation score",
+	)
+	assert.NotContains(t, out, "coverage test failed")
+	assert.Contains(t, out, "Adaptive timeout:")
+
+	goLogBytes, err := os.ReadFile(goLog)
+	require.NoError(t, err)
+	for _, line := range strings.Split(string(goLogBytes), "\n") {
+		if strings.Contains(line, "-overlay=") {
+			assert.NotContains(t, line, "-timeout 1s", "mutant runs must use the derived timeout, not --exec-timeout")
+		}
+	}
+}
+
 func TestMainAdaptiveTimeoutPreservesPositiveTestCount(t *testing.T) {
 	root, goLog := adaptiveTimeoutFixture(t, "example.com/adaptivecount")
 

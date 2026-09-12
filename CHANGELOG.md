@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `--timeout-coefficient` now measures the clean suite under a generous timeout before applying `--exec-timeout`, so a green suite slower than the fixed timeout no longer dies in pre-flight with exit 3 (#135).
+
 ## [v2.10.12] — 2026-09-11
 
 ### Fixed
@@ -618,4 +623,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.8]: https://github.com/quality-gates/mutago/compare/v2.10.7...v2.10.8
 [v2.10.10]: https://github.com/quality-gates/mutago/compare/v2.10.8...v2.10.10
 [v2.10.11]: https://github.com/quality-gates/mutago/compare/v2.10.10...v2.10.11
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.12...HEAD
 [v2.10.12]: https://github.com/quality-gates/mutago/compare/v2.10.11...v2.10.12

@@ -16,7 +16,7 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | :--- | :------ | :---------- |
 | `--exec` | (built-in) | Custom exec command for testing each mutation |
 | `--exec-timeout` | `10` | Seconds to wait before killing the test process |
-| `--timeout-coefficient` | `0` (disabled) | Scale per-mutation timeout as a multiple of an uncached baseline test-suite run (e.g. `3` = 3× the clean run). Overrides `--exec-timeout` when set. |
+| `--timeout-coefficient` | `0` (disabled) | Scale per-mutation timeout as a multiple of an uncached baseline test-suite run (e.g. `3` = 3× the clean run). The clean pre-flight/coverage run uses a generous cap so a suite slower than `--exec-timeout` can still be measured. Overrides `--exec-timeout` when set. |
 | `--workers` | all CPUs | Number of parallel mutation workers |
 | `--config` | — | Path to YAML config file |
 

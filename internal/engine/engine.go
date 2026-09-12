@@ -42,9 +42,10 @@ import (
 )
 
 const (
-	returnOk                 = 0
-	returnError              = 3
-	returnMsiThresholdNotMet = 4
+	returnOk                       = 0
+	returnError                    = 3
+	returnMsiThresholdNotMet       = 4
+	adaptiveBaselineTimeoutSeconds = 300
 )
 
 // Engine orchestrates the mutation testing lifecycle.
@@ -421,7 +422,6 @@ func configureAdaptiveTimeoutAndCoverage(opts *models.Options, pkgs []importing.
 		}
 		return profiles, nil
 	}
-	applyAdaptiveTimeout(opts, pkgs, run.execs, run.extraTestFlags)
 	return nil, nil
 }
 
@@ -709,24 +709,47 @@ func parseExecFlags(opts *models.Options) (execs []string, extraTestFlags []stri
 // separately), --no-exec, --dry-run, and custom --exec (the built-in `go test`
 // baseline does not reflect a custom exec command). The --noop flag is now a
 // no-op retained for backward compatibility, since the check is always on.
+// When --timeout-coefficient is set, the check uses a generous timeout, measures
+// the clean run, and sets the per-mutation timeout from that measurement.
+func skipBaselineChecks(opts *models.Options, execs []string) bool {
+	return opts.Exec.Coverage || opts.Exec.NoExec || opts.General.DryRun || len(execs) > 0
+}
+
 func runBaselineChecks(opts *models.Options, pkgs []importing.Package, execs []string, extraTestFlags []string) int {
-	if opts.Exec.Coverage || opts.Exec.NoExec || opts.General.DryRun || len(execs) > 0 {
+	if skipBaselineChecks(opts, execs) {
 		return 0 // returnOk
 	}
+	timeout := opts.Exec.Timeout
+	flags := extraTestFlags
+	measureAdaptive := opts.Exec.TimeoutCoefficient > 0
+	if measureAdaptive {
+		timeout = adaptiveBaselineTimeoutSeconds
+		flags = uncachedTestFlags(extraTestFlags)
+	}
+	var maxBaseline time.Duration
 	for _, importPkg := range pkgs {
 		pkgPath := packageImportPath(importPkg.Files)
 		if pkgPath == "" {
 			continue
 		}
-		args := []string{"test", "-timeout", fmt.Sprintf("%ds", opts.Exec.Timeout)}
-		args = append(args, extraTestFlags...)
+		args := []string{"test", "-timeout", fmt.Sprintf("%ds", timeout)}
+		args = append(args, flags...)
 		args = append(args, pkgPath)
 		cmd := exec.Command("go", args...)
 		cmd.Env = os.Environ()
-		if out, err := cmd.CombinedOutput(); err != nil {
+		start := time.Now()
+		out, err := cmd.CombinedOutput()
+		elapsed := time.Since(start)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Baseline test failed for %q — mutation testing requires a green baseline; fix the build/tests before running mutago:\n%s\n", pkgPath, out)
 			return 3 // returnError
 		}
+		if elapsed > maxBaseline {
+			maxBaseline = elapsed
+		}
+	}
+	if measureAdaptive {
+		applyAdaptiveTimeoutFromBaseline(opts, maxBaseline)
 	}
 	console.Verbose(opts, "Baseline check passed — all packages green before mutation")
 	return 0 // returnOk
@@ -748,32 +771,6 @@ func packageImportPath(files []string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
-}
-
-func applyAdaptiveTimeout(opts *models.Options, pkgs []importing.Package, execs []string, extraTestFlags []string) {
-	if opts.Exec.TimeoutCoefficient <= 0 || opts.Exec.NoExec || len(execs) > 0 {
-		return
-	}
-	baselineTestFlags := uncachedTestFlags(extraTestFlags)
-	var maxBaseline time.Duration
-	for _, importPkg := range pkgs {
-		pkgPath := packageImportPath(importPkg.Files)
-		if pkgPath == "" {
-			continue
-		}
-		baseArgs := []string{"test", "-timeout", "300s"}
-		baseArgs = append(baseArgs, baselineTestFlags...)
-		baseArgs = append(baseArgs, pkgPath)
-		cmd := exec.Command("go", baseArgs...)
-		cmd.Env = os.Environ()
-		start := time.Now()
-		_ = cmd.Run()
-		elapsed := time.Since(start)
-		if elapsed > maxBaseline {
-			maxBaseline = elapsed
-		}
-	}
-	applyAdaptiveTimeoutFromBaseline(opts, maxBaseline)
 }
 
 func applyAdaptiveTimeoutFromBaseline(opts *models.Options, baseline time.Duration) {
@@ -803,11 +800,13 @@ func buildCoverageProfile(opts *models.Options, pkgFiles []string, tmpDir string
 	}
 	profilePath := filepath.Join(profileDir, "coverage.out")
 	coverageTestFlags := extraTestFlags
+	timeout := opts.Exec.Timeout
 	if opts.Exec.TimeoutCoefficient > 0 && strings.TrimSpace(opts.Exec.Exec) == "" {
 		coverageTestFlags = uncachedTestFlags(extraTestFlags)
+		timeout = adaptiveBaselineTimeoutSeconds
 	}
 	start := time.Now()
-	if err := runCoverageProfile(pkgPath, profilePath, opts.Exec.Timeout, coverageTestFlags); err != nil {
+	if err := runCoverageProfile(pkgPath, profilePath, timeout, coverageTestFlags); err != nil {
 		return nil, time.Since(start), err
 	}
 	elapsed := time.Since(start)
