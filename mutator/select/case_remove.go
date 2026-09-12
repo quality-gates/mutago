@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/types"
 
+	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -14,7 +15,7 @@ func init() {
 // MutatorSelectCaseRemove removes one non-default case at a time from a select statement.
 // Each mutation tests whether the program still behaves correctly when a particular
 // channel event can never fire.
-func MutatorSelectCaseRemove(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorSelectCaseRemove(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	n, ok := node.(*ast.SelectStmt)
 	if !ok {
 		return nil
@@ -33,6 +34,9 @@ func MutatorSelectCaseRemove(_ *types.Package, _ *types.Info, node ast.Node) []m
 		comm, ok := stmt.(*ast.CommClause)
 		if !ok || comm.Comm == nil {
 			continue // skip default
+		}
+		if !astutil.IsSafeToRemove(info, comm) {
+			continue
 		}
 
 		li := i
