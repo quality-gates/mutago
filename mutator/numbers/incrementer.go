@@ -15,7 +15,7 @@ func init() {
 }
 
 // MutatorNumbersIncrementer implements a mutator to increment int and float.
-func MutatorNumbersIncrementer(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorNumbersIncrementer(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	n, ok := node.(*ast.BasicLit)
 	if !ok {
 		return nil
@@ -23,13 +23,21 @@ func MutatorNumbersIncrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 
 	if n.Kind == token.INT {
 		original := n.Value
-		info, ok := parseIntLiteral(n.Value)
+		litInfo, ok := parseIntLiteral(n.Value)
 		if !ok {
 			return nil
 		}
 
-		mutatedVal := info.val + 1
-		mutated := formatIntLiteral(mutatedVal, info)
+		// Incrementing a typed integer at its upper bound yields an overflow
+		// constant the compiler rejects (e.g. byte(256)).
+		if basic := integerBasicOf(info, n); basic != nil {
+			if max, ok := maxIntOf(basic); ok && litInfo.val == max {
+				return nil
+			}
+		}
+
+		mutatedVal := litInfo.val + 1
+		mutated := formatIntLiteral(mutatedVal, litInfo)
 
 		return []mutator.Mutation{
 			{
