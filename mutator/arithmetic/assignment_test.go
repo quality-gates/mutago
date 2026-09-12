@@ -124,3 +124,59 @@ func mustTypeCheck(t *testing.T, src string) (*types.Info, *ast.File) {
 	assert.NoError(t, err)
 	return info, file
 }
+
+func TestMutatorArithmeticAssignment_NonShiftIgnoresAssignability(t *testing.T) {
+	lhs := ast.NewIdent("x")
+	rhs := ast.NewIdent("s")
+	info := &types.Info{
+		Types: map[ast.Expr]types.TypeAndValue{
+			lhs: {Type: types.Typ[types.Uint64]},
+			rhs: {Type: types.Typ[types.Uint]},
+		},
+	}
+	node := &ast.AssignStmt{
+		Tok: token.ADD_ASSIGN,
+		Lhs: []ast.Expr{lhs},
+		Rhs: []ast.Expr{rhs},
+	}
+	assert.Len(t, MutatorArithmeticAssignment(nil, info, node), 1)
+}
+
+func TestMutatorArithmeticAssignment_NilInfoMutatesShift(t *testing.T) {
+	node := &ast.AssignStmt{
+		Tok: token.SHL_ASSIGN,
+		Lhs: []ast.Expr{ast.NewIdent("x")},
+		Rhs: []ast.Expr{ast.NewIdent("s")},
+	}
+	assert.Len(t, MutatorArithmeticAssignment(nil, nil, node), 1)
+}
+
+func TestMutatorArithmeticAssignment_EmptyOperandsMutateShift(t *testing.T) {
+	info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
+	assert.Len(t, MutatorArithmeticAssignment(nil, info, &ast.AssignStmt{Tok: token.SHL_ASSIGN}), 1)
+	assert.Len(t, MutatorArithmeticAssignment(nil, info, &ast.AssignStmt{
+		Tok: token.SHL_ASSIGN,
+		Lhs: []ast.Expr{ast.NewIdent("x")},
+	}), 1)
+	assert.Len(t, MutatorArithmeticAssignment(nil, info, &ast.AssignStmt{
+		Tok: token.SHR_ASSIGN,
+		Rhs: []ast.Expr{ast.NewIdent("s")},
+	}), 1)
+}
+
+func TestMutatorArithmeticAssignment_MissingTypesMutateShift(t *testing.T) {
+	lhs := ast.NewIdent("x")
+	rhs := ast.NewIdent("s")
+	node := &ast.AssignStmt{
+		Tok: token.SHL_ASSIGN,
+		Lhs: []ast.Expr{lhs},
+		Rhs: []ast.Expr{rhs},
+	}
+	assert.Len(t, MutatorArithmeticAssignment(nil, &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}, node), 1)
+	assert.Len(t, MutatorArithmeticAssignment(nil, &types.Info{Types: map[ast.Expr]types.TypeAndValue{
+		lhs: {Type: types.Typ[types.Uint64]},
+	}}, node), 1)
+	assert.Len(t, MutatorArithmeticAssignment(nil, &types.Info{Types: map[ast.Expr]types.TypeAndValue{
+		rhs: {Type: types.Typ[types.Uint]},
+	}}, node), 1)
+}
