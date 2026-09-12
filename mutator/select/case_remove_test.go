@@ -37,3 +37,21 @@ func TestMutatorSelectCaseRemove(t *testing.T) {
 		2,
 	)
 }
+
+func TestMutatorSelectCaseRemove_SkipsUnsafeImport(t *testing.T) {
+	test.Mutator(
+		t,
+		MutatorSelectCaseRemove,
+		"../../testdata/select/case_remove_unsafe.go",
+		1,
+	)
+}
+
+func TestMutatorSelectCaseRemove_SkipsUnsafeLocal(t *testing.T) {
+	test.Mutator(
+		t,
+		MutatorSelectCaseRemove,
+		"../../testdata/select/case_remove_unsafe_local.go",
+		1,
+	)
+}

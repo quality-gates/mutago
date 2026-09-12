@@ -21,3 +21,12 @@ func TestMutatorSelectDefaultRemove(t *testing.T) {
 		1,
 	)
 }
+
+func TestMutatorSelectDefaultRemove_SkipsUnsafeImport(t *testing.T) {
+	test.Mutator(
+		t,
+		MutatorSelectDefaultRemove,
+		"../../testdata/select/default_remove_unsafe.go",
+		0,
+	)
+}
