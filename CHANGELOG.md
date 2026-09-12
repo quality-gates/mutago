@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- `numbers/decrementer` and `numbers/incrementer` now inspect type information to avoid emitting out-of-range literals at typed integer boundaries (e.g. uint 0, byte 255), preventing uncompilable mutants and false kills (#141).
 - `arithmetic/base` now skips mutating `*` to `/` when the right-hand operand is constant zero, preventing compile-time division by zero errors and false kills (#140).
 - `arithmetic/assignment` now skips mutating `<<=` and `>>=` to `=` when the shift count type is not assignable to the shifted variable, preventing uncompilable mutants and false kills (#139).
 - `arithmetic/negate` now skips signed integer minimum boundary constants (such as `-128`, `-32768`, `-2147483648`, `-9223372036854775808`) where positive inversion produces integer constant overflow, preventing uncompilable mutants and false kills (#138).
