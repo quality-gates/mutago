@@ -621,7 +621,7 @@ Examples for exec commands can be found in the [scripts](/scripts/exec) director
 | AndNotAssignment | &^=      | =       |
 
 #### arithmetic/negate
-Inverts unary minus expressions. Catches code that relies on a sign flip that tests don't verify.
+Inverts unary minus expressions. Catches code that relies on a sign flip that tests don't verify. Signed integer minimum boundary constants (where positive inversion produces integer constant overflow) are skipped to avoid uncompilable mutants.
 
 | Name          | Original | Mutated |
 | :------------ | :------- | :------ |
