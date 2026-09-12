@@ -15,7 +15,7 @@ func init() {
 }
 
 // MutatorNumbersDecrementer implements a mutator to decrement int and float.
-func MutatorNumbersDecrementer(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorNumbersDecrementer(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	n, ok := node.(*ast.BasicLit)
 	if !ok {
 		return nil
@@ -23,12 +23,20 @@ func MutatorNumbersDecrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 
 	if n.Kind == token.INT {
 		original := n.Value
-		info, ok := parseIntLiteral(n.Value)
+		litInfo, ok := parseIntLiteral(n.Value)
 		if !ok {
 			return nil
 		}
 
-		mutated := formatIntLiteral(info.val-1, info)
+		// Decrementing 0 in an unsigned typed context yields an out-of-range
+		// constant (e.g. uint(-1)) that fails to compile.
+		if litInfo.val == 0 {
+			if basic := integerBasicOf(info, n); basic != nil && basic.Info()&types.IsUnsigned != 0 {
+				return nil
+			}
+		}
+
+		mutated := formatIntLiteral(litInfo.val-1, litInfo)
 
 		return []mutator.Mutation{
 			{
