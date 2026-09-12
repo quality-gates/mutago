@@ -46,7 +46,7 @@ Writes `mutago-summary.json`. Useful for CI badges, dashboards, and downstream s
 | `mutationCodeCoverage` | int | Lines covered by the coverage profile |
 | `coveredCodeMsi` | float | MSI restricted to covered lines only, range 0–1 |
 
-`msi` and `coveredCodeMsi` are in the **0–1 range** (not 0–100). Note that the agentic JSON report (`--logger-agentic-json`) uses the **0–100 percentage** scale for its `msi` field — both are correct within their respective formats, but scripts that consume both must account for the difference.
+`msi` and `coveredCodeMsi` are in the **0–1 range** (not 0–100). The agentic JSON report (`--logger-agentic-json`) uses the **same 0–1 ratio** for its `msi` field (unified with summary JSON).
 
 ## `--logger-agentic-json`
 
@@ -55,7 +55,7 @@ Writes `mutago-agentic.json`. A richer payload designed for LLM consumption. Eac
 ```json
 {
   "generated_at": "2026-05-19T08:13:38Z",
-  "msi": 58.57,
+  "msi": 0.5857,
   "escaped_count": 5,
   "reminder": "A mutant is an example of how this code could be wrong...",
   "mutants": [
@@ -79,7 +79,7 @@ Writes `mutago-agentic.json`. A richer payload designed for LLM consumption. Eac
 | Field | Type | Description |
 | :---- | :--- | :---------- |
 | `generated_at` | string | RFC 3339 timestamp of the run |
-| `msi` | float | Overall MSI as a **percentage (0–100)** — note this differs from the summary JSON, which uses a 0–1 ratio |
+| `msi` | float | Overall MSI as a **0–1 ratio** (same scale as summary JSON) |
 | `escaped_count` | int | Number of survived mutants |
 | `reminder` | string | A plain-English reminder about how to interpret mutants — useful context when feeding the file to an LLM |
 | `mutants[].id` | string | Stable hash of file + mutator + diff — survives refactors that shift line numbers |

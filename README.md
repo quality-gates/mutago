@@ -479,7 +479,7 @@ Writes `mutago-agentic.json` — a richer payload designed for LLM consumption. 
 | Field | Type | Description |
 | :---- | :--- | :---------- |
 | `generated_at` | string | RFC 3339 timestamp of the run |
-| `msi` | float | Overall MSI as a percentage (0–100) — note: summary JSON uses 0–1 ratio |
+| `msi` | float | Overall MSI as a 0–1 ratio (same scale as summary JSON) |
 | `escaped_count` | int | Number of survived mutants |
 | `reminder` | string | Plain-English reminder about how to interpret mutants; included as context for LLMs |
 | `mutants[].id` | string | Stable hash of file + mutator + diff — survives refactors |
