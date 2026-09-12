@@ -27,7 +27,7 @@ var assignmentMutations = map[token.Token]token.Token{
 }
 
 // MutatorArithmeticAssignment implements a mutator to change base assign logic.
-func MutatorArithmeticAssignment(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorArithmeticAssignment(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	n, ok := node.(*ast.AssignStmt)
 	if !ok {
 		return nil
@@ -36,6 +36,13 @@ func MutatorArithmeticAssignment(_ *types.Package, _ *types.Info, node ast.Node)
 	original := n.Tok
 	mutated, ok := assignmentMutations[n.Tok]
 	if !ok {
+		return nil
+	}
+
+	// <<= / >>= allow a shift count of a different integer type than the LHS.
+	// Rewriting to plain = then fails to compile when the types differ.
+	if (original == token.SHL_ASSIGN || original == token.SHR_ASSIGN) &&
+		!shiftAssignRHSAssignable(info, n) {
 		return nil
 	}
 
@@ -50,4 +57,16 @@ func MutatorArithmeticAssignment(_ *types.Package, _ *types.Info, node ast.Node)
 			},
 		},
 	}
+}
+
+func shiftAssignRHSAssignable(info *types.Info, n *ast.AssignStmt) bool {
+	if info == nil || len(n.Lhs) == 0 || len(n.Rhs) == 0 {
+		return true
+	}
+	lhs := info.TypeOf(n.Lhs[0])
+	rhs := info.TypeOf(n.Rhs[0])
+	if lhs == nil || rhs == nil {
+		return true
+	}
+	return types.AssignableTo(rhs, lhs)
 }
