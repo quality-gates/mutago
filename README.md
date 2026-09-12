@@ -606,6 +606,8 @@ Examples for exec commands can be found in the [scripts](/scripts/exec) director
 | AndNotAssign     | &^=      | &=      |
 
 #### arithmetic/assignment
+Strips compound assignment operators, replacing them with plain `=`. Shift assignments (`<<=`, `>>=`) whose right-hand side is not assignable to the left-hand side are skipped to avoid uncompilable mutants.
+
 | Name	           | Original | Mutated |
 | :--------------- | :------- | :------ |
 | AddAssignment    | +=       | =       |
