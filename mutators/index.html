@@ -1857,9 +1857,9 @@
 <p>Inserts a <code>break</code> at the start of each range loop body, causing only the first iteration to run.</p>
 <h2 id="numbers">Numbers<a class="headerlink" href="#numbers" title="Permanent link">&para;</a></h2>
 <h3 id="numbersincrementer">numbers/incrementer<a class="headerlink" href="#numbersincrementer" title="Permanent link">&para;</a></h3>
-<p>Increments integer and float literals by 1.</p>
+<p>Increments integer and float literals by 1. Maximum boundary literals for bounded integer types (where incrementing produces integer constant overflow) are skipped to avoid uncompilable mutants.</p>
 <h3 id="numbersdecrementer">numbers/decrementer<a class="headerlink" href="#numbersdecrementer" title="Permanent link">&para;</a></h3>
-<p>Decrements integer and float literals by 1.</p>
+<p>Decrements integer and float literals by 1. Zero literals in unsigned integer contexts (where decrementing produces integer constant overflow) are skipped to avoid uncompilable mutants.</p>
 <h3 id="numbersfloat-negate">numbers/float-negate<a class="headerlink" href="#numbersfloat-negate" title="Permanent link">&para;</a></h3>
 <p>Replaces a float literal with its negation.</p>
 <table>
