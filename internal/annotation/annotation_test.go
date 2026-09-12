@@ -136,6 +136,50 @@ func TestParseRegexAnnotation(t *testing.T) {
 			expectedRegex: nil,
 			expectedInfo:  mutatorInfo{},
 		},
+		{
+			name:        "Pattern with spaces and star",
+			commentText: "RegexName return true *",
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("return true")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"*"},
+			},
+		},
+		{
+			name:        "Pattern without spaces and star",
+			commentText: "RegexName return *",
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("return")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"*"},
+			},
+		},
+		{
+			name:        "Pattern with spaces and explicit mutator",
+			commentText: "RegexName return true numbers/incrementer",
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("return true")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"numbers/incrementer"},
+			},
+		},
+		{
+			name:        "Pattern with spaces and comma-separated mutators",
+			commentText: "RegexName return true MutatorA, MutatorB",
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("return true")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"MutatorA", "MutatorB"},
+			},
+		},
 	}
 
 	r := &RegexAnnotation{Name: "RegexName"}
