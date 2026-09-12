@@ -726,3 +726,30 @@ func TestClassifyGoTestBuildFailureAsSkipped(t *testing.T) {
 		t.Fatalf("expected successful go test to remain successful, got exit code %d", got)
 	}
 }
+
+
+func TestFinalizeResultsUnknownRunMutantID(t *testing.T) {
+	opts := &models.Options{}
+	opts.Exec.RunMutantID = "nosuchid"
+	report := &models.Report{}
+	var stdout, stderr bytes.Buffer
+	code := finalizeResults(&stdout, &stderr, opts, report, nil, ".")
+	if code != returnError {
+		t.Fatalf("expected exit %d for unknown --run-mutant-id, got %d (stderr=%q)", returnError, code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "nosuchid") || !strings.Contains(stderr.String(), "no mutant") {
+		t.Fatalf("expected stderr to say the ID was not found, got %q", stderr.String())
+	}
+}
+
+func TestFinalizeResultsKnownRunMutantID(t *testing.T) {
+	opts := &models.Options{}
+	opts.Exec.RunMutantID = "knownid"
+	report := &models.Report{}
+	report.Stats.KilledCount = 1
+	var stdout, stderr bytes.Buffer
+	code := finalizeResults(&stdout, &stderr, opts, report, nil, ".")
+	if code != returnOk {
+		t.Fatalf("expected exit %d when a mutant matched --run-mutant-id, got %d (stderr=%q)", returnOk, code, stderr.String())
+	}
+}

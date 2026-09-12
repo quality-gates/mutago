@@ -1001,6 +1001,10 @@ func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *mod
 	}
 
 	if opts.Exec.RunMutantID != "" {
+		if report.TotalCount() == 0 {
+			fmt.Fprintf(stderr, "mutago: no mutant with ID %q was found\n", opts.Exec.RunMutantID)
+			return returnError
+		}
 		return returnOk
 	}
 	return checkQualityGates(opts, report, bl, moduleRoot)
