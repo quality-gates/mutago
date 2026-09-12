@@ -15,7 +15,7 @@ func init() {
 }
 
 // MutatorNumbersIncrementer implements a mutator to increment int and float.
-func MutatorNumbersIncrementer(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorNumbersIncrementer(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	n, ok := node.(*ast.BasicLit)
 	if !ok {
 		return nil
@@ -23,13 +23,17 @@ func MutatorNumbersIncrementer(_ *types.Package, _ *types.Info, node ast.Node) [
 
 	if n.Kind == token.INT {
 		original := n.Value
-		info, ok := parseIntLiteral(n.Value)
+		litInfo, ok := parseIntLiteral(n.Value)
 		if !ok {
 			return nil
 		}
 
-		mutatedVal := info.val + 1
-		mutated := formatIntLiteral(mutatedVal, info)
+		if shouldSkipIncrement(info, n, litInfo.val) {
+			return nil
+		}
+
+		mutatedVal := litInfo.val + 1
+		mutated := formatIntLiteral(mutatedVal, litInfo)
 
 		return []mutator.Mutation{
 			{

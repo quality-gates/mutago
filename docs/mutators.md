@@ -75,10 +75,10 @@ Inserts a `break` at the start of each range loop body, causing only the first i
 ## Numbers
 
 ### numbers/incrementer
-Increments integer and float literals by 1.
+Increments integer and float literals by 1. Maximum boundary literals for bounded integer types (where incrementing produces integer constant overflow) are skipped to avoid uncompilable mutants.
 
 ### numbers/decrementer
-Decrements integer and float literals by 1.
+Decrements integer and float literals by 1. Zero literals in unsigned integer contexts (where decrementing produces integer constant overflow) are skipped to avoid uncompilable mutants.
 
 ### numbers/float-negate
 Replaces a float literal with its negation.
