@@ -55,7 +55,7 @@ Strips compound assignment operators, replacing them with plain `=`.
 | … | `=` |
 
 ### arithmetic/negate
-Inverts unary minus expressions. Catches code that relies on a sign flip that tests don't verify.
+Inverts unary minus expressions. Catches code that relies on a sign flip that tests don't verify. Signed integer minimum boundary constants (where positive inversion produces integer constant overflow) are skipped to avoid uncompilable mutants.
 
 | Original | Mutated |
 | :------- | :------ |
