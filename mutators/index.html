@@ -1833,7 +1833,7 @@
 </tbody>
 </table>
 <h3 id="arithmeticnegate">arithmetic/negate<a class="headerlink" href="#arithmeticnegate" title="Permanent link">&para;</a></h3>
-<p>Inverts unary minus expressions. Catches code that relies on a sign flip that tests don't verify.</p>
+<p>Inverts unary minus expressions. Catches code that relies on a sign flip that tests don't verify. Signed integer minimum boundary constants (where positive inversion produces integer constant overflow) are skipped to avoid uncompilable mutants.</p>
 <table>
 <thead>
 <tr>
