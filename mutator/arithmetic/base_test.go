@@ -73,3 +73,29 @@ func TestMutatorArithmeticBase_StringLiteralWithoutInfo(t *testing.T) {
 	}
 	assert.Len(t, MutatorArithmeticBase(nil, nil, intBin), 1)
 }
+
+func TestMutatorArithmeticBase_SkipsMulByZero(t *testing.T) {
+	cases := []string{
+		`package main
+func f(x int) int { return x * 0 }`,
+		`package main
+func f(x int) int { return 0 * x }`,
+		`package main
+func f(x float64) float64 { return x * 0.0 }`,
+	}
+	for _, src := range cases {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "test.go", src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var count int
+		ast.Inspect(file, func(n ast.Node) bool {
+			count += len(MutatorArithmeticBase(nil, nil, n))
+			return true
+		})
+		if count != 0 {
+			t.Fatalf("expected 0 mutations for %q, got %d", src, count)
+		}
+	}
+}

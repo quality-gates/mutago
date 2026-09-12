@@ -4,6 +4,8 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"strconv"
+	"strings"
 
 	"github.com/quality-gates/mutago/v2/mutator"
 )
@@ -37,6 +39,11 @@ func MutatorArithmeticAssignInvert(_ *types.Package, info *types.Info, node ast.
 		return nil
 	}
 
+	// Skip *= 0; inverting to /= 0 does not compile.
+	if n.Tok == token.MUL_ASSIGN && len(n.Rhs) > 0 && isConstantZero(n.Rhs[0]) {
+		return nil
+	}
+
 	original := n.Tok
 	mutated, ok := assignInvertMutations[n.Tok]
 	if !ok {
@@ -67,4 +74,32 @@ func isStringAssign(info *types.Info, n *ast.AssignStmt) bool {
 		}
 	}
 	return false
+}
+
+func isConstantZero(expr ast.Expr) bool {
+	for {
+		p, ok := expr.(*ast.ParenExpr)
+		if !ok {
+			break
+		}
+		expr = p.X
+	}
+	lit, ok := expr.(*ast.BasicLit)
+	if !ok {
+		return false
+	}
+	if lit.Kind != token.INT && lit.Kind != token.FLOAT {
+		return false
+	}
+	v := strings.ReplaceAll(lit.Value, "_", "")
+	switch v {
+	case "0", "0.0", "0.", ".0", "0x0", "0X0", "0o0", "0O0", "0b0", "0B0":
+		return true
+	}
+	if lit.Kind == token.INT {
+		n, err := strconv.ParseUint(v, 0, 64)
+		return err == nil && n == 0
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	return err == nil && f == 0
 }
