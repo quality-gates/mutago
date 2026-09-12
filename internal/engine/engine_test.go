@@ -216,6 +216,32 @@ func TestSkipForGitDiffUsesOriginalASTLine(t *testing.T) {
 	}
 }
 
+func TestSkipDryRunForGitDiffMatchesExecFilter(t *testing.T) {
+	r := &mutationRun{
+		opts:       &models.Options{},
+		moduleRoot: "/repo",
+		gitChangedLines: gitdiff.ChangedLines{
+			"fixture.go": {{Start: 4, End: 4}},
+		},
+	}
+	fc := &fileContext{
+		absFile:    "/repo/fixture.go",
+		sourceFile: "fixture.go",
+	}
+
+	if skipDryRunForGitDiff(r, fc, 4) {
+		t.Error("expected changed line 4 to be counted in dry-run")
+	}
+	if !skipDryRunForGitDiff(r, fc, 3) {
+		t.Error("expected unchanged line 3 to be skipped in dry-run")
+	}
+
+	r.gitChangedLines = nil
+	if skipDryRunForGitDiff(r, fc, 3) {
+		t.Error("expected no skip when git-diff filter is inactive")
+	}
+}
+
 // TestEngineCoverageHonorsTestFlags ensures --test-flags reaches the initial
 // coverage collection step. Without -short, testdata/covflags fails (simulating
 // missing credentials) and mutants are incorrectly marked NOT COVERED.

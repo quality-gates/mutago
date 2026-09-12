@@ -66,20 +66,21 @@ type mutatorItem struct {
 }
 
 type mutationRun struct {
-	ctx            context.Context
-	opts           *models.Options
-	mutators       []mutatorItem
-	blacklist      map[string]struct{}
-	tmpDir         string
-	numWorkers     int
-	execs          []string
-	extraTestFlags []string
-	report         *models.Report
-	mu             *sync.Mutex
-	modulePath     string
-	moduleRoot     string
-	jobs           chan<- execJob
-	stdout         io.Writer
+	ctx             context.Context
+	opts            *models.Options
+	mutators        []mutatorItem
+	blacklist       map[string]struct{}
+	tmpDir          string
+	numWorkers      int
+	execs           []string
+	extraTestFlags  []string
+	report          *models.Report
+	mu              *sync.Mutex
+	modulePath      string
+	moduleRoot      string
+	jobs            chan<- execJob
+	stdout          io.Writer
+	gitChangedLines gitdiff.ChangedLines
 }
 
 type execJob struct {
@@ -266,20 +267,21 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 	}
 
 	run := &mutationRun{
-		ctx:            ctx,
-		opts:           opts,
-		mutators:       buildActiveMutators(opts),
-		blacklist:      mutationBlackList,
-		tmpDir:         tmpDir,
-		numWorkers:     numWorkers,
-		execs:          execs,
-		extraTestFlags: extraTestFlags,
-		report:         report,
-		mu:             &reportMu,
-		modulePath:     detectModulePath(),
-		moduleRoot:     detectModuleRoot(),
-		jobs:           jobs,
-		stdout:         e.Stdout,
+		ctx:             ctx,
+		opts:            opts,
+		mutators:        buildActiveMutators(opts),
+		blacklist:       mutationBlackList,
+		tmpDir:          tmpDir,
+		numWorkers:      numWorkers,
+		execs:           execs,
+		extraTestFlags:  extraTestFlags,
+		report:          report,
+		mu:              &reportMu,
+		modulePath:      detectModulePath(),
+		moduleRoot:      detectModuleRoot(),
+		jobs:            jobs,
+		stdout:          e.Stdout,
+		gitChangedLines: gitChangedLines,
 	}
 
 	return run, pkgs, jobs, jobWg, stopProgress, progressWg, gitChangedLines, nil
@@ -563,23 +565,49 @@ func applyMutator(r *mutationRun, m mutatorItem, fc *fileContext, node ast.Node,
 		}
 
 		originalStartLine := int64(fc.fset.Position(mutation.Position).Line)
-		recordOneMutation(r, m, fc, mutation, mutationID, originalStartLine, originalSourceCode, dryRunCounts, dryRunGlobalTotals)
+		counted := recordOneMutation(r, m, fc, mutation, mutationID, originalStartLine, originalSourceCode, dryRunCounts, dryRunGlobalTotals)
 
 		changed <- mutago.PositionedMutation{}
 		<-changed
 		changed <- mutago.PositionedMutation{}
 
-		mutationID++
+		// Dry-run totals come from mutationID. Skip ID bumps for mutants that
+		// --git-diff-lines would drop so the count matches a real run (#164).
+		if counted || !r.opts.General.DryRun {
+			mutationID++
+		}
 	}
 	return mutationID
 }
 
-func recordOneMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
+func recordOneMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) bool {
 	if r.opts.General.DryRun {
+		if skipDryRunForGitDiff(r, fc, originalStartLine) {
+			return false
+		}
 		countDryRunMutation(m.Name, dryRunCounts, dryRunGlobalTotals)
-		return
+		return true
 	}
 	processMutation(r, m, fc, mutation, mutationID, originalStartLine, originalSourceCode)
+	return true
+}
+
+// skipDryRunForGitDiff applies the same line filter as runExecJob so --dry-run
+// --git-diff-lines reports only mutants a real run would execute.
+func skipDryRunForGitDiff(r *mutationRun, fc *fileContext, originalStartLine int64) bool {
+	if r.gitChangedLines == nil {
+		return false
+	}
+	job := execJob{
+		opts: r.opts,
+		source: mutationSource{
+			absFile:      fc.absFile,
+			relFile:      toRelPath(fc.absFile, r.moduleRoot),
+			mutationFile: fc.sourceFile,
+		},
+	}
+	job.mutant.Mutator.OriginalStartLine = originalStartLine
+	return skipForGitDiff(job, r.gitChangedLines)
 }
 
 func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte) {
