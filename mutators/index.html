@@ -1969,7 +1969,7 @@
 <h3 id="expressionremove">expression/remove<a class="headerlink" href="#expressionremove" title="Permanent link">&para;</a></h3>
 <p>Makes each operand of <code>&amp;&amp;</code> and <code>||</code> irrelevant by replacing it with <code>true</code> or <code>false</code>. Operands whose removal would leave a local variable or import unused are skipped to avoid uncompilable mutants.</p>
 <h3 id="expressioncontext-nil">expression/context-nil<a class="headerlink" href="#expressioncontext-nil" title="Permanent link">&para;</a></h3>
-<p>Replaces <code>context.Context</code> arguments at call sites with <code>nil</code>. Finds code paths that silently accept a nil context instead of propagating a real one.</p>
+<p>Replaces <code>context.Context</code> arguments at call sites with <code>nil</code>. Arguments whose replacement would leave a local variable or imported package unused are skipped. Finds code paths that silently accept a nil context instead of propagating a real one.</p>
 <table>
 <thead>
 <tr>
