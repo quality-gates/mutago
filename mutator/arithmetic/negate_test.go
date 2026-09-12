@@ -68,7 +68,7 @@ func TestMutatorArithmeticNegate_SkipsMinIntBoundaries(t *testing.T) {
 		assert.Nil(t, MutatorArithmeticNegate(nil, nil, node), "expected mutation to be skipped for -%s", lit)
 	}
 
-	// Also test parenthesized boundary constant -(128)
+	// Also test parenthesized boundary constants -(128) and -((128))
 	parenNode := &ast.UnaryExpr{
 		Op: token.SUB,
 		X: &ast.ParenExpr{
@@ -76,6 +76,16 @@ func TestMutatorArithmeticNegate_SkipsMinIntBoundaries(t *testing.T) {
 		},
 	}
 	assert.Nil(t, MutatorArithmeticNegate(nil, nil, parenNode), "expected mutation to be skipped for -(128)")
+
+	nestedParenNode := &ast.UnaryExpr{
+		Op: token.SUB,
+		X: &ast.ParenExpr{
+			X: &ast.ParenExpr{
+				X: &ast.BasicLit{Kind: token.INT, Value: "128"},
+			},
+		},
+	}
+	assert.Nil(t, MutatorArithmeticNegate(nil, nil, nestedParenNode), "expected mutation to be skipped for -((128))")
 }
 
 func TestMutatorArithmeticNegate_AllowsNonBoundaryNumbers(t *testing.T) {
@@ -127,18 +137,18 @@ var okFloat float64 = -2.5
 	assert.NoError(t, err)
 
 	expected := map[string]bool{
-		"a":       false, // int8: +128 overflows
-		"b":       false, // int16: +32768 overflows
-		"c":       false, // int32: +2147483648 overflows
-		"d":       false, // int64: +9223372036854775808 overflows
-		"MinInt8": false, // untyped boundary constant: +128
-		"e":       true,  // int16: +128 is representable in int16
-		"f":       true,  // int: +1 is representable in int
-		"ok8":     true,  // int8: +127 is representable in int8
-		"ok16":    true,  // int16: +32767 is representable in int16
-		"ok32":    true,  // int32: +2147483647 is representable in int32
-		"ok64":    true,  // int64: +9223372036854775807 is representable in int64
-		"okInt":   true,  // int: +100 is representable in int
+		"a":       false, // int8: -128 boundary constant
+		"b":       false, // int16: -32768 boundary constant
+		"c":       false, // int32: -2147483648 boundary constant
+		"d":       false, // int64: -9223372036854775808 boundary constant
+		"MinInt8": false, // untyped boundary constant: -128
+		"e":       false, // int16: -128 boundary constant
+		"f":       true,  // int: -1 is representable in int
+		"ok8":     true,  // int8: -127 is representable in int8
+		"ok16":    true,  // int16: -32767 is representable in int16
+		"ok32":    true,  // int32: -2147483647 is representable in int32
+		"ok64":    true,  // int64: -9223372036854775807 is representable in int64
+		"okInt":   true,  // int: -100 is representable in int
 		"okFloat": true,  // float64: -2.5 is not an integer, mutates
 	}
 
