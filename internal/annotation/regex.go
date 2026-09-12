@@ -10,6 +10,38 @@ import (
 	"strings"
 )
 
+// trailingMutatorList matches a trailing mutator list: "*" or comma-separated
+// names (spaces only around commas). Pattern text may contain spaces and is
+// everything before this list.
+var trailingMutatorList = regexp.MustCompile(`\s(\*|[^\s,]+(?:\s*,\s*[^\s,]+)+)$`)
+
+// splitRegexPatternAndMutators splits annotation content into a regex pattern
+// (which may contain spaces) and a trailing mutator list ("*" or
+// comma-separated names). If there is no mutator list, the whole string is the
+// pattern.
+func splitRegexPatternAndMutators(content string) (pattern, mutatorList string) {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return "", ""
+	}
+
+	if strings.HasSuffix(content, " *") {
+		return strings.TrimSpace(strings.TrimSuffix(content, " *")), "*"
+	}
+
+	if loc := trailingMutatorList.FindStringIndex(content); loc != nil {
+		// loc[0] points at the whitespace before the mutator list.
+		return strings.TrimSpace(content[:loc[0]]), strings.TrimSpace(content[loc[0]:])
+	}
+
+	// Single trailing mutator name (no commas), or pattern-only.
+	idx := strings.LastIndex(content, " ")
+	if idx < 0 {
+		return content, ""
+	}
+	return strings.TrimSpace(content[:idx]), strings.TrimSpace(content[idx+1:])
+}
+
 // parseRegexAnnotation parses a comment line containing a regex annotation.
 func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, mutatorInfo) {
 	content := strings.TrimSpace(strings.TrimPrefix(comment, r.Name))
@@ -17,9 +49,8 @@ func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, 
 		return nil, mutatorInfo{}
 	}
 
-	parts := strings.SplitN(content, " ", 2)
+	pattern, mutatorList := splitRegexPatternAndMutators(content)
 
-	pattern := strings.TrimSpace(parts[0])
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		log.Printf("Warning: invalid regex in annotation: %q, error: %v\n", pattern, err)
@@ -27,8 +58,8 @@ func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, 
 	}
 
 	var mutators []string
-	if len(parts) > 1 {
-		mutators = parseMutators(parts[1])
+	if mutatorList != "" {
+		mutators = parseMutators(mutatorList)
 	}
 
 	return re, mutatorInfo{
