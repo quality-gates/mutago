@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 
+	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -13,7 +14,7 @@ func init() {
 }
 
 // MutatorLoopCondition implements a mutator to change loop condition to always false.
-func MutatorLoopCondition(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+func MutatorLoopCondition(_ *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
 	n, ok := node.(*ast.ForStmt)
 	if !ok {
 		return nil
@@ -21,6 +22,9 @@ func MutatorLoopCondition(_ *types.Package, _ *types.Info, node ast.Node) []muta
 
 	condition, ok := n.Cond.(*ast.BinaryExpr)
 	if !ok {
+		return nil
+	}
+	if !astutil.IsSafeToRemove(info, condition) {
 		return nil
 	}
 

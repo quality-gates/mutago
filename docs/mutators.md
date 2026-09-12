@@ -156,7 +156,7 @@ Swaps `&&` and `||` operators.
 Makes each operand of `&&` and `||` irrelevant by replacing it with `true` or `false`. Operands whose removal would leave a local variable or import unused are skipped to avoid uncompilable mutants.
 
 ### expression/context-nil
-Replaces `context.Context` arguments at call sites with `nil`. Finds code paths that silently accept a nil context instead of propagating a real one.
+Replaces `context.Context` arguments at call sites with `nil`. Arguments whose replacement would leave a local variable or imported package unused are skipped. Finds code paths that silently accept a nil context instead of propagating a real one.
 
 | Original | Mutated |
 | :------- | :------ |
