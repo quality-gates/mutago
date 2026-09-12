@@ -20,6 +20,7 @@ func ZeroExprForTypeAt(t types.Type, currentPkg *types.Package, info *types.Info
 }
 
 func zeroExprForType(t types.Type, currentPkg *types.Package, info *types.Info, pos token.Pos) ast.Expr {
+	t = types.Unalias(t)
 	switch u := t.(type) {
 	case *types.Basic:
 		return zeroExprForBasic(u)
