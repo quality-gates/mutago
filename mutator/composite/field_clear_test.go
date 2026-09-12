@@ -112,3 +112,48 @@ func Build() Config {
 		t.Errorf("expected mut 1 at C (%v), got %v", kvC.Pos(), muts[1].Position)
 	}
 }
+
+func TestMutatorFieldClear_SkipsSoleUseMapKey(t *testing.T) {
+	src := `package example
+
+func Build() map[string]int {
+	key := "hello"
+	other := "world"
+	_ = other
+	return map[string]int{
+		key:   42,
+		other: 100,
+	}
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := &types.Info{
+		Types:      make(map[ast.Expr]types.TypeAndValue),
+		Defs:       make(map[*ast.Ident]types.Object),
+		Uses:       make(map[*ast.Ident]types.Object),
+		Scopes:     make(map[ast.Node]*types.Scope),
+		Selections: make(map[*ast.SelectorExpr]*types.Selection),
+	}
+	pkg, err := (&types.Config{Importer: importer.Default()}).Check("example", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn := file.Decls[0].(*ast.FuncDecl)
+	ret := fn.Body.List[3].(*ast.ReturnStmt)
+	lit := ret.Results[0].(*ast.CompositeLit)
+
+	muts := MutatorFieldClear(pkg, info, lit)
+	// key is sole-use -> skipped; other has another use -> mutated
+	if len(muts) != 1 {
+		t.Fatalf("expected 1 mutation, got %d", len(muts))
+	}
+	kvOther := lit.Elts[1].(*ast.KeyValueExpr)
+	if muts[0].Position != kvOther.Pos() {
+		t.Errorf("expected mut at other (%v), got %v", kvOther.Pos(), muts[0].Position)
+	}
+}

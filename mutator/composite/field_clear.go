@@ -43,7 +43,7 @@ func MutatorFieldClear(_ *types.Package, info *types.Info, node ast.Node) []muta
 	var scratch []ast.Expr
 	for i, elt := range lit.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
-		if !ok || isZeroish(kv.Value) || !astutil.IsSafeToRemove(info, kv.Value) {
+		if !ok || isZeroish(kv.Value) || !astutil.IsSafeToRemove(info, kv) {
 			continue
 		}
 
