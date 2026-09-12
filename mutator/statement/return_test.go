@@ -6,8 +6,10 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"os"
 	"testing"
 
+	"github.com/quality-gates/mutago/v2/internal/annotation"
 	"github.com/quality-gates/mutago/v2/mutator"
 	"github.com/quality-gates/mutago/v2/test"
 )
@@ -169,4 +171,116 @@ func Cases(param int) int {
 	if len(muts) != 0 {
 		t.Fatalf("expected final return to be skipped due to sole import, got %d mutations", len(muts))
 	}
+}
+
+func TestMutatorReturnValue_HonorsLineAndRegexpAnnotations(t *testing.T) {
+	cases := []struct {
+		name     string
+		src      string
+		wantMuts int
+	}{
+		{
+			name: "baseline no annotation",
+			src: `package main
+func Inc(x int) int {
+	return x + 1
+}
+`,
+			wantMuts: 1,
+		},
+		{
+			name: "disable-next-line star",
+			src: `package main
+func Inc(x int) int {
+	// mutator-disable-next-line *
+	return x + 1
+}
+`,
+			wantMuts: 0,
+		},
+		{
+			name: "disable-next-line statement/return",
+			src: `package main
+func Inc(x int) int {
+	// mutator-disable-next-line statement/return
+	return x + 1
+}
+`,
+			wantMuts: 0,
+		},
+		{
+			name: "only annotated return skipped in same block",
+			src: `package main
+func Two(x int) int {
+	// mutator-disable-next-line *
+	return x + 1
+	return x + 2
+}
+`,
+			wantMuts: 1, // second return in same block still mutated
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, "inc.go", tc.src, parser.ParseComments)
+			if err != nil {
+				t.Fatal(err)
+			}
+			processor := annotation.NewProcessor()
+			processor.Collect(file, fset, "inc.go")
+
+			info := &types.Info{Types: make(map[ast.Expr]types.TypeAndValue)}
+			pkg, err := (&types.Config{}).Check("main", fset, []*ast.File{file}, info)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var count int
+			ast.Inspect(file, func(n ast.Node) bool {
+				count += len(MutatorReturnValue(pkg, info, n))
+				return true
+			})
+			if count != tc.wantMuts {
+				t.Fatalf("got %d statement/return mutants, want %d", count, tc.wantMuts)
+			}
+		})
+	}
+
+	t.Run("disable-regexp return star", func(t *testing.T) {
+		dir := t.TempDir()
+		path := dir + "/inc.go"
+		src := `package main
+// mutator-disable-regexp return *
+func Inc(x int) int {
+	return x + 1
+}
+`
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			t.Fatal(err)
+		}
+		processor := annotation.NewProcessor()
+		processor.Collect(file, fset, path)
+
+		info := &types.Info{Types: make(map[ast.Expr]types.TypeAndValue)}
+		pkg, err := (&types.Config{}).Check("main", fset, []*ast.File{file}, info)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var count int
+		ast.Inspect(file, func(n ast.Node) bool {
+			count += len(MutatorReturnValue(pkg, info, n))
+			return true
+		})
+		if count != 0 {
+			t.Fatalf("got %d statement/return mutants, want 0", count)
+		}
+	})
 }

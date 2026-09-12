@@ -15,7 +15,7 @@ func init() {
 }
 
 func checkRemoveStatement(node ast.Stmt) bool {
-	skip := annotation.HandleBlockStmt(node)
+	skip := annotation.HandleBlockStmt(node, "statement/remove")
 	if skip {
 		return false
 	}
