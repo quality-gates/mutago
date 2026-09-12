@@ -346,12 +346,40 @@ func shouldInitializeSelector(info *types.Info, n *ast.SelectorExpr) bool {
 		return false
 	}
 
+	if isGenericType(obj.Type()) {
+		return false
+	}
+
 	switch obj.Type().Underlying().(type) {
 	case *types.Array, *types.Map, *types.Slice, *types.Struct:
 		return true
 	}
 
 	return false
+}
+
+func isGenericType(t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	if alias, ok := t.(*types.Alias); ok {
+		if alias.TypeParams() != nil && alias.TypeParams().Len() > 0 {
+			return true
+		}
+	}
+	if named, ok := types.Unalias(t).(*types.Named); ok {
+		return named.TypeParams() != nil && named.TypeParams().Len() > 0
+	}
+	return false
+}
+
+func isGenericFunc(obj types.Object) bool {
+	fn, ok := obj.(*types.Func)
+	if !ok {
+		return false
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	return ok && sig.TypeParams() != nil && sig.TypeParams().Len() > 0
 }
 
 func isUnusableSelector(info *types.Info, n *ast.SelectorExpr) bool {
@@ -365,7 +393,7 @@ func isUnusableSelector(info *types.Info, n *ast.SelectorExpr) bool {
 	if _, isType := obj.(*types.TypeName); isType {
 		return !shouldInitializeSelector(info, n)
 	}
-	return false
+	return isGenericFunc(obj)
 }
 
 // Functions returns all found functions.

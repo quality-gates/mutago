@@ -379,3 +379,108 @@ func mutate(enabled bool, v any) {
 	}
 	parseAndTypeCheck(t, mutated)
 }
+
+func TestCreateNoopOfStatementsGenericFunction(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		badIdent string
+	}{
+		{
+			name: "generic function slices.Clone",
+			source: `package example
+
+import "slices"
+
+var sink []int
+
+func dummy() {
+	_ = slices.Equal([]int{1}, []int{1})
+}
+
+func mutate(enabled bool, s []int) {
+	if enabled {
+		sink = slices.Clone(s)
+	}
+}
+`,
+			badIdent: "slices.Clone",
+		},
+		{
+			name: "generic function slices.Sort",
+			source: `package example
+
+import "slices"
+
+func dummy() {
+	_ = slices.Equal([]int{1}, []int{1})
+}
+
+func mutate(enabled bool, s []int) {
+	if enabled {
+		slices.Sort(s)
+	}
+}
+`,
+			badIdent: "slices.Sort",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fset, file, pkg, info := parseAndTypeCheck(t, tt.source)
+			ifStmt := firstIfStatement(t, file)
+			noop := CreateNoopOfStatements(pkg, info, ifStmt.Body.List)
+			ifStmt.Body.List = []ast.Stmt{noop}
+			mutated := printFile(t, fset, file)
+			if strings.Contains(mutated, tt.badIdent) {
+				t.Fatalf("mutated source contains uninstantiated generic function %s:\n%s", tt.badIdent, mutated)
+			}
+			parseAndTypeCheck(t, mutated)
+		})
+	}
+}
+
+func TestCreateNoopOfStatementsGenericType(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		badIdent string
+	}{
+		{
+			name: "generic type atomic.Pointer",
+			source: `package example
+
+import "sync/atomic"
+
+var sink any
+
+func dummy() {
+	var v atomic.Value
+	_ = v
+}
+
+func mutate(enabled bool, v any) {
+	if enabled {
+		sink = v.(atomic.Pointer[int])
+	}
+}
+`,
+			badIdent: "atomic.Pointer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fset, file, pkg, info := parseAndTypeCheck(t, tt.source)
+			ifStmt := firstIfStatement(t, file)
+			noop := CreateNoopOfStatements(pkg, info, ifStmt.Body.List)
+			ifStmt.Body.List = []ast.Stmt{noop}
+			mutated := printFile(t, fset, file)
+			if strings.Contains(mutated, tt.badIdent) {
+				t.Fatalf("mutated source contains uninstantiated generic type %s:\n%s", tt.badIdent, mutated)
+			}
+			parseAndTypeCheck(t, mutated)
+		})
+	}
+}

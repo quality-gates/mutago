@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- `astutil.CreateNoopOfStatements` now skips uninstantiated generic functions and types when synthesizing no-op assignments, preventing uncompilable mutants and false kills on generic code (#136).
 - `--timeout-coefficient` now measures the clean suite under a generous timeout before applying `--exec-timeout`, so a green suite slower than the fixed timeout no longer dies in pre-flight with exit 3 (#135).
 
 ## [v2.10.12] — 2026-09-11
