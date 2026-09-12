@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/types"
 
+	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -29,6 +30,9 @@ func MutatorContextNil(_ *types.Package, info *types.Info, node ast.Node) []muta
 			case "nil":
 				continue
 			}
+		}
+		if !astutil.IsSafeToRemove(info, arg) {
+			continue
 		}
 
 		idx := i
