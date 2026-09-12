@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/types"
 
+	"github.com/quality-gates/mutago/v2/astutil"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -33,6 +34,9 @@ func MutatorContextNil(_ *types.Package, info *types.Info, node ast.Node) []muta
 
 		idx := i
 		original := call.Args[idx]
+		if !astutil.IsSafeToRemove(info, original) {
+			continue
+		}
 		mutations = append(mutations, mutator.Mutation{
 			Position: original.Pos(),
 			Change:   func() { call.Args[idx] = ast.NewIdent("nil") },
