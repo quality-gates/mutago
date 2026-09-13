@@ -27,7 +27,8 @@ func MutatorSelectDefaultRemove(_ *types.Package, info *types.Info, node ast.Nod
 			continue // skip non-default cases
 		}
 		if !astutil.IsSafeToRemove(info, comm) {
-			continue
+			// A valid select has at most one default clause.
+			return nil
 		}
 
 		li := i
