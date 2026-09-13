@@ -566,6 +566,8 @@ A command must exit with an appropriate exit code.
 | 2         | The mutation was skipped, since there are other problems e.g. compilation errors.                             |
 | >2        | The mutation produced an unknown exit code which might be a flaw in the exec command.                         |
 
+Note that `go test` exits with `1` both for a failing test and for a build failure, so the exit code alone cannot distinguish a killed mutant from one that never compiled. Check the output for `[build failed]` or `[setup failed]` and report exit code 2 in that case, as the shipped scripts do. Otherwise uncompilable mutants are counted as kills and inflate the mutation score.
+
 Examples for exec commands can be found in the [scripts](/scripts/exec) directory.
 
 ## <a name="list-of-mutators"></a>Which mutators are implemented?

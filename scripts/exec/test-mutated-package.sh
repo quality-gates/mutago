@@ -43,6 +43,13 @@ fi
 
 clean_up
 
+# `go test` exits 1 for a build failure exactly as it does for a failing test,
+# so the exit code alone cannot tell a killed mutant from one that never
+# compiled. Detect the build failure in the output and report SKIP.
+if [ $GOMUTESTING_RESULT -eq 1 ] && echo "$GOMUTESTING_TEST" | grep -q '\[build failed\]\|\[setup failed\]' ; then
+	GOMUTESTING_RESULT=2
+fi
+
 case $GOMUTESTING_RESULT in
 0) # tests passed -> ESCAPED
 	echo "$GOMUTESTING_DIFF"
