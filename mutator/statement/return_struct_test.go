@@ -15,6 +15,15 @@ func TestMutatorReturnValueStruct(t *testing.T) {
 	)
 }
 
+func TestMutatorReturnValueAlias(t *testing.T) {
+	test.Mutator(
+		t,
+		MutatorReturnValue,
+		"../../testdata/statement/return_alias.go",
+		2,
+	)
+}
+
 func TestMutatorReturnValueZeroStruct(t *testing.T) {
 	test.Mutator(
 		t,
