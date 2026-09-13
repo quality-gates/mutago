@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- `arithmetic/assign_invert` now skips mutating `*=` to `/=` when the right-hand operand is constant zero, preventing compile-time division by zero errors and false kills (#158).
 - `scripts/exec/test-mutated-package.sh` and `scripts/exec/test-current-directory.sh` now report mutants that fail to compile as SKIP instead of KILLED. `go test` exits 1 for a build failure just as it does for a failing test, so both scripts credited uncompilable mutants as kills and inflated MSI (#157).
 - `astutil.zeroExprForType` now unaliases `*types.Alias` (Go 1.24+) so `statement/return` and terminating `branch/if`, `branch/else`, and `branch/case` mutations apply to functions returning type aliases (#156).
 - `numbers/decrementer` and `numbers/incrementer` now inspect type information to avoid emitting out-of-range literals at typed integer boundaries (e.g. uint 0, byte 255), preventing uncompilable mutants and false kills (#141).
