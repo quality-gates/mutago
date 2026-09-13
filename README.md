@@ -363,7 +363,7 @@ Commit `mutago-baseline.json` to your repo. The baseline uses stable mutant IDs 
 mutago --logger-agentic-json --quiet ./...
 ```
 
-Use `--run-mutant-id` to re-run a single mutant by its stable ID (copy the `id` field from `mutago-agentic.json`). Useful for iterating on a specific test gap without waiting for the full suite.
+Use `--run-mutant-id` to re-run a single mutant by its stable ID (copy the `id` field from `mutago-agentic.json`). Useful for iterating on a specific test gap without waiting for the full suite. A missing ID is reported as a tool error and exits with code 3; valid-ID runs suppress the summary and quality gates.
 
 ### <a name="progress"></a>Live progress
 

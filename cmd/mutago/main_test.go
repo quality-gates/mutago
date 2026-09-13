@@ -37,6 +37,17 @@ func TestMainSimple(t *testing.T) {
 	)
 }
 
+func TestMainUnknownRunMutantID(t *testing.T) {
+	out := testMain(
+		t,
+		"../../example",
+		[]string{"--workers", "1", "--exec-timeout", "1", "--run-mutant-id", "nosuchid"},
+		returnError,
+		`No mutant with ID "nosuchid" was found`,
+	)
+	assert.NotContains(t, out, "mutation score")
+}
+
 func TestMainRecursive(t *testing.T) {
 	testMain(
 		t,
@@ -345,6 +356,7 @@ func TestMainExposesMutationChecksums(t *testing.T) {
 
 	var agenticReport struct {
 		Mutants []struct {
+			ID       string `json:"id"`
 			Checksum string `json:"checksum"`
 		} `json:"mutants"`
 	}
@@ -353,6 +365,12 @@ func TestMainExposesMutationChecksums(t *testing.T) {
 	require.NoError(t, json.Unmarshal(agenticData, &agenticReport))
 	require.NotEmpty(t, agenticReport.Mutants)
 	assert.Equal(t, checksum, agenticReport.Mutants[0].Checksum)
+	runMutantID := agenticReport.Mutants[0].ID
+	require.NotEmpty(t, runMutantID)
+
+	singleRunArgs := append([]string{"--run-mutant-id", runMutantID}, runArgs...)
+	singleOut := testMain(t, root, singleRunArgs, returnOk, "ESCAPED")
+	assert.NotContains(t, singleOut, "mutation score")
 
 	blacklistPath := filepath.Join(root, "example.blacklist")
 	writeFixtureFile(t, blacklistPath, checksum+"\n")

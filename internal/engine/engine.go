@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -66,20 +67,21 @@ type mutatorItem struct {
 }
 
 type mutationRun struct {
-	ctx            context.Context
-	opts           *models.Options
-	mutators       []mutatorItem
-	blacklist      map[string]struct{}
-	tmpDir         string
-	numWorkers     int
-	execs          []string
-	extraTestFlags []string
-	report         *models.Report
-	mu             *sync.Mutex
-	modulePath     string
-	moduleRoot     string
-	jobs           chan<- execJob
-	stdout         io.Writer
+	ctx              context.Context
+	opts             *models.Options
+	mutators         []mutatorItem
+	blacklist        map[string]struct{}
+	tmpDir           string
+	numWorkers       int
+	execs            []string
+	extraTestFlags   []string
+	report           *models.Report
+	mu               *sync.Mutex
+	modulePath       string
+	moduleRoot       string
+	jobs             chan<- execJob
+	stdout           io.Writer
+	runMutantIDFound *atomic.Bool
 }
 
 type execJob struct {
@@ -109,7 +111,8 @@ type execJob struct {
 	// adjRelFile is the directive-adjusted filename relative to the module
 	// root (the filename Go's coverage profile uses for this position). It is
 	// only meaningful when directiveShifted is true.
-	adjRelFile string
+	adjRelFile       string
+	runMutantIDFound *atomic.Bool
 }
 
 type mutationSource struct {
@@ -184,7 +187,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	}
 
 	report.Calculate()
-	exitCode := finalizeResults(e.Stdout, e.Stderr, opts, report, bl, run.moduleRoot)
+	exitCode := finalizeResults(e.Stdout, e.Stderr, opts, report, bl, run.moduleRoot, run.runMutantIDFound.Load())
 	return Result{Report: report, ExitCode: exitCode}, nil
 }
 
@@ -255,6 +258,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 
 	var jobs chan execJob
 	var jobWg *sync.WaitGroup
+	runMutantIDFound := &atomic.Bool{}
 	if !opts.General.DryRun && !opts.Exec.NoExec {
 		jobs, jobWg = startWorkerPool(opts, numWorkers, report, &reportMu, e.Stdout, gitChangedLines)
 	}
@@ -266,20 +270,21 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 	}
 
 	run := &mutationRun{
-		ctx:            ctx,
-		opts:           opts,
-		mutators:       buildActiveMutators(opts),
-		blacklist:      mutationBlackList,
-		tmpDir:         tmpDir,
-		numWorkers:     numWorkers,
-		execs:          execs,
-		extraTestFlags: extraTestFlags,
-		report:         report,
-		mu:             &reportMu,
-		modulePath:     detectModulePath(),
-		moduleRoot:     detectModuleRoot(),
-		jobs:           jobs,
-		stdout:         e.Stdout,
+		ctx:              ctx,
+		opts:             opts,
+		mutators:         buildActiveMutators(opts),
+		blacklist:        mutationBlackList,
+		tmpDir:           tmpDir,
+		numWorkers:       numWorkers,
+		execs:            execs,
+		extraTestFlags:   extraTestFlags,
+		report:           report,
+		mu:               &reportMu,
+		modulePath:       detectModulePath(),
+		moduleRoot:       detectModuleRoot(),
+		jobs:             jobs,
+		stdout:           e.Stdout,
+		runMutantIDFound: runMutantIDFound,
 	}
 
 	return run, pkgs, jobs, jobWg, stopProgress, progressWg, gitChangedLines, nil
@@ -641,6 +646,7 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 		packageLevelDecl: isPackageLevelDecl(fc.src, mutation.Position),
 		directiveShifted: directiveShifted,
 		adjRelFile:       toRelPath(filepath.Join(r.moduleRoot, adjPos.Filename), r.moduleRoot),
+		runMutantIDFound: r.runMutantIDFound,
 	}
 	select {
 	case <-r.ctx.Done():
@@ -988,7 +994,12 @@ func shutdownAndCleanup(opts *models.Options, jobs chan execJob, jobWg *sync.Wai
 	console.Debug(opts, "Remove %q", tmpDir)
 }
 
-func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File, moduleRoot string) int {
+func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File, moduleRoot string, runMutantIDFound bool) int {
+	if opts.Exec.RunMutantID != "" && !runMutantIDFound {
+		fmt.Fprintf(stderr, "No mutant with ID %q was found\n", opts.Exec.RunMutantID)
+		return returnError
+	}
+
 	if handled, code := handleBaselineUpdate(stdout, stderr, opts, report, moduleRoot); handled {
 		return code
 	}
@@ -1370,6 +1381,7 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, stdout io.Wri
 	if skipForMutantID(job) {
 		return
 	}
+	job.runMutantIDFound.Store(job.runMutantID != "")
 
 	execExitCode := mutateExec(job, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)

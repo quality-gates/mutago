@@ -35,7 +35,7 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | `--logger-gitlab` | Write `mutago-gitlab.json` in GitLab Code Quality format |
 | `--logger-summary-json` | Write compact stats to `mutago-summary.json` |
 | `--logger-agentic-json` | Write LLM-ready report to `mutago-agentic.json` |
-| `--run-mutant-id` | Run only the mutant with this stable ID (copy the `id` field from `mutago-agentic.json`) |
+| `--run-mutant-id` | Run only the mutant with this stable ID (copy the `id` field from `mutago-agentic.json`); exits 3 if no matching mutant is found. Valid-ID runs suppress the summary and quality gates. |
 | `--version`, `-v` | Print version and exit 0 |
 
 ## Quality gates
