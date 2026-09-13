@@ -1541,11 +1541,12 @@ func runGoTest(ctx context.Context, opts *models.Options, pkg *types.Package, ov
 	return classifyGoTestResult(execExitCode, test)
 }
 
-// classifyGoTestResult distinguishes a test failure from a package build
-// failure. Both make `go test` exit 1, but a mutant that never compiled was
-// not killed by a test and must be skipped instead.
+// classifyGoTestResult distinguishes a test failure from a package build or
+// setup failure. All make `go test` exit 1, but a mutant that never compiled
+// or whose package failed setup was not killed by a test and must be skipped
+// instead.
 func classifyGoTestResult(execExitCode int, output []byte) int {
-	if execExitCode == 1 && bytes.Contains(output, []byte("[build failed]")) {
+	if execExitCode == 1 && (bytes.Contains(output, []byte("[build failed]")) || bytes.Contains(output, []byte("[setup failed]"))) {
 		return 2
 	}
 	return execExitCode

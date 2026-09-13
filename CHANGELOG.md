@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- `internal/engine.classifyGoTestResult` now classifies `[setup failed]` package errors as SKIP instead of KILLED, preventing false kills and inflated MSI when `go test` fails during package initialization or load (#160).
 - `select/case-remove` and `select/default-remove` now skip mutations that would leave local variables or imports unused, preventing uncompilable mutants and false kills (#159).
 - `arithmetic/assign_invert` now skips mutating `*=` to `/=` when the right-hand operand is constant zero, preventing compile-time division by zero errors and false kills (#158).
 - `scripts/exec/test-mutated-package.sh` and `scripts/exec/test-current-directory.sh` now report mutants that fail to compile as SKIP instead of KILLED. `go test` exits 1 for a build failure just as it does for a failing test, so both scripts credited uncompilable mutants as kills and inflated MSI (#157).
