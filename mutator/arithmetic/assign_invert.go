@@ -37,6 +37,10 @@ func MutatorArithmeticAssignInvert(_ *types.Package, info *types.Info, node ast.
 		return nil
 	}
 
+	if n.Tok == token.MUL_ASSIGN && len(n.Rhs) > 0 && isZeroExpr(info, n.Rhs[0]) {
+		return nil
+	}
+
 	original := n.Tok
 	mutated, ok := assignInvertMutations[n.Tok]
 	if !ok {

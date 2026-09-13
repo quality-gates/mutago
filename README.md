@@ -593,6 +593,8 @@ Examples for exec commands can be found in the [scripts](/scripts/exec) director
 | ShiftLeft     | <<       | \>>     |
 
 #### arithmetic/assign_invert
+Multiplication assignments (`*=`) whose right-hand side is constant zero are skipped to avoid division by zero compile errors.
+
 | Name	           | Original | Mutated |
 | :--------------- | :------- | :------ |
 | AddAssign        | +=       | -=      |

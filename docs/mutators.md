@@ -28,7 +28,7 @@ Swaps bitwise operators.
 | `<<` | `>>` |
 
 ### arithmetic/assign\_invert
-Inverts compound assignment operators.
+Inverts compound assignment operators. Multiplication assignments (`*=`) whose right-hand side is constant zero are skipped to avoid division by zero compile errors.
 
 | Original | Mutated |
 | :------- | :------ |
