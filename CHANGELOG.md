@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- `astutil.zeroExprForType` now unaliases `*types.Alias` (Go 1.24+) so `statement/return` and terminating `branch/if`, `branch/else`, and `branch/case` mutations apply to functions returning type aliases (#156).
 - `numbers/decrementer` and `numbers/incrementer` now inspect type information to avoid emitting out-of-range literals at typed integer boundaries (e.g. uint 0, byte 255), preventing uncompilable mutants and false kills (#141).
 - `arithmetic/base` now skips mutating `*` to `/` when the right-hand operand is constant zero, preventing compile-time division by zero errors and false kills (#140).
 - `arithmetic/assignment` now skips mutating `<<=` and `>>=` to `=` when the shift count type is not assignable to the shifted variable, preventing uncompilable mutants and false kills (#139).

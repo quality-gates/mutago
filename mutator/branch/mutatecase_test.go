@@ -25,6 +25,15 @@ func TestMutatorCaseTerminating(t *testing.T) {
 	)
 }
 
+func TestMutatorCaseAlias(t *testing.T) {
+	test.Mutator(
+		t,
+		MutatorCase,
+		"../../testdata/branch/mutatecase_alias.go",
+		2,
+	)
+}
+
 func TestMutatorCaseRegistered(t *testing.T) {
 	if _, err := mutator.New("branch/case"); err != nil {
 		t.Fatalf("mutator not registered: %v", err)

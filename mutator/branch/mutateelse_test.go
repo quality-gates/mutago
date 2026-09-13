@@ -25,6 +25,15 @@ func TestMutatorElseTerminating(t *testing.T) {
 	)
 }
 
+func TestMutatorElseAlias(t *testing.T) {
+	test.Mutator(
+		t,
+		MutatorElse,
+		"../../testdata/branch/mutateelse_alias.go",
+		1,
+	)
+}
+
 func TestMutatorElseRegistered(t *testing.T) {
 	if _, err := mutator.New("branch/else"); err != nil {
 		t.Fatalf("mutator not registered: %v", err)
