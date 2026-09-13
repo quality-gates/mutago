@@ -1749,7 +1749,7 @@
 </tbody>
 </table>
 <h3 id="arithmeticassign_invert">arithmetic/assign_invert<a class="headerlink" href="#arithmeticassign_invert" title="Permanent link">&para;</a></h3>
-<p>Inverts compound assignment operators.</p>
+<p>Inverts compound assignment operators. Multiplication assignments (<code>*=</code>) whose right-hand side is constant zero are skipped to avoid division by zero compile errors.</p>
 <table>
 <thead>
 <tr>
