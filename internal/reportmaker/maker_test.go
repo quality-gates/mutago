@@ -124,6 +124,37 @@ func TestMakeJSONReport(t *testing.T) {
 	}
 }
 
+func TestMakeAgenticJSONReport(t *testing.T) {
+	report := models.Report{
+		Stats: models.Stats{
+			Msi: 0.855,
+		},
+		Escaped: []models.Mutant{},
+	}
+
+	err := MakeAgenticJSONReport(report, "")
+	require.NoError(t, err)
+	defer os.Remove(models.ReportAgenticJSONFileName)
+
+	content, err := os.ReadFile(models.ReportAgenticJSONFileName)
+	require.NoError(t, err)
+
+	var parsed struct {
+		GeneratedAt  string  `json:"generated_at"`
+		Msi          float64 `json:"msi"`
+		EscapedCount int     `json:"escaped_count"`
+		Reminder     string  `json:"reminder"`
+	}
+	err = json.Unmarshal(content, &parsed)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0.855, parsed.Msi)
+	assert.GreaterOrEqual(t, parsed.Msi, 0.0)
+	assert.LessOrEqual(t, parsed.Msi, 1.0)
+	assert.Equal(t, 0, parsed.EscapedCount)
+	assert.Equal(t, agenticReminder, parsed.Reminder)
+}
+
 func TestCreateOrTruncateReportFile(t *testing.T) {
 	filename := "test_report.tmp"
 
