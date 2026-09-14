@@ -6,11 +6,248 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/quality-gates/mutago/v2/internal/annotation"
 	"github.com/quality-gates/mutago/v2/mutator"
 	"github.com/quality-gates/mutago/v2/test"
 )
+
+func TestMutatorReturnValue_Annotation_NextLineWildcard(t *testing.T) {
+	src := `package main
+
+func Inc(x int) int {
+	// mutator-disable-next-line *
+	return x + 1
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processor := annotation.NewProcessor()
+	processor.Collect(file, fset, "test.go")
+
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+	}
+	pkg, err := conf.Check("main", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	ast.Inspect(file, func(n ast.Node) bool {
+		muts := MutatorReturnValue(pkg, info, n)
+		count += len(muts)
+		return true
+	})
+	if count != 0 {
+		t.Fatalf("expected 0 mutations for return with mutator-disable-next-line *, got %d", count)
+	}
+}
+
+func TestMutatorReturnValue_Annotation_NextLineSpecific(t *testing.T) {
+	src := `package main
+
+func Inc(x int) int {
+	// mutator-disable-next-line statement/return
+	return x + 1
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processor := annotation.NewProcessor()
+	processor.Collect(file, fset, "test.go")
+
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+	}
+	pkg, err := conf.Check("main", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	ast.Inspect(file, func(n ast.Node) bool {
+		muts := MutatorReturnValue(pkg, info, n)
+		count += len(muts)
+		return true
+	})
+	if count != 0 {
+		t.Fatalf("expected 0 mutations for return with mutator-disable-next-line statement/return, got %d", count)
+	}
+}
+
+func TestMutatorReturnValue_Annotation_NextLineUnrelated(t *testing.T) {
+	src := `package main
+
+func Inc(x int) int {
+	// mutator-disable-next-line numbers/incrementer
+	return x + 1
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processor := annotation.NewProcessor()
+	processor.Collect(file, fset, "test.go")
+
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+	}
+	pkg, err := conf.Check("main", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	ast.Inspect(file, func(n ast.Node) bool {
+		muts := MutatorReturnValue(pkg, info, n)
+		count += len(muts)
+		return true
+	})
+	if count != 1 {
+		t.Fatalf("expected 1 mutation for statement/return when only numbers/incrementer disabled, got %d", count)
+	}
+}
+
+func TestMutatorReturnValue_Annotation_MultipleReturnsInSameBlock(t *testing.T) {
+	src := `package main
+
+func decide(b bool) int {
+	if b {
+		// mutator-disable-next-line *
+		return 10
+	}
+	return 20
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processor := annotation.NewProcessor()
+	processor.Collect(file, fset, "test.go")
+
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+	}
+	pkg, err := conf.Check("main", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	ast.Inspect(file, func(n ast.Node) bool {
+		muts := MutatorReturnValue(pkg, info, n)
+		count += len(muts)
+		return true
+	})
+	if count != 1 {
+		t.Fatalf("expected 1 mutation (for unannotated return 20), got %d", count)
+	}
+}
+
+func TestMutatorReturnValue_Annotation_Regex(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "regex_return_test.go")
+	src := `package main
+
+// mutator-disable-regexp return.*suppressed statement/return
+func calc(x int) int {
+	if x > 0 {
+		return x + 1 // suppressed
+	}
+	return x + 2 // preserved
+}
+`
+	err := os.WriteFile(filePath, []byte(src), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filePath, src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processor := annotation.NewProcessor()
+	processor.Collect(file, fset, filePath)
+
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+	}
+	pkg, err := conf.Check("main", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	ast.Inspect(file, func(n ast.Node) bool {
+		muts := MutatorReturnValue(pkg, info, n)
+		count += len(muts)
+		return true
+	})
+	if count != 1 {
+		t.Fatalf("expected 1 mutation (suppressed 1 of 2 returns via regexp), got %d", count)
+	}
+}
+
+func TestMutatorReturnValue_Annotation_CaseClause(t *testing.T) {
+	src := `package main
+
+func check(x int) int {
+	switch x {
+	case 1:
+		// mutator-disable-next-line *
+		return 100
+	default:
+		return 200
+	}
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processor := annotation.NewProcessor()
+	processor.Collect(file, fset, "test.go")
+
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+	}
+	pkg, err := conf.Check("main", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	ast.Inspect(file, func(n ast.Node) bool {
+		muts := MutatorReturnValue(pkg, info, n)
+		count += len(muts)
+		return true
+	})
+	if count != 1 {
+		t.Fatalf("expected 1 mutation for case clause (suppressed case 1, mutated default), got %d", count)
+	}
+}
 
 func TestMutatorReturnValue(t *testing.T) {
 	test.Mutator(

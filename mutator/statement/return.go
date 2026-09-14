@@ -6,6 +6,7 @@ import (
 	"go/types"
 
 	"github.com/quality-gates/mutago/v2/astutil"
+	"github.com/quality-gates/mutago/v2/internal/annotation"
 	"github.com/quality-gates/mutago/v2/mutator"
 )
 
@@ -48,6 +49,9 @@ func stmtListAndSetter(node ast.Node) ([]ast.Stmt, func([]ast.Stmt)) {
 func mutateReturnStmt(pkg *types.Package, info *types.Info, l []ast.Stmt, stmtIdx int, setStmts func([]ast.Stmt)) []mutator.Mutation {
 	ret, ok := l[stmtIdx].(*ast.ReturnStmt)
 	if !ok || len(ret.Results) == 0 {
+		return nil
+	}
+	if annotation.HandleBlockStmt(ret, "statement/return") {
 		return nil
 	}
 

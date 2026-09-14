@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Honor line (`// mutator-disable-next-line`) and regexp (`// mutator-disable-regexp`) annotations for `statement/return` mutations on return statements (#165).
 - `--dry-run` now applies `--git-diff-lines` and `--git-diff-base` filtering so reported dry-run mutation counts match what a real run executes on changed lines (#164).
 - Unknown `--run-mutant-id` values now report an error and exit 3 instead of silently succeeding (#163).
 - `internal/engine.classifyGoTestResult` now classifies `[setup failed]` package errors as SKIP instead of KILLED, preventing false kills and inflated MSI when `go test` fails during package initialization or load (#160).
