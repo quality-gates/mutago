@@ -66,15 +66,19 @@ type mutatorItem struct {
 	Mutator mutator.Mutator
 }
 
+type execConfig struct {
+	numWorkers     int
+	execs          []string
+	extraTestFlags []string
+}
+
 type mutationRun struct {
 	ctx              context.Context
 	opts             *models.Options
 	mutators         []mutatorItem
 	blacklist        map[string]struct{}
 	tmpDir           string
-	numWorkers       int
-	execs            []string
-	extraTestFlags   []string
+	exec             execConfig
 	report           *models.Report
 	mu               *sync.Mutex
 	modulePath       string
@@ -82,6 +86,7 @@ type mutationRun struct {
 	jobs             chan<- execJob
 	stdout           io.Writer
 	runMutantIDFound *atomic.Bool
+	gitChangedLines  gitdiff.ChangedLines
 }
 
 type execJob struct {
@@ -160,7 +165,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	defer cleanup()
 
 	report := run.report
-	if exitCode := runBaselineChecks(opts, pkgs, run.execs, run.extraTestFlags); exitCode != 0 {
+	if exitCode := runBaselineChecks(opts, pkgs, run.exec.execs, run.exec.extraTestFlags); exitCode != 0 {
 		return Result{Report: report, ExitCode: exitCode}, nil
 	}
 
@@ -270,14 +275,16 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 	}
 
 	run := &mutationRun{
-		ctx:              ctx,
-		opts:             opts,
-		mutators:         buildActiveMutators(opts),
-		blacklist:        mutationBlackList,
-		tmpDir:           tmpDir,
-		numWorkers:       numWorkers,
-		execs:            execs,
-		extraTestFlags:   extraTestFlags,
+		ctx:       ctx,
+		opts:      opts,
+		mutators:  buildActiveMutators(opts),
+		blacklist: mutationBlackList,
+		tmpDir:    tmpDir,
+		exec: execConfig{
+			numWorkers:     numWorkers,
+			execs:          execs,
+			extraTestFlags: extraTestFlags,
+		},
 		report:           report,
 		mu:               &reportMu,
 		modulePath:       detectModulePath(),
@@ -285,6 +292,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 		jobs:             jobs,
 		stdout:           e.Stdout,
 		runMutantIDFound: runMutantIDFound,
+		gitChangedLines:  gitChangedLines,
 	}
 
 	return run, pkgs, jobs, jobWg, stopProgress, progressWg, gitChangedLines, nil
@@ -389,13 +397,21 @@ func detectModuleRoot() string {
 	return filepath.Dir(gomod)
 }
 
+func sumDryRunTotals(totals map[string]int) int {
+	var total int
+	for _, count := range totals {
+		total += count
+	}
+	return total
+}
+
 func mutateAll(r *mutationRun, pkgs []importing.Package, coverageProfiles []*coverage.Profile) (dryRunTotal int, dryRunMutatorTotals map[string]int, exitCode int) {
 	if r.opts.General.DryRun {
 		dryRunMutatorTotals = make(map[string]int)
 	}
 	for i, importPkg := range pkgs {
 		if r.ctx.Err() != nil {
-			return dryRunTotal, dryRunMutatorTotals, returnError
+			return 0, dryRunMutatorTotals, returnError
 		}
 		var coverProfile *coverage.Profile
 		if coverageProfiles != nil {
@@ -404,25 +420,23 @@ func mutateAll(r *mutationRun, pkgs []importing.Package, coverageProfiles []*cov
 		perTestProf := perTestForPackage(r, importPkg)
 		for _, file := range importPkg.Files {
 			if r.ctx.Err() != nil {
-				return dryRunTotal, dryRunMutatorTotals, returnError
+				return 0, dryRunMutatorTotals, returnError
 			}
-			count, code := processFile(r, file, coverProfile, perTestProf, dryRunMutatorTotals)
-			if code != 0 {
-				return dryRunTotal, dryRunMutatorTotals, code
+			if _, code := processFile(r, file, coverProfile, perTestProf, dryRunMutatorTotals); code != 0 {
+				return 0, dryRunMutatorTotals, code
 			}
-			dryRunTotal += count
 		}
 	}
-	return dryRunTotal, dryRunMutatorTotals, 0
+	return sumDryRunTotals(dryRunMutatorTotals), dryRunMutatorTotals, 0
 }
 
 func configureAdaptiveTimeoutAndCoverage(opts *models.Options, pkgs []importing.Package, run *mutationRun) ([]*coverage.Profile, error) {
 	if opts.Exec.Coverage && !opts.Exec.NoExec && !opts.General.DryRun {
-		profiles, maxBaseline, err := prepareCoverageProfiles(opts, pkgs, run.tmpDir, run.modulePath, run.extraTestFlags, run.report)
+		profiles, maxBaseline, err := prepareCoverageProfiles(opts, pkgs, run.tmpDir, run.modulePath, run.exec.extraTestFlags, run.report)
 		if err != nil {
 			return nil, err
 		}
-		if len(run.execs) == 0 {
+		if len(run.exec.execs) == 0 {
 			applyAdaptiveTimeoutFromBaseline(opts, maxBaseline)
 		}
 		return profiles, nil
@@ -450,10 +464,10 @@ func prepareCoverageProfiles(opts *models.Options, pkgs []importing.Package, tmp
 }
 
 func perTestForPackage(r *mutationRun, importPkg importing.Package) *coverage.PerTestProfile {
-	if !r.opts.Exec.PerTest || r.opts.Exec.NoExec || r.opts.General.DryRun || len(r.execs) != 0 {
+	if !r.opts.Exec.PerTest || r.opts.Exec.NoExec || r.opts.General.DryRun || len(r.exec.execs) != 0 {
 		return nil
 	}
-	return buildPerTestCoverageProfile(r.opts, importPkg.Files, r.modulePath, r.tmpDir, r.numWorkers, r.extraTestFlags)
+	return buildPerTestCoverageProfile(r.opts, importPkg.Files, r.modulePath, r.tmpDir, r.exec.numWorkers, r.exec.extraTestFlags)
 }
 
 func processFile(r *mutationRun, file string, coverProfile *coverage.Profile, perTestProf *coverage.PerTestProfile, dryRunMutatorTotals map[string]int) (int, int) {
@@ -581,6 +595,10 @@ func applyMutator(r *mutationRun, m mutatorItem, fc *fileContext, node ast.Node,
 
 func recordOneMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
 	if r.opts.General.DryRun {
+		relFile := toRelPath(fc.absFile, r.moduleRoot)
+		if isGitDiffSkipped(r.gitChangedLines, relFile, fc.absFile, int(originalStartLine)) {
+			return
+		}
 		countDryRunMutation(m.Name, dryRunCounts, dryRunGlobalTotals)
 		return
 	}
@@ -629,9 +647,9 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 		pkg:            fc.pkg,
 		mutant:         mutant,
 		coverProfile:   fc.coverProfile,
-		execs:          r.execs,
+		execs:          r.exec.execs,
 		perTestProf:    fc.perTestProf,
-		extraTestFlags: r.extraTestFlags,
+		extraTestFlags: r.exec.extraTestFlags,
 		runMutantID:    r.opts.Exec.RunMutantID,
 		tmpDir:         r.tmpDir,
 		source: mutationSource{
@@ -1405,20 +1423,24 @@ func mutantLocation(opts *models.Options, mutant models.Mutant) string {
 	return fmt.Sprintf("%s (%s)", loc, mutant.Mutator.MutatorName)
 }
 
-func skipForGitDiff(job execJob, gitChangedLines gitdiff.ChangedLines) bool {
+func isGitDiffSkipped(gitChangedLines gitdiff.ChangedLines, relFile, absFile string, lineNum int) bool {
 	if gitChangedLines == nil {
 		return false
 	}
+	changed := gitdiff.IsRelativeLineChanged(gitChangedLines, relFile, lineNum)
+	if relFile == "" {
+		changed = gitdiff.IsLineChanged(gitChangedLines, absFile, lineNum)
+	}
+	return !changed
+}
+
+func skipForGitDiff(job execJob, gitChangedLines gitdiff.ChangedLines) bool {
 	lineNum := int(job.mutant.Mutator.OriginalStartLine)
-	changed := gitdiff.IsRelativeLineChanged(gitChangedLines, job.source.relFile, lineNum)
-	if job.source.relFile == "" {
-		changed = gitdiff.IsLineChanged(gitChangedLines, job.source.absFile, lineNum)
+	if isGitDiffSkipped(gitChangedLines, job.source.relFile, job.source.absFile, lineNum) {
+		console.Debug(job.opts, "Skip %q at line %d (not in git diff)", job.source.mutationFile, lineNum)
+		return true
 	}
-	if changed {
-		return false
-	}
-	console.Debug(job.opts, "Skip %q at line %d (not in git diff)", job.source.mutationFile, lineNum)
-	return true
+	return false
 }
 
 func toRelPath(absOrRel, moduleRoot string) string {
