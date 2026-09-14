@@ -342,6 +342,9 @@ func TestMainExposesMutationChecksums(t *testing.T) {
 	out := testMain(t, root, runArgs, returnOk, "mutation score")
 
 	var report struct {
+		Stats struct {
+			Msi float64 `json:"msi"`
+		} `json:"stats"`
 		Escaped []struct {
 			Checksum string `json:"checksum"`
 		} `json:"escaped"`
@@ -355,6 +358,7 @@ func TestMainExposesMutationChecksums(t *testing.T) {
 	assert.Contains(t, out, checksum)
 
 	var agenticReport struct {
+		Msi     float64 `json:"msi"`
 		Mutants []struct {
 			ID       string `json:"id"`
 			Checksum string `json:"checksum"`
@@ -363,6 +367,9 @@ func TestMainExposesMutationChecksums(t *testing.T) {
 	agenticData, err := os.ReadFile(agenticReportPath)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(agenticData, &agenticReport))
+	assert.Equal(t, report.Stats.Msi, agenticReport.Msi)
+	assert.GreaterOrEqual(t, agenticReport.Msi, 0.0)
+	assert.LessOrEqual(t, agenticReport.Msi, 1.0)
 	require.NotEmpty(t, agenticReport.Mutants)
 	assert.Equal(t, checksum, agenticReport.Mutants[0].Checksum)
 	runMutantID := agenticReport.Mutants[0].ID

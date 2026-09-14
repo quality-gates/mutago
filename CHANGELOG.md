@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Align agentic JSON documentation with emitted data: describe `msi` as a 0–1 ratio matching summary JSON and update the example and schema tables in `docs/json-outputs.md` and `README.md` (#167).
 - Allow `mutator-disable-regexp` patterns to contain spaces so the trailing mutator list is parsed correctly (#166).
 - Honor line (`// mutator-disable-next-line`) and regexp (`// mutator-disable-regexp`) annotations for `statement/return` mutations on return statements (#165).
 - `--dry-run` now applies `--git-diff-lines` and `--git-diff-base` filtering so reported dry-run mutation counts match what a real run executes on changed lines (#164).
