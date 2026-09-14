@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/quality-gates/mutago/v2"
 	"github.com/quality-gates/mutago/v2/internal/gitdiff"
 	"github.com/quality-gates/mutago/v2/internal/models"
 
@@ -213,6 +214,67 @@ func TestSkipForGitDiffUsesOriginalASTLine(t *testing.T) {
 	job.mutant.Mutator.OriginalStartLine = 3
 	if !skipForGitDiff(job, gitChangedLines) {
 		t.Error("expected skipForGitDiff to be true, got false")
+	}
+}
+
+func TestIsGitDiffSkipped(t *testing.T) {
+	// When gitChangedLines is nil, nothing is skipped.
+	if isGitDiffSkipped(nil, "foo.go", "/repo/foo.go", 10) {
+		t.Error("expected isGitDiffSkipped to be false when gitChangedLines is nil")
+	}
+
+	gitChangedLines := gitdiff.ChangedLines{
+		"pkg/foo.go": {{Start: 10, End: 15}},
+	}
+
+	// Line within range for relative path: not skipped.
+	if isGitDiffSkipped(gitChangedLines, "pkg/foo.go", "/repo/pkg/foo.go", 12) {
+		t.Error("expected line 12 to not be skipped")
+	}
+
+	// Line outside range for relative path: skipped.
+	if !isGitDiffSkipped(gitChangedLines, "pkg/foo.go", "/repo/pkg/foo.go", 20) {
+		t.Error("expected line 20 to be skipped")
+	}
+
+	// Fallback to absFile when relFile is empty.
+	if isGitDiffSkipped(gitChangedLines, "", "/repo/pkg/foo.go", 12) {
+		t.Error("expected line 12 with absFile to not be skipped")
+	}
+	if !isGitDiffSkipped(gitChangedLines, "", "/repo/pkg/foo.go", 20) {
+		t.Error("expected line 20 with absFile to be skipped")
+	}
+}
+
+func TestRecordOneMutationDryRunGitDiff(t *testing.T) {
+	opts := &models.Options{}
+	opts.General.DryRun = true
+	gitChangedLines := gitdiff.ChangedLines{
+		"foo.go": {{Start: 10, End: 10}},
+	}
+	r := &mutationRun{
+		opts:            opts,
+		gitChangedLines: gitChangedLines,
+		moduleRoot:      "/repo",
+	}
+	m := mutatorItem{Name: "test-mutator"}
+	fc := &fileContext{
+		absFile: "/repo/foo.go",
+	}
+
+	dryRunCounts := make(map[string]int)
+	dryRunGlobalTotals := make(map[string]int)
+
+	// Mutation on changed line 10 should be counted.
+	recordOneMutation(r, m, fc, mutago.PositionedMutation{}, 0, 10, nil, dryRunCounts, dryRunGlobalTotals)
+	if dryRunCounts["test-mutator"] != 1 || dryRunGlobalTotals["test-mutator"] != 1 {
+		t.Errorf("expected mutation on line 10 to be counted, got counts=%v, globals=%v", dryRunCounts, dryRunGlobalTotals)
+	}
+
+	// Mutation on unchanged line 20 should NOT be counted.
+	recordOneMutation(r, m, fc, mutago.PositionedMutation{}, 1, 20, nil, dryRunCounts, dryRunGlobalTotals)
+	if dryRunCounts["test-mutator"] != 1 || dryRunGlobalTotals["test-mutator"] != 1 {
+		t.Errorf("expected mutation on line 20 to not be counted, got counts=%v, globals=%v", dryRunCounts, dryRunGlobalTotals)
 	}
 }
 

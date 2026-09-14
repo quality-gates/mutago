@@ -492,6 +492,67 @@ func BelowComment(y int) int {
 	assert.Equal(t, map[int64]bool{4: true, 10: true}, actualLines)
 }
 
+func TestMainDryRunWithGitDiffLines(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/lineposition\n\ngo 1.26.3\n")
+	writeFixtureFile(t, filepath.Join(root, "lineposition_test.go"), `package lineposition
+
+import "testing"
+
+func TestFunctionsReturnInput(t *testing.T) {
+	for _, fn := range []func(int) int{NearTop, BelowComment} {
+		if got := fn(7); got != 7 {
+			t.Fatalf("function returned %d, want 7", got)
+		}
+	}
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - statement/remove-self-assign\n")
+
+	baseSource := `package lineposition
+
+func NearTop(x int) int {
+	x = x // v1
+	return x
+}
+
+func BelowComment(y int) int {
+	y = y
+	return y
+}
+`
+	// Only change NearTop (line 4), leave BelowComment (line 9) untouched.
+	changedSource := strings.ReplaceAll(baseSource, "x = x // v1", "x = x // v2")
+	writeFixtureFile(t, filepath.Join(root, "lineposition.go"), baseSource)
+	runGit(t, root, "init", "-q")
+	runGit(t, root, "config", "user.email", "mutago@example.com")
+	runGit(t, root, "config", "user.name", "mutago test")
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-q", "-m", "base")
+	writeFixtureFile(t, filepath.Join(root, "lineposition.go"), changedSource)
+
+	// Dry-run with --git-diff-lines should report only 1 mutation.
+	outWithDiff := testMain(
+		t,
+		root,
+		[]string{"--dry-run", "--git-diff-lines", "--git-diff-base", "HEAD", "--config", "mutago.yml"},
+		returnOk,
+		"1 mutation(s) would be generated",
+	)
+	assert.Contains(t, outWithDiff, "statement/remove-self-assign")
+	assert.NotContains(t, outWithDiff, "2 mutation(s) would be generated")
+
+	// Dry-run without --git-diff-lines should report all 2 mutations.
+	outWithoutDiff := testMain(
+		t,
+		root,
+		[]string{"--dry-run", "--config", "mutago.yml"},
+		returnOk,
+		"2 mutation(s) would be generated",
+	)
+	assert.Contains(t, outWithoutDiff, "2 mutation(s) would be generated")
+}
+
 func writeFixtureFile(t *testing.T, path, contents string) {
 	t.Helper()
 	require.NoError(t, os.WriteFile(path, []byte(contents), 0644))
