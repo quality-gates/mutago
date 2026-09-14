@@ -125,6 +125,95 @@ func TestParseRegexAnnotation(t *testing.T) {
 			},
 		},
 		{
+			name:        "Regex with spaces and wildcard mutator",
+			commentText: "RegexName return true *",
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("return true")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"*"},
+			},
+		},
+		{
+			name:        "Regex with spaces and explicit mutators",
+			commentText: "RegexName return true branch/if, conditional/negation",
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("return true")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"branch/if", "conditional/negation"},
+			},
+		},
+		{
+			name:        "Regex with spaces and single explicit mutator",
+			commentText: "RegexName return true branch/if",
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("return true")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"branch/if"},
+			},
+		},
+		{
+			name:        "No-space regex with wildcard mutator",
+			commentText: "RegexName return *",
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("return")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"*"},
+			},
+		},
+		{
+			name:        "Regex with escaped parens and wildcard mutator",
+			commentText: `RegexName s\.Method\(\) *`,
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile(`s\.Method\(\)`)
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"*"},
+			},
+		},
+		{
+			name:        "Quoted regex with spaces and wildcard mutator",
+			commentText: `RegexName "return true" *`,
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("return true")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"*"},
+			},
+		},
+		{
+			name:        "Regex with commas and explicit mutators",
+			commentText: "RegexName foo, bar MutatorA, MutatorB",
+			expectedRegex: func() *regexp.Regexp {
+				re, _ := regexp.Compile("foo, bar")
+				return re
+			}(),
+			expectedInfo: mutatorInfo{
+				Names: []string{"MutatorA", "MutatorB"},
+			},
+		},
+		{
+			name:          "Invalid regex with wildcard",
+			commentText:   "RegexName [a-z *",
+			expectedRegex: nil,
+			expectedInfo:  mutatorInfo{},
+		},
+		{
+			name:          "Invalid regex with explicit mutator",
+			commentText:   "RegexName [a-z branch/if",
+			expectedRegex: nil,
+			expectedInfo:  mutatorInfo{},
+		},
+		{
 			name:          "Invalid regex",
 			commentText:   "RegexName [a-z",
 			expectedRegex: nil,

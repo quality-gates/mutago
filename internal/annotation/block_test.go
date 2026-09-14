@@ -96,3 +96,45 @@ func foo() int {
 	assert.False(t, HandleBlockStmt(ret2, "statement/return"))
 	assert.False(t, HandleBlockStmt(ret2, "statement/remove"))
 }
+
+func TestHandleBlockStmt_RegexAnnotation_Spaces(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "regex_spaces_block_test.go")
+	src := `package main
+
+// mutator-disable-regexp return true *
+// mutator-disable-regexp return false branch/if
+func foo(b bool) bool {
+	if b {
+		return true
+	}
+	return false
+}
+`
+	err := os.WriteFile(filePath, []byte(src), 0644)
+	require.NoError(t, err)
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filePath, src, parser.ParseComments)
+	require.NoError(t, err)
+
+	p := NewProcessor()
+	p.Collect(file, fset, filePath)
+
+	fn := file.Decls[0].(*ast.FuncDecl)
+	require.Len(t, fn.Body.List, 2)
+
+	ifStmt := fn.Body.List[0].(*ast.IfStmt)
+	retTrue := ifStmt.Body.List[0]
+	retFalse := fn.Body.List[1]
+
+	// return true has wildcard mutator "*" -> suppresses all mutators
+	assert.True(t, HandleBlockStmt(retTrue, "statement/return"))
+	assert.True(t, HandleBlockStmt(retTrue, "branch/if"))
+	assert.True(t, HandleBlockStmt(retTrue, "numbers/incrementer"))
+
+	// return false has explicit mutator "branch/if" -> only suppresses branch/if
+	assert.True(t, HandleBlockStmt(retFalse, "branch/if"))
+	assert.False(t, HandleBlockStmt(retFalse, "statement/return"))
+	assert.False(t, HandleBlockStmt(retFalse, "numbers/incrementer"))
+}
