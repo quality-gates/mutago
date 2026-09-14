@@ -1292,6 +1292,57 @@ func Switch(n int) string {
 	assert.NotContains(t, out, "KILLED")
 }
 
+func TestMainStatementReturnAnnotationSuppression(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/suppress\n\ngo 1.26.5\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - statement/return\n")
+	writeFixtureFile(t, filepath.Join(root, "suppress.go"), `package suppress
+
+// mutator-disable-regexp return.*regex statement/return
+func Inc(x int) int {
+	// mutator-disable-next-line *
+	return x + 1
+}
+
+func Dec(x int) int {
+	// mutator-disable-next-line statement/return
+	return x - 1
+}
+
+func Special(x int) int {
+	return x + 10 // regex
+}
+
+// mutator-disable-func
+func FuncDisabled(x int) int {
+	return x + 50
+}
+
+func Preserved(x int) int {
+	return x + 100
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "suppress_test.go"), `package suppress
+
+import "testing"
+
+func TestAll(t *testing.T) {
+	if Inc(1) != 2 || Dec(2) != 1 || Special(5) != 15 || FuncDisabled(5) != 55 || Preserved(5) != 105 {
+		t.Fatal("failed")
+	}
+}
+`)
+
+	out := testMain(
+		t,
+		root,
+		[]string{"--dry-run", "--config", filepath.Join(root, "mutago.yml"), "."},
+		returnOk,
+		"1 mutation(s) would be generated",
+	)
+	assert.Contains(t, out, "statement/return: 1")
+}
+
 func testMain(t *testing.T, root string, exec []string, expectedExitCode int, contains string) string {
 	// Clear the parser cache so each test loads files fresh from disk.
 	// Without this, TestMainMatch's exec script (which writes to the original
