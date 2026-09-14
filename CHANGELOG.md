@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Allow `mutator-disable-regexp` patterns to contain spaces so the trailing mutator list is parsed correctly (#166).
 - Honor line (`// mutator-disable-next-line`) and regexp (`// mutator-disable-regexp`) annotations for `statement/return` mutations on return statements (#165).
 - `--dry-run` now applies `--git-diff-lines` and `--git-diff-base` filtering so reported dry-run mutation counts match what a real run executes on changed lines (#164).
 - Unknown `--run-mutant-id` values now report an error and exit 3 instead of silently succeeding (#163).

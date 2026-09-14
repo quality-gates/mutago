@@ -17,9 +17,12 @@ func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, 
 		return nil, mutatorInfo{}
 	}
 
-	parts := strings.SplitN(content, " ", 2)
+	pattern, mutatorList := splitRegexAnnotation(content)
+	pattern = unquotePattern(pattern)
+	if pattern == "" {
+		return nil, mutatorInfo{}
+	}
 
-	pattern := strings.TrimSpace(parts[0])
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		log.Printf("Warning: invalid regex in annotation: %q, error: %v\n", pattern, err)
@@ -27,13 +30,142 @@ func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, 
 	}
 
 	var mutators []string
-	if len(parts) > 1 {
-		mutators = parseMutators(parts[1])
+	if mutatorList != "" {
+		mutators = parseMutators(mutatorList)
 	}
 
 	return re, mutatorInfo{
 		Names: mutators,
 	}
+}
+
+func unquotePattern(pattern string) string {
+	pattern = strings.TrimSpace(pattern)
+	if len(pattern) >= 2 {
+		if (pattern[0] == '"' && pattern[len(pattern)-1] == '"') ||
+			(pattern[0] == '`' && pattern[len(pattern)-1] == '`') {
+			return pattern[1 : len(pattern)-1]
+		}
+	}
+	return pattern
+}
+
+var validMutatorRune = [256]bool{
+	'*': true,
+	'-': true,
+	'/': true,
+	'_': true,
+}
+
+func init() {
+	for c := 'a'; c <= 'z'; c++ {
+		validMutatorRune[c] = true
+	}
+	for c := 'A'; c <= 'Z'; c++ {
+		validMutatorRune[c] = true
+	}
+	for c := '0'; c <= '9'; c++ {
+		validMutatorRune[c] = true
+	}
+}
+
+func isValidMutatorName(name string) bool {
+	if name == "*" {
+		return true
+	}
+	if name == "" {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		b := name[i]
+		if b >= 128 || !validMutatorRune[b] {
+			return false
+		}
+	}
+	return true
+}
+
+func splitWildcard(content string) (string, string, bool) {
+	lastSpace := strings.LastIndexAny(content, " \t")
+	if lastSpace == -1 {
+		return "", "", false
+	}
+	lastToken := strings.TrimSpace(content[lastSpace:])
+	if lastToken == "*" {
+		return strings.TrimSpace(content[:lastSpace]), "*", true
+	}
+	return "", "", false
+}
+
+func splitSingleMutator(content string) (string, string, bool) {
+	lastSpace := strings.LastIndexAny(content, " \t")
+	if lastSpace == -1 {
+		return "", "", false
+	}
+	candidateMutator := strings.TrimSpace(content[lastSpace:])
+	candidatePattern := strings.TrimSpace(content[:lastSpace])
+	if candidatePattern != "" && isValidMutatorName(candidateMutator) {
+		return candidatePattern, candidateMutator, true
+	}
+	return "", "", false
+}
+
+func findCommaMutatorBoundary(commaParts []string) (int, int, bool) {
+	for i := len(commaParts) - 2; i >= 0; i-- {
+		trimmed := strings.TrimSpace(commaParts[i])
+		if isValidMutatorName(trimmed) {
+			continue
+		}
+		idx := strings.LastIndexAny(commaParts[i], " \t")
+		if idx != -1 && isValidMutatorName(strings.TrimSpace(commaParts[i][idx:])) {
+			return i, idx, true
+		}
+		return -1, -1, false
+	}
+	return -1, -1, false
+}
+
+func splitCommaMutators(content string) (string, string, bool) {
+	if !strings.Contains(content, ",") {
+		return "", "", false
+	}
+	commaParts := strings.Split(content, ",")
+	lastPart := strings.TrimSpace(commaParts[len(commaParts)-1])
+	if !isValidMutatorName(lastPart) {
+		return "", "", false
+	}
+
+	targetPartIdx, firstMutIdxInPart, ok := findCommaMutatorBoundary(commaParts)
+	if !ok {
+		return "", "", false
+	}
+
+	patternParts := append([]string{}, commaParts[:targetPartIdx]...)
+	patternParts = append(patternParts, commaParts[targetPartIdx][:firstMutIdxInPart])
+	pattern := strings.TrimSpace(strings.Join(patternParts, ","))
+
+	mutatorParts := append([]string{strings.TrimSpace(commaParts[targetPartIdx][firstMutIdxInPart:])}, commaParts[targetPartIdx+1:]...)
+	mutatorList := strings.Join(mutatorParts, ", ")
+	return pattern, mutatorList, true
+}
+
+func splitRegexAnnotation(content string) (string, string) {
+	content = strings.TrimSpace(content)
+	if content == "" || !strings.ContainsAny(content, " \t") {
+		return content, ""
+	}
+
+	if pattern, mutators, ok := splitWildcard(content); ok {
+		return pattern, mutators
+	}
+	if pattern, mutators, ok := splitCommaMutators(content); ok {
+		return pattern, mutators
+	}
+	if pattern, mutators, ok := splitSingleMutator(content); ok {
+		return pattern, mutators
+	}
+
+	return content, ""
 }
 
 // collectMatchNodes processes a "mutator-disable-regexp" annotation comment by:
