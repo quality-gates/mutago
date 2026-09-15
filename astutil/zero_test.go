@@ -3,6 +3,8 @@ package astutil
 import (
 	"bytes"
 	"go/ast"
+	"go/importer"
+	"go/parser"
 	"go/printer"
 	"go/token"
 	"go/types"
@@ -188,4 +190,109 @@ func firstReturn(t *testing.T, file *ast.File) *ast.ReturnStmt {
 		t.Fatal("source contains no return statement")
 	}
 	return found
+}
+
+func TestZeroExprForTypeAt_UnexportedStructInImportedPackage(t *testing.T) {
+	dependency := `package dep
+
+type secret struct{ Val int }
+
+func New() secret { return secret{1} }
+`
+	source := `package example
+
+import "example.com/dep"
+
+func Get() any {
+	return dep.New()
+}
+`
+	assertCrossPackageZeroExpr(t, dependency, source, "")
+}
+
+func TestZeroExprForTypeAt_ExportedStructInImportedPackage(t *testing.T) {
+	dependency := `package dep
+
+type Public struct{ Val int }
+
+func New() Public { return Public{1} }
+`
+	source := `package example
+
+import "example.com/dep"
+
+func Get() any {
+	return dep.New()
+}
+`
+	assertCrossPackageZeroExpr(t, dependency, source, "dep.Public{}")
+}
+
+// assertCrossPackageZeroExpr type-checks dependency as "example.com/dep",
+// then source as a package importing it, and compares the zero expression
+// built for the first return result against want. An empty want means the
+// zero expression must be nil.
+func assertCrossPackageZeroExpr(t *testing.T, dependency, source, want string) {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	depFile, err := parser.ParseFile(fset, "dep.go", dependency, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse dependency: %v\n%s", err, dependency)
+	}
+	depPkg, err := (&types.Config{Importer: importer.Default()}).Check("example.com/dep", fset, []*ast.File{depFile}, nil)
+	if err != nil {
+		t.Fatalf("type-check dependency: %v\n%s", err, dependency)
+	}
+
+	file, err := parser.ParseFile(fset, "example.go", source, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse source: %v\n%s", err, source)
+	}
+	info := &types.Info{
+		Types:     make(map[ast.Expr]types.TypeAndValue),
+		Defs:      make(map[*ast.Ident]types.Object),
+		Uses:      make(map[*ast.Ident]types.Object),
+		Implicits: make(map[ast.Node]types.Object),
+		Scopes:    make(map[ast.Node]*types.Scope),
+	}
+	config := &types.Config{Importer: fixedImporter{pkg: depPkg}}
+	pkg, err := config.Check("example.com/example", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatalf("type-check source: %v\n%s", err, source)
+	}
+
+	ret := firstReturn(t, file)
+	result := ret.Results[0]
+	typ := info.TypeOf(result)
+	if typ == nil {
+		t.Fatal("no type for return expression")
+	}
+
+	got := ZeroExprForTypeAt(typ, pkg, info, result.Pos())
+	if want == "" {
+		if got != nil {
+			t.Fatalf("ZeroExprForTypeAt(%s) = %s, want nil", typ, printExpr(t, got))
+		}
+		return
+	}
+	if got == nil {
+		t.Fatalf("ZeroExprForTypeAt(%s) = nil, want %s", typ, want)
+	}
+	if printed := printExpr(t, got); printed != want {
+		t.Fatalf("ZeroExprForTypeAt(%s) = %s, want %s", typ, printed, want)
+	}
+}
+
+// fixedImporter resolves every import path to the same package, which is
+// enough for the two-package sources used in these tests.
+type fixedImporter struct {
+	pkg *types.Package
+}
+
+func (i fixedImporter) Import(path string) (*types.Package, error) {
+	if path == i.pkg.Path() {
+		return i.pkg, nil
+	}
+	return importer.Default().Import(path)
 }

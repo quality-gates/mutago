@@ -67,6 +67,11 @@ func structTypeExpr(obj *types.TypeName, currentPkg *types.Package, info *types.
 	if currentPkg != nil && obj.Pkg().Path() == currentPkg.Path() {
 		return ast.NewIdent(obj.Name())
 	}
+	// The type belongs to another package (or the current package is
+	// unknown), so an unexported name cannot be referenced from here.
+	if !obj.Exported() {
+		return nil
+	}
 	packageName, ok := localPackageName(info, pos, obj.Pkg())
 	if ok {
 		if packageName == "." {
