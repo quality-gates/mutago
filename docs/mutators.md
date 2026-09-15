@@ -75,7 +75,7 @@ Inserts a `break` at the start of each range loop body, causing only the first i
 ## Numbers
 
 ### numbers/incrementer
-Increments integer and float literals by 1. Maximum boundary literals for bounded integer types (where incrementing produces integer constant overflow) are skipped to avoid uncompilable mutants.
+Increments integer and float literals by 1. Maximum boundary literals for bounded integer types, and minimum signed-integer boundary constants under unary minus (e.g. `int8(-128)`), are skipped where incrementing would overflow, to avoid uncompilable mutants.
 
 ### numbers/decrementer
 Decrements integer and float literals by 1. Zero literals in unsigned integer contexts (where decrementing produces integer constant overflow) are skipped to avoid uncompilable mutants.

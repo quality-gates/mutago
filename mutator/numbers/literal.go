@@ -2,6 +2,7 @@ package numbers
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
 	"math"
 	"strconv"
@@ -86,6 +87,36 @@ func shouldSkipIncrement(info *types.Info, expr ast.Expr, val int64) bool {
 	if info == nil {
 		return false
 	}
+	if skipIncrementForType(info, expr, val) {
+		return true
+	}
+	return skipIncrementUnderUnaryMinus(info, expr, val)
+}
+
+func skipIncrementUnderUnaryMinus(info *types.Info, expr ast.Expr, val int64) bool {
+	for e := range info.Types {
+		unary, ok := e.(*ast.UnaryExpr)
+		if !ok || unary.Op != token.SUB {
+			continue
+		}
+		if unwrapParen(unary.X) == expr && skipIncrementForType(info, unary, val) {
+			return true
+		}
+	}
+	return false
+}
+
+func unwrapParen(expr ast.Expr) ast.Expr {
+	for {
+		paren, ok := expr.(*ast.ParenExpr)
+		if !ok {
+			return expr
+		}
+		expr = paren.X
+	}
+}
+
+func skipIncrementForType(info *types.Info, expr ast.Expr, val int64) bool {
 	tv, ok := info.Types[expr]
 	if !ok {
 		return false
