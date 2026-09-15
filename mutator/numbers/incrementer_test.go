@@ -209,3 +209,100 @@ func testFunc() byte {
 		assert.NoError(t, compileErr, "mutant %d failed to compile: %v\nsource:\n%s", i, compileErr, buf.String())
 	}
 }
+
+func TestMutatorNumbersIncrementer_SkipsMinSignedBoundaries(t *testing.T) {
+	src := `package main
+
+func testFunc() {
+	var i8 int8 = -128
+	var i16 int16 = -32768
+	var i32 int32 = -2147483648
+	_ = int8(-128)
+	_ = int16(-32768)
+	_ = int32(-2147483648)
+	var paren int8 = -(128)
+
+	var safeInt8 int8 = -100
+	var independent int = 128
+	_ = i8
+	_ = i16
+	_ = i32
+	_ = paren
+	_ = safeInt8
+	_ = independent
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, 0)
+	require.NoError(t, err)
+
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+		Defs:  make(map[*ast.Ident]types.Object),
+		Uses:  make(map[*ast.Ident]types.Object),
+	}
+	pkg, err := conf.Check("main", fset, []*ast.File{file}, info)
+	require.NoError(t, err)
+
+	var minBoundaryMutations int
+	var safeMutations int
+	var independentMutations int
+	var allMutations []mutator.Mutation
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		unary, ok := n.(*ast.UnaryExpr)
+		if ok && unary.Op == token.SUB {
+			x := unary.X
+			for {
+				paren, ok := x.(*ast.ParenExpr)
+				if !ok {
+					break
+				}
+				x = paren.X
+			}
+			lit, litOK := x.(*ast.BasicLit)
+			if litOK && lit.Kind == token.INT {
+				muts := MutatorNumbersIncrementer(pkg, info, lit)
+				switch lit.Value {
+				case "128", "32768", "2147483648":
+					minBoundaryMutations += len(muts)
+				case "100":
+					safeMutations += len(muts)
+				}
+			}
+		}
+		if spec, ok := n.(*ast.ValueSpec); ok {
+			for i, name := range spec.Names {
+				if name.Name != "independent" || i >= len(spec.Values) {
+					continue
+				}
+				if lit, ok := spec.Values[i].(*ast.BasicLit); ok {
+					independentMutations += len(MutatorNumbersIncrementer(pkg, info, lit))
+				}
+			}
+		}
+		allMutations = append(allMutations, MutatorNumbersIncrementer(pkg, info, n)...)
+		return true
+	})
+
+	assert.Equal(t, 0, minBoundaryMutations, "expected 0 mutations on min signed-boundary literals under unary minus")
+	assert.Greater(t, safeMutations, 0, "expected mutations on safe negative literals")
+	assert.Greater(t, independentMutations, 0, "expected mutations on 128 outside unary minus")
+
+	for i, m := range allMutations {
+		m.Change()
+		buf := new(bytes.Buffer)
+		err := printer.Fprint(buf, fset, file)
+		require.NoError(t, err)
+
+		mutantFset := token.NewFileSet()
+		mutantFile, err := parser.ParseFile(mutantFset, "mutant.go", buf.String(), 0)
+		require.NoError(t, err)
+
+		checkInfo := &types.Info{Types: make(map[ast.Expr]types.TypeAndValue)}
+		_, compileErr := conf.Check("main", mutantFset, []*ast.File{mutantFile}, checkInfo)
+		m.Reset()
+		assert.NoError(t, compileErr, "mutant %d failed to compile: %v\nsource:\n%s", i, compileErr, buf.String())
+	}
+}

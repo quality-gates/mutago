@@ -656,6 +656,8 @@ Name	             | Original Body | Mutated Body |
 
 ### Numbers mutators
 #### numbers/incrementer
+Increments integer and float literals by 1. Maximum boundary literals for bounded integer types, and minimum signed-integer boundary constants under unary minus (e.g. `int8(-128)`), are skipped where incrementing would overflow.
+
 Name	           | Original | Mutated  |
 | :--------------- | :------- | :------- |
 | IncrementInteger | 100      | 101      |
