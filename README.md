@@ -610,7 +610,7 @@ Multiplication assignments (`*=`) whose right-hand side is constant zero are ski
 | AndNotAssign     | &^=      | &=      |
 
 #### arithmetic/assignment
-Strips compound assignment operators, replacing them with plain `=`. Shift assignments (`<<=`, `>>=`) whose right-hand side is not assignable to the left-hand side are skipped to avoid uncompilable mutants.
+Strips compound assignment operators, replacing them with plain `=`. Shift assignments (`<<=`, `>>=`) whose right-hand side is not assignable to the left-hand side, or whose untyped constant value overflows the left-hand side type, are skipped to avoid uncompilable mutants.
 
 | Name	           | Original | Mutated |
 | :--------------- | :------- | :------ |

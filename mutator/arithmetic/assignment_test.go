@@ -70,6 +70,66 @@ func TestMutatorArithmeticAssignment_ShiftAssignability(t *testing.T) {
 			wantMutate: true,
 		},
 		{
+			name:       "overflowing untyped constant shl skipped",
+			src:        "package main\nfunc f() int8 { var x int8 = 1; x <<= 200; return x }",
+			tok:        token.SHL_ASSIGN,
+			wantMutate: false,
+		},
+		{
+			name:       "overflowing untyped constant shr skipped",
+			src:        "package main\nfunc f() int8 { var x int8 = 1; x >>= 200; return x }",
+			tok:        token.SHR_ASSIGN,
+			wantMutate: false,
+		},
+		{
+			name:       "int8-fitting untyped constant shl mutated",
+			src:        "package main\nfunc f() int8 { var x int8 = 1; x <<= 1; return x }",
+			tok:        token.SHL_ASSIGN,
+			wantMutate: true,
+		},
+		{
+			name:       "int8 max untyped constant shl mutated",
+			src:        "package main\nfunc f() int8 { var x int8 = 1; x <<= 127; return x }",
+			tok:        token.SHL_ASSIGN,
+			wantMutate: true,
+		},
+		{
+			name:       "int8 max-plus-one untyped constant shl skipped",
+			src:        "package main\nfunc f() int8 { var x int8 = 1; x <<= 128; return x }",
+			tok:        token.SHL_ASSIGN,
+			wantMutate: false,
+		},
+		{
+			name:       "uint8-fitting untyped constant shl mutated",
+			src:        "package main\nfunc f() uint8 { var x uint8 = 1; x <<= 200; return x }",
+			tok:        token.SHL_ASSIGN,
+			wantMutate: true,
+		},
+		{
+			name:       "uint8 max untyped constant shl mutated",
+			src:        "package main\nfunc f() uint8 { var x uint8 = 1; x <<= 255; return x }",
+			tok:        token.SHL_ASSIGN,
+			wantMutate: true,
+		},
+		{
+			name:       "uint8 overflowing untyped constant shl skipped",
+			src:        "package main\nfunc f() uint8 { var x uint8 = 1; x <<= 256; return x }",
+			tok:        token.SHL_ASSIGN,
+			wantMutate: false,
+		},
+		{
+			name:       "named int8 overflowing untyped constant shl skipped",
+			src:        "package main\ntype MyInt8 int8\nfunc f() MyInt8 { var x MyInt8 = 1; x <<= 200; return x }",
+			tok:        token.SHL_ASSIGN,
+			wantMutate: false,
+		},
+		{
+			name:       "const identifier overflowing untyped shl skipped",
+			src:        "package main\nconst n = 200\nfunc f() int8 { var x int8 = 1; x <<= n; return x }",
+			tok:        token.SHL_ASSIGN,
+			wantMutate: false,
+		},
+		{
 			name:       "untyped constant shr mutated",
 			src:        "package main\nfunc f() uint64 { var x uint64 = 1; x >>= 1; return x }",
 			tok:        token.SHR_ASSIGN,
@@ -85,6 +145,33 @@ func TestMutatorArithmeticAssignment_ShiftAssignability(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assertShiftMutation(t, tt.src, tt.tok, tt.wantMutate)
+		})
+	}
+}
+
+func TestMutatorArithmeticAssignment_UntypedConstantOverflowByType(t *testing.T) {
+	cases := []struct {
+		typ      string
+		fit      string
+		overflow string
+	}{
+		{"int8", "127", "128"},
+		{"int16", "32767", "32768"},
+		{"int32", "2147483647", "2147483648"},
+		{"int64", "9223372036854775807", "9223372036854775808"},
+		{"int", "9223372036854775807", "9223372036854775808"},
+		{"uint8", "255", "256"},
+		{"uint16", "65535", "65536"},
+		{"uint32", "4294967295", "4294967296"},
+	}
+	for _, tt := range cases {
+		fitSrc := "package main\nfunc f() " + tt.typ + " { var x " + tt.typ + " = 1; x <<= " + tt.fit + "; return x }"
+		overSrc := "package main\nfunc f() " + tt.typ + " { var x " + tt.typ + " = 1; x <<= " + tt.overflow + "; return x }"
+		t.Run(tt.typ+" fit", func(t *testing.T) {
+			assertShiftMutation(t, fitSrc, token.SHL_ASSIGN, true)
+		})
+		t.Run(tt.typ+" overflow", func(t *testing.T) {
+			assertShiftMutation(t, overSrc, token.SHL_ASSIGN, false)
 		})
 	}
 }
