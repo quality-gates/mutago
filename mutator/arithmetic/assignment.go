@@ -2,8 +2,10 @@ package arithmetic
 
 import (
 	"go/ast"
+	"go/constant"
 	"go/token"
 	"go/types"
+	"math"
 
 	"github.com/quality-gates/mutago/v2/mutator"
 )
@@ -68,5 +70,40 @@ func skipUnassignableShift(info *types.Info, n *ast.AssignStmt) bool {
 	if lhsType == nil || rhsType == nil {
 		return false
 	}
-	return !types.AssignableTo(rhsType, lhsType)
+	if !types.AssignableTo(rhsType, lhsType) {
+		return true
+	}
+	return constantOverflowsType(info.Types[n.Rhs[0]].Value, lhsType)
+}
+
+var integerMax = map[types.BasicKind]uint64{
+	types.Int8:   math.MaxInt8,
+	types.Int16:  math.MaxInt16,
+	types.Int32:  math.MaxInt32,
+	types.Int64:  math.MaxInt64,
+	types.Int:    math.MaxInt,
+	types.Uint8:  math.MaxUint8,
+	types.Uint16: math.MaxUint16,
+	types.Uint32: math.MaxUint32,
+}
+
+func constantOverflowsType(val constant.Value, t types.Type) bool {
+	if val == nil {
+		return false
+	}
+	max, ok := maxOfIntegerType(t)
+	if !ok {
+		return false
+	}
+	x, _ := constant.Uint64Val(val)
+	return x > max
+}
+
+func maxOfIntegerType(t types.Type) (uint64, bool) {
+	basic, ok := t.Underlying().(*types.Basic)
+	if !ok {
+		return 0, false
+	}
+	max, ok := integerMax[basic.Kind()]
+	return max, ok
 }

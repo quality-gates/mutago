@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- `arithmetic/assignment` now skips mutating `<<=` and `>>=` to `=` when an untyped constant shift count overflows the left-hand side type (e.g. `int8` `x <<= 200`), preventing uncompilable mutants and false kills (#200).
 - `numbers/incrementer` now skips incrementing literal magnitudes at signed integer minimum boundaries under unary minus (e.g. `int8(-128)`, `int16(-32768)`, `int32(-2147483648)`), preventing uncompilable mutants and false kills (#199).
 - Align agentic JSON documentation with emitted data: describe `msi` as a 0–1 ratio matching summary JSON and update the example and schema tables in `docs/json-outputs.md` and `README.md` (#167).
 - Allow `mutator-disable-regexp` patterns to contain spaces so the trailing mutator list is parsed correctly (#166).
