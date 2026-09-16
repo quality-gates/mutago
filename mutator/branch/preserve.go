@@ -21,11 +21,15 @@ func mutateBranchBody(pkg *types.Package, info *types.Info, node ast.Node, old [
 	if skip {
 		return nil
 	}
+	replacement := noopWithReturn(pkg, info, old, ret, pos)
+	if astutil.HasUnsafeImportAfterReplacement(info, &ast.BlockStmt{List: old, Lbrace: pos}, &ast.BlockStmt{List: replacement, Lbrace: pos}) {
+		return nil
+	}
 	return []mutator.Mutation{
 		{
 			Position: pos,
 			Change: func() {
-				setBody(noopWithReturn(pkg, info, old, ret, pos))
+				setBody(replacement)
 			},
 			Reset: func() {
 				setBody(old)

@@ -480,6 +480,81 @@ var sink int
 	}
 }
 
+func TestBranchMutators_SoleImport(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutator mutator.Mutator
+		source  string
+	}{
+		{
+			name:    "if",
+			mutator: MutatorIf,
+			source: `package example
+
+import "io"
+
+func f(x any) {
+	if true {
+		_, _ = x.(io.Reader)
+	}
+}
+`,
+		},
+		{
+			name:    "else",
+			mutator: MutatorElse,
+			source: `package example
+
+import "io"
+
+func f(x any) {
+	if false {
+	} else {
+		_, _ = x.(io.Reader)
+	}
+}
+`,
+		},
+		{
+			name:    "case",
+			mutator: MutatorCase,
+			source: `package example
+
+import "io"
+
+func f(x any) {
+	switch {
+	case true:
+		_, _ = x.(io.Reader)
+	}
+}
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fset, file, pkg, info := parseBranchSource(t, tt.source)
+			var mutations []mutator.Mutation
+			ast.Inspect(file, func(node ast.Node) bool {
+				mutations = append(mutations, tt.mutator(pkg, info, node)...)
+				return true
+			})
+			for _, m := range mutations {
+				m.Change()
+				mutated := printBranchSource(t, fset, file)
+				m.Reset()
+				if err := typeCheckSource(t, mutated); err != nil {
+					t.Logf("mutant compilation error: %v", err)
+				}
+			}
+			if len(mutations) != 0 {
+				t.Fatalf("expected 0 mutations because branch contains sole import in file, got %d", len(mutations))
+			}
+		})
+	}
+}
+
 func typeCheckSource(t *testing.T, source string) error {
 	t.Helper()
 	fset := token.NewFileSet()

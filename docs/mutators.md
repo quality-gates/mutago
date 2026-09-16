@@ -136,13 +136,13 @@ Removes the `!` operator from negated conditions in `if`, `for`, and `&&`/`||` e
 ## Branch
 
 ### branch/case
-Empties `case` bodies in `switch` statements. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases.
+Empties `case` bodies in `switch` statements. When emptying a case would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases. Skips mutations that would leave an imported package unused.
 
 ### branch/if
-Empties the body of `if` and `else if` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases.
+Empties the body of `if` and `else if` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases. Skips mutations that would leave an imported package unused.
 
 ### branch/else
-Empties the body of `else` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases.
+Empties the body of `else` branches. When emptying the branch would remove the enclosing function's terminating statement, the mutant keeps a zero-value `return` so it still compiles. Imported struct return types use the package name local to the source file, including aliases. Skips mutations that would leave an imported package unused.
 
 ## Expression
 
@@ -194,7 +194,7 @@ Replaces non-empty string literals in `==` and `!=` comparisons with `""`. Finds
 ## Statement
 
 ### statement/remove
-Removes assignment, increment, decrement, and expression statements.
+Removes assignment, increment, decrement, and expression statements. Skips mutations that would leave an imported package unused.
 
 ### statement/remove-self-assign
 Removes self-assignment statements (`a = a`). These are typically dead code; this mutator confirms tests don't accidentally rely on them.

@@ -134,7 +134,15 @@ func IsSafeToRemove(info *types.Info, node ast.Node) bool {
 // HasUnsafeImport reports whether removing node would remove the only use of
 // an imported package in the enclosing file.
 func HasUnsafeImport(info *types.Info, node ast.Node) bool {
-	if info == nil || node == nil {
+	return HasUnsafeImportAfterReplacement(info, node, nil)
+}
+
+// HasUnsafeImportAfterReplacement reports whether replacing old with replacement
+// would leave any imported package with zero uses in the enclosing file.
+// An imported package is unsafe if all of its uses in the file are inside old,
+// and replacement contains no selector referencing that package.
+func HasUnsafeImportAfterReplacement(info *types.Info, old ast.Node, replacement ast.Node) bool {
+	if info == nil || old == nil {
 		return false
 	}
 	idx := getSafetyIndex(info)
@@ -142,13 +150,33 @@ func HasUnsafeImport(info *types.Info, node ast.Node) bool {
 		return false
 	}
 
-	file := idx.fileForPos(node.Pos())
+	file := idx.fileForPos(old.Pos())
 	if file == nil {
 		return false
 	}
 
+	unsafePkgs := collectUnsafePkgs(info, idx, file, old)
+	if len(unsafePkgs) == 0 {
+		return false
+	}
+
+	if replacement == nil {
+		return true
+	}
+
+	replacementPkgNames := collectReplacementPkgNames(replacement)
+	for _, pkgName := range unsafePkgs {
+		if !replacementPkgNames[pkgName.Name()] {
+			return true
+		}
+	}
+
+	return false
+}
+
+func collectUnsafePkgs(info *types.Info, idx *safetyIndex, file *ast.File, old ast.Node) []*types.PkgName {
 	nodePkgUses := make(map[*types.PkgName]int)
-	ast.Inspect(node, func(n ast.Node) bool {
+	ast.Inspect(old, func(n ast.Node) bool {
 		if id, ok := n.(*ast.Ident); ok {
 			if pkgName, ok := info.Uses[id].(*types.PkgName); ok {
 				nodePkgUses[pkgName]++
@@ -157,12 +185,26 @@ func HasUnsafeImport(info *types.Info, node ast.Node) bool {
 		return true
 	})
 
+	var unsafePkgs []*types.PkgName
 	for pkgName, count := range nodePkgUses {
 		if count >= idx.filePkgUses[pkgName][file] {
-			return true
+			unsafePkgs = append(unsafePkgs, pkgName)
 		}
 	}
-	return false
+	return unsafePkgs
+}
+
+func collectReplacementPkgNames(replacement ast.Node) map[string]bool {
+	names := make(map[string]bool)
+	ast.Inspect(replacement, func(n ast.Node) bool {
+		if sel, ok := n.(*ast.SelectorExpr); ok {
+			if root := selectorRoot(sel); root != nil {
+				names[root.Name] = true
+			}
+		}
+		return true
+	})
+	return names
 }
 
 // UnsafeLocalVars returns identifiers of local variables whose only uses are

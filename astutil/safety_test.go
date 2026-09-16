@@ -149,6 +149,43 @@ func Foo() string {
 	assert.True(t, IsSafeToRemove(info, expr))
 }
 
+func TestHasUnsafeImportAfterReplacement(t *testing.T) {
+	src := `package example
+
+import "strings"
+
+func Foo(x string) {
+	println(strings.TrimSpace(x))
+}
+`
+	_, file, _, info := parseAndTypeCheckSource(t, src)
+	fn := file.Decls[1].(*ast.FuncDecl)
+	stmt := fn.Body.List[0]
+
+	// 1. Replacement is nil -> sole use in file -> returns true
+	assert.True(t, HasUnsafeImportAfterReplacement(info, stmt, nil))
+
+	// 2. Replacement drops the package -> returns true
+	droppedReplacement := &ast.AssignStmt{
+		Lhs: []ast.Expr{&ast.Ident{Name: "_"}},
+		Rhs: []ast.Expr{&ast.Ident{Name: "x"}},
+	}
+	assert.True(t, HasUnsafeImportAfterReplacement(info, stmt, droppedReplacement))
+
+	// 3. Replacement retains the package -> returns false
+	retainedReplacement := &ast.AssignStmt{
+		Lhs: []ast.Expr{&ast.Ident{Name: "_"}, &ast.Ident{Name: "_"}},
+		Rhs: []ast.Expr{
+			&ast.SelectorExpr{
+				X:   &ast.Ident{Name: "strings"},
+				Sel: &ast.Ident{Name: "TrimSpace"},
+			},
+			&ast.Ident{Name: "x"},
+		},
+	}
+	assert.False(t, HasUnsafeImportAfterReplacement(info, stmt, retainedReplacement))
+}
+
 func TestCreateNoopOfExpressions(t *testing.T) {
 	pos := token.Pos(10)
 	ids := []ast.Expr{
