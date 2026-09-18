@@ -21,6 +21,11 @@ func MutatorSelectDefaultRemove(_ *types.Package, info *types.Info, node ast.Nod
 		return nil
 	}
 
+	// Removing the only clause produces an empty select{} that blocks forever.
+	if len(n.Body.List) < 2 {
+		return nil
+	}
+
 	for i, stmt := range n.Body.List {
 		comm, ok := stmt.(*ast.CommClause)
 		if !ok || comm.Comm != nil {

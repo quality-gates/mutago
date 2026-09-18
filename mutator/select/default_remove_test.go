@@ -99,3 +99,36 @@ func Send(ch chan int, x int) {
 		t.Fatalf("got %d mutations, want no mutation that leaves a local variable unused", len(mutations))
 	}
 }
+
+func TestMutatorSelectDefaultRemoveSkipsSoleDefault(t *testing.T) {
+	const source = `package example
+
+func Run() {
+	select {
+	default:
+		println("done")
+	}
+}`
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "example.go", source, 0)
+	if err != nil {
+		t.Fatalf("parse source: %v", err)
+	}
+
+	var selectStmt *ast.SelectStmt
+	ast.Inspect(file, func(node ast.Node) bool {
+		if stmt, ok := node.(*ast.SelectStmt); ok {
+			selectStmt = stmt
+			return false
+		}
+		return true
+	})
+	if selectStmt == nil {
+		t.Fatal("source did not contain a select statement")
+	}
+
+	if got := MutatorSelectDefaultRemove(nil, &types.Info{}, selectStmt); len(got) != 0 {
+		t.Fatalf("got %d mutations, want none: removing the sole clause yields a blocking select {}", len(got))
+	}
+}
