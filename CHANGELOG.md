@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.10.14] — 2026-09-18
 
 ### Fixed
 - `astutil.structTypeExpr` now returns `nil` instead of synthesizing an unimported package selector when a struct type's package is only transitively imported (reachable through another package but not directly imported in the mutated file), preventing uncompilable mutants such as `pkg_c.CustomError{}` referencing an unimported `pkg_c` (#207).
@@ -644,5 +644,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.8]: https://github.com/quality-gates/mutago/compare/v2.10.7...v2.10.8
 [v2.10.10]: https://github.com/quality-gates/mutago/compare/v2.10.8...v2.10.10
 [v2.10.11]: https://github.com/quality-gates/mutago/compare/v2.10.10...v2.10.11
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.12...HEAD
+[v2.10.14]: https://github.com/quality-gates/mutago/compare/v2.10.12...v2.10.14
 [v2.10.12]: https://github.com/quality-gates/mutago/compare/v2.10.11...v2.10.12
