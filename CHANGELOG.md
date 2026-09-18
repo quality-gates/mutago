@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `select/default-remove` now skips select statements whose only clause is `default`, preventing an empty `select {}` mutant that blocks until timeout (#209).
+
 ## [v2.10.14] — 2026-09-18
 
 ### Fixed
