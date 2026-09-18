@@ -228,6 +228,113 @@ func Get() any {
 	assertCrossPackageZeroExpr(t, dependency, source, "dep.Public{}")
 }
 
+func TestZeroExprForTypeAt_ExportedStructInTransitivelyImportedPackage(t *testing.T) {
+	// dep2.Public is only reachable through dep's return type; example.go
+	// never imports dep2 directly, so a synthesized dep2.Public{} would be
+	// uncompilable.
+	dep2 := `package dep2
+
+type Public struct{ Val int }
+`
+	dependency := `package dep
+
+import "example.com/dep2"
+
+func New() dep2.Public { return dep2.Public{Val: 1} }
+`
+	source := `package example
+
+import "example.com/dep"
+
+func Get() any {
+	return dep.New()
+}
+`
+	assertTransitiveCrossPackageZeroExpr(t, dep2, dependency, source, "")
+}
+
+// assertTransitiveCrossPackageZeroExpr type-checks dep2 as "example.com/dep2",
+// then dependency as "example.com/dep" (importing dep2), then source as a
+// package importing dep only, and compares the zero expression built for the
+// first return result against want. An empty want means the zero expression
+// must be nil.
+func assertTransitiveCrossPackageZeroExpr(t *testing.T, dep2Src, dependencySrc, source, want string) {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	dep2File, err := parser.ParseFile(fset, "dep2.go", dep2Src, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse dep2: %v\n%s", err, dep2Src)
+	}
+	dep2Pkg, err := (&types.Config{Importer: importer.Default()}).Check("example.com/dep2", fset, []*ast.File{dep2File}, nil)
+	if err != nil {
+		t.Fatalf("type-check dep2: %v\n%s", err, dep2Src)
+	}
+
+	depFile, err := parser.ParseFile(fset, "dep.go", dependencySrc, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse dependency: %v\n%s", err, dependencySrc)
+	}
+	depPkg, err := (&types.Config{Importer: fixedImporter{pkg: dep2Pkg}}).Check("example.com/dep", fset, []*ast.File{depFile}, nil)
+	if err != nil {
+		t.Fatalf("type-check dependency: %v\n%s", err, dependencySrc)
+	}
+
+	file, err := parser.ParseFile(fset, "example.go", source, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse source: %v\n%s", err, source)
+	}
+	info := &types.Info{
+		Types:     make(map[ast.Expr]types.TypeAndValue),
+		Defs:      make(map[*ast.Ident]types.Object),
+		Uses:      make(map[*ast.Ident]types.Object),
+		Implicits: make(map[ast.Node]types.Object),
+		Scopes:    make(map[ast.Node]*types.Scope),
+	}
+	config := &types.Config{Importer: multiImporter{pkgs: map[string]*types.Package{
+		depPkg.Path():  depPkg,
+		dep2Pkg.Path(): dep2Pkg,
+	}}}
+	pkg, err := config.Check("example.com/example", fset, []*ast.File{file}, info)
+	if err != nil {
+		t.Fatalf("type-check source: %v\n%s", err, source)
+	}
+
+	ret := firstReturn(t, file)
+	result := ret.Results[0]
+	typ := info.TypeOf(result)
+	if typ == nil {
+		t.Fatal("no type for return expression")
+	}
+
+	got := ZeroExprForTypeAt(typ, pkg, info, result.Pos())
+	if want == "" {
+		if got != nil {
+			t.Fatalf("ZeroExprForTypeAt(%s) = %s, want nil", typ, printExpr(t, got))
+		}
+		return
+	}
+	if got == nil {
+		t.Fatalf("ZeroExprForTypeAt(%s) = nil, want %s", typ, want)
+	}
+	if printed := printExpr(t, got); printed != want {
+		t.Fatalf("ZeroExprForTypeAt(%s) = %s, want %s", typ, printed, want)
+	}
+}
+
+// multiImporter resolves import paths present in pkgs, which is enough for
+// the three-package sources used in these tests.
+type multiImporter struct {
+	pkgs map[string]*types.Package
+}
+
+func (i multiImporter) Import(path string) (*types.Package, error) {
+	if pkg, ok := i.pkgs[path]; ok {
+		return pkg, nil
+	}
+	return importer.Default().Import(path)
+}
+
 // assertCrossPackageZeroExpr type-checks dependency as "example.com/dep",
 // then source as a package importing it, and compares the zero expression
 // built for the first return result against want. An empty want means the

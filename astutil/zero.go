@@ -74,20 +74,31 @@ func structTypeExpr(obj *types.TypeName, currentPkg *types.Package, info *types.
 	}
 	packageName, ok := localPackageName(info, pos, obj.Pkg())
 	if ok {
-		if packageName == "." {
-			return ast.NewIdent(obj.Name())
-		}
-		if packageName == "_" {
-			return nil
-		}
-		return &ast.SelectorExpr{
-			X:   ast.NewIdent(packageName),
-			Sel: ast.NewIdent(obj.Name()),
-		}
+		return qualifiedStructTypeExpr(obj, packageName)
+	}
+	// info/pos let us check the file's actual imports; when they're
+	// available but the package isn't imported there, synthesizing
+	// pkg.TypeName would reference an unimported package.
+	if info != nil && pos.IsValid() {
+		return nil
 	}
 	return &ast.SelectorExpr{
 		X:   ast.NewIdent(obj.Pkg().Name()),
 		Sel: ast.NewIdent(obj.Name()),
+	}
+}
+
+func qualifiedStructTypeExpr(obj *types.TypeName, packageName string) ast.Expr {
+	switch packageName {
+	case ".":
+		return ast.NewIdent(obj.Name())
+	case "_":
+		return nil
+	default:
+		return &ast.SelectorExpr{
+			X:   ast.NewIdent(packageName),
+			Sel: ast.NewIdent(obj.Name()),
+		}
 	}
 }
 

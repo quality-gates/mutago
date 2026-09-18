@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- `astutil.structTypeExpr` now returns `nil` instead of synthesizing an unimported package selector when a struct type's package is only transitively imported (reachable through another package but not directly imported in the mutated file), preventing uncompilable mutants such as `pkg_c.CustomError{}` referencing an unimported `pkg_c` (#207).
 - Branch mutators (`branch/if`, `branch/else`, `branch/case`) and `statement/remove` now check for unsafe imports before mutating, preventing uncompilable mutants when an imported package's sole reference is dropped (#202).
 - `astutil` no longer builds zero-value struct literals for unexported types owned by another package, so `statement/return` and the terminating `branch/*` mutators stop emitting references such as `b.secret{}` that cannot compile (#201).
 - `arithmetic/assignment` now skips mutating `<<=` and `>>=` to `=` when an untyped constant shift count overflows the left-hand side type (e.g. `int8` `x <<= 200`), preventing uncompilable mutants and false kills (#200).
