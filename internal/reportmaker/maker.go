@@ -19,7 +19,7 @@ import (
 // mutatorDescriptions maps mutator names to plain-English explanations.
 var mutatorDescriptions = map[string]string{
 	"arithmetic/assign_invert":     "Inverts a compound assignment operator (e.g. += becomes -=)",
-	"arithmetic/assignment":        "Swaps an assignment operator for a different one (e.g. = becomes +=)",
+	"arithmetic/assignment":        "Replaces a compound assignment operator with a plain assignment (e.g. += becomes =)",
 	"arithmetic/base":              "Swaps an arithmetic operator (+, -, *, /) for a different one",
 	"arithmetic/bitwise":           "Swaps a bitwise operator (&, |, ^, <<, >>) for a different one",
 	"arithmetic/negate":            "Negates a numeric value by prepending a unary minus",
@@ -39,9 +39,9 @@ var mutatorDescriptions = map[string]string{
 	"expression/string-literal":    "Replaces a non-empty string literal in an == or != comparison with an empty string",
 	"expression/logical":           "Swaps a logical operator (&& becomes ||, or vice versa)",
 	"expression/remove":            "Removes an expression statement entirely, dropping its side effect",
-	"loop/break":                   "Removes a break statement, potentially causing an infinite loop",
+	"loop/break":                   "Swaps break and continue statements inside loops",
 	"loop/condition":               "Changes the loop's termination condition",
-	"loop/range_break":             "Removes a break statement inside a range loop",
+	"loop/range_break":             "Inserts a break statement at the beginning of a range loop so only the first iteration runs",
 	"numbers/decrementer":          "Decrements a numeric literal by 1",
 	"numbers/float-negate":         "Negates a floating-point literal (e.g. 1.5 becomes -1.5)",
 	"numbers/incrementer":          "Increments a numeric literal by 1",
