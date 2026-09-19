@@ -260,3 +260,33 @@ func TestExtractContextLines(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateInstanceDescriptionFallbackMatchesMutatorBehaviour(t *testing.T) {
+	tests := []struct {
+		mutator string
+		diff    string
+		want    string
+	}{
+		{
+			mutator: "arithmetic/assignment",
+			diff:    "",
+			want:    "Replaces a compound assignment operator with a plain assignment (e.g. += becomes =)",
+		},
+		{
+			mutator: "loop/break",
+			diff:    "",
+			want:    "Swaps break and continue statements inside loops",
+		},
+		{
+			mutator: "loop/range_break",
+			diff:    "@@ -1,2 +1,3 @@\n for _, v := range xs {\n+\tbreak\n \tsum += v\n",
+			want:    "Inserts a break statement at the beginning of a range loop so only the first iteration runs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.mutator, func(t *testing.T) {
+			assert.Equal(t, tt.want, generateInstanceDescription(tt.mutator, tt.diff))
+		})
+	}
+}
