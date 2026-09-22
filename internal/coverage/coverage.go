@@ -116,6 +116,9 @@ func (p *Profile) parseLine(line, modulePfx string) error {
 		return nil
 	}
 	relFile := relativeCoverageFile(line[:colonIdx], modulePfx)
+	if relFile == "" {
+		return nil
+	}
 
 	fields := strings.Fields(line[colonIdx+1:])
 	if len(fields) != 3 {

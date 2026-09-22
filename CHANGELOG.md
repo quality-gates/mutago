@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Ignore malformed coverage profile entries with empty filenames so they cannot mark unrelated files as covered (#223).
 - Strip LF and CRLF terminators before matching `mutator-disable-regexp` patterns so end-of-line anchors work on all source lines (#220).
 - Correct the agentic JSON `description` text for `arithmetic/assignment`, `loop/break`, and `loop/range_break` so it matches what each mutator actually does (#208).
 
