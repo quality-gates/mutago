@@ -48,22 +48,26 @@ func ParseProfile(path, modulePath string) (*Profile, error) {
 }
 
 // longestSuffixKey returns the key from m that is the most specific path
-// suffix of absFile, or "" if none match. A key matches when it equals
-// absFile or absFile ends in "/"+key. When multiple keys match — one relPath
-// is a path-suffix of another, e.g. "foo/bar.go" and "bar.go" — the longest
-// (most specific) key wins, so the choice is deterministic regardless of map
-// iteration order. Ties are impossible because map keys are unique: two
-// distinct strings of equal length cannot both be a suffix of the same path.
-func longestSuffixKey[V any](absFile string, m map[string]V) string {
+// suffix of absFile and whether a key matched. An empty key can match only an
+// empty absFile; the boolean distinguishes that match from no match. A
+// non-empty key matches when it equals absFile or absFile ends in "/"+key.
+// When multiple keys match — one relPath is a path-suffix of another, e.g.
+// "foo/bar.go" and "bar.go" — the longest (most specific) key wins, so the
+// choice is deterministic regardless of map iteration order. Ties are
+// impossible because map keys are unique: two distinct strings of equal
+// length cannot both be a suffix of the same path.
+func longestSuffixKey[V any](absFile string, m map[string]V) (string, bool) {
 	var best string
+	var found bool
 	for relPath := range m {
-		if relPath == absFile || strings.HasSuffix(absFile, "/"+relPath) {
-			if len(relPath) > len(best) {
+		if relPath == absFile || (relPath != "" && strings.HasSuffix(absFile, "/"+relPath)) {
+			if !found || len(relPath) > len(best) {
 				best = relPath
+				found = true
 			}
 		}
 	}
-	return best
+	return best, found
 }
 
 // IsCovered reports whether the given absolute file path and line number are
@@ -78,7 +82,11 @@ func (p *Profile) IsCovered(absFile string, line int) bool {
 	if cached, ok := p.resolved.Load(absFile); ok {
 		return cached.(map[int]bool)[line]
 	}
-	lines := p.coveredLines[longestSuffixKey(absFile, p.coveredLines)]
+	relPath, found := longestSuffixKey(absFile, p.coveredLines)
+	var lines map[int]bool
+	if found {
+		lines = p.coveredLines[relPath]
+	}
 	p.resolved.Store(absFile, lines)
 	return lines[line]
 }
@@ -209,7 +217,11 @@ func (p *PerTestProfile) CoveringTests(absFile string, lineNum int) []string {
 	if cached, ok := p.resolved.Load(absSlash); ok {
 		return cached.(map[int][]string)[lineNum]
 	}
-	lines := p.data[longestSuffixKey(absSlash, p.data)]
+	relPath, found := longestSuffixKey(absSlash, p.data)
+	var lines map[int][]string
+	if found {
+		lines = p.data[relPath]
+	}
 	p.resolved.Store(absSlash, lines)
 	return lines[lineNum]
 }

@@ -48,3 +48,14 @@ func TestIsLineChangedSuffixCollision(t *testing.T) {
 		t.Error("root bar.go line 5 should not be changed")
 	}
 }
+
+func TestIsLineChangedEmptyFilenameResolution(t *testing.T) {
+	cl := ChangedLines{"": {{Start: 1, End: 1}}}
+
+	if !IsLineChanged(cl, "", 1) {
+		t.Error("an empty filename should resolve to its exact empty key")
+	}
+	if IsLineChanged(cl, "/unrelated/file.go", 1) {
+		t.Error("an empty filename must not match an unrelated file")
+	}
+}

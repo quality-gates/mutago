@@ -130,6 +130,14 @@ func TestParseProfile_EmptyProfile(t *testing.T) {
 	assert.False(t, p.IsCovered("/any/file.go", 1))
 }
 
+func TestIsCovered_EmptyFilenameDoesNotMatchUnrelatedFile(t *testing.T) {
+	path := writeTmpProfile(t, "mode: set\n:1.1,1.1 1 1\n")
+	p, err := ParseProfile(path, modulePath)
+	require.NoError(t, err)
+
+	assert.False(t, p.IsCovered("/unrelated/file.go", 1))
+}
+
 func TestParseProfile_ModeOnlyLine(t *testing.T) {
 	path := writeTmpProfile(t, "mode: atomic\n")
 	p, err := ParseProfile(path, modulePath)
@@ -648,6 +656,14 @@ func TestCoveringTests_NoMatch(t *testing.T) {
 	}}
 	assert.Nil(t, p.CoveringTests("/different/path/bar.go", 5))
 	assert.Nil(t, p.CoveringTests("/abs/pkg/foo.go", 99))
+}
+
+func TestCoveringTests_EmptyFilenameDoesNotMatchUnrelatedFile(t *testing.T) {
+	p := &PerTestProfile{data: map[string]map[int][]string{
+		"": {1: {"TestUnexpected"}},
+	}}
+
+	assert.Nil(t, p.CoveringTests("/unrelated/file.go", 1))
 }
 
 func TestCoveringTests_CachesResolvedPath(t *testing.T) {

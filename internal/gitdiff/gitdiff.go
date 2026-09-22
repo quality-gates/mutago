@@ -140,28 +140,31 @@ func IsLineChanged(cl ChangedLines, absFile string, line int) bool {
 		return true
 	}
 	absFile = filepath.ToSlash(absFile)
-	best := longestSuffixFile(absFile, cl)
-	if best == "" {
+	best, found := longestSuffixFile(absFile, cl)
+	if !found {
 		return false // file not in diff → unchanged → skip
 	}
 	return IsRelativeLineChanged(ChangedLines{best: cl[best]}, best, line)
 }
 
 // longestSuffixFile returns the key from cl that is the most specific path
-// suffix of absFile, or "" if none match. A key matches when it equals
-// absFile or absFile ends in "/"+key. When multiple keys match — one relPath
-// is a path-suffix of another — the longest (most specific) key wins, so the
-// choice is deterministic regardless of map iteration order. Ties are
-// impossible because map keys are unique: two distinct equal-length strings
-// cannot both be a suffix of the same path.
-func longestSuffixFile(absFile string, cl ChangedLines) string {
+// suffix of absFile and whether a key matched. An empty key can match only an
+// empty absFile; the boolean distinguishes that match from no match. A
+// non-empty key matches when it equals absFile or absFile ends in "/"+key.
+// When multiple keys match — one relPath is a path-suffix of another — the
+// longest (most specific) key wins, so the choice is deterministic regardless
+// of map iteration order. Ties are impossible because map keys are unique: two
+// distinct equal-length strings cannot both be a suffix of the same path.
+func longestSuffixFile(absFile string, cl ChangedLines) (string, bool) {
 	var best string
+	var found bool
 	for relPath := range cl {
-		if relPath == absFile || strings.HasSuffix(absFile, "/"+relPath) {
-			if len(relPath) > len(best) {
+		if relPath == absFile || (relPath != "" && strings.HasSuffix(absFile, "/"+relPath)) {
+			if !found || len(relPath) > len(best) {
 				best = relPath
+				found = true
 			}
 		}
 	}
-	return best
+	return best, found
 }
