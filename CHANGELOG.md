@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Strip LF and CRLF terminators before matching `mutator-disable-regexp` patterns so end-of-line anchors work on all source lines (#220).
 - Correct the agentic JSON `description` text for `arithmetic/assignment`, `loop/break`, and `loop/range_break` so it matches what each mutator actually does (#208).
 
 ## [v2.10.15] — 2026-09-18
