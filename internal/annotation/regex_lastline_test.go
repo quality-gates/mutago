@@ -49,3 +49,45 @@ func TestFindLinesMatchingRegex_NoTrailingNewline(t *testing.T) {
 		t.Errorf("control case (trailing newline) unexpectedly failed; got %v", lines2)
 	}
 }
+
+func TestFindLinesMatchingRegex_EndOfLineAnchorIgnoresLineTerminators(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{
+			name: "LF interior line",
+			src:  "package p\n\nvar target = 42\nvar other = 1\n",
+		},
+		{
+			name: "CRLF interior line",
+			src:  "package p\r\n\r\nvar target = 42\r\nvar other = 1\r\n",
+		},
+		{
+			name: "final line with trailing newline",
+			src:  "package p\n\nvar target = 42\n",
+		},
+		{
+			name: "final line without trailing newline",
+			src:  "package p\n\nvar target = 42",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "p.go")
+			if err := os.WriteFile(path, []byte(tt.src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			r := &RegexAnnotation{}
+			lines, err := r.findLinesMatchingRegex(path, regexp.MustCompile(`42$`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(lines) != 1 || lines[0] != 3 {
+				t.Fatalf("expected only matching line 3, got %v", lines)
+			}
+		})
+	}
+}

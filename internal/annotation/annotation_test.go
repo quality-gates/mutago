@@ -4,6 +4,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -555,4 +557,64 @@ func TestCollect(t *testing.T) {
 		},
 	})
 
+}
+
+func TestCollectRegexAnnotationUsesPhysicalLinesWithLineDirective(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		directive string
+	}{
+		{name: "named", directive: "//line fake.go:100"},
+		{name: "filename-less", directive: "//line :100"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			src := "package p\n" + tt.directive + "\n// mutator-disable-regexp \"return 1\" *\nfunc f() int { return 1 }\n"
+			tmp := filepath.Join(t.TempDir(), "sample.go")
+			if err := os.WriteFile(tmp, []byte(src), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, tmp, src, parser.ParseComments)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			processor := NewProcessor()
+			processor.Collect(file, fset, tmp)
+
+			statement := file.Decls[0].(*ast.FuncDecl).Body.List[0]
+			assert.True(t, processor.ShouldSkip(statement, "statement/remove"), "regex annotation should target the physical return line")
+		})
+	}
+}
+
+func TestCollectNextLineAnnotationUsesPhysicalLinesWithLineDirective(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		directive string
+	}{
+		{name: "named", directive: "//line fake.go:100"},
+		{name: "filename-less", directive: "//line :100"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			src := "package p\n" + tt.directive + "\n// mutator-disable-next-line *\nfunc f() { return }\n"
+			tmp := filepath.Join(t.TempDir(), "sample.go")
+			if err := os.WriteFile(tmp, []byte(src), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, tmp, src, parser.ParseComments)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			processor := NewProcessor()
+			processor.Collect(file, fset, tmp)
+
+			statement := file.Decls[0].(*ast.FuncDecl).Body.List[0]
+			assert.True(t, processor.ShouldSkip(statement, "statement/remove"), "next-line annotation should target the following physical source line")
+		})
+	}
 }

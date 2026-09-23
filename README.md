@@ -533,6 +533,7 @@ s.Method()
 ```
 
 All mutation annotations only apply to the file where they are declared. There is no global/cross-file propagation.
+Line-based annotations and `ignore_source_lines` match physical source lines; `//line` directives do not change their targets.
 
 ## <a name="write-mutation-exec-commands"></a>How do I write my own mutation exec commands?
 
@@ -831,7 +832,7 @@ The config contains the following parameters:
 | exclude_dirs         | []string(nil) | File path prefixes to skip. Any file whose path starts with one of these strings is excluded. `vendor/` skips all files under vendor; `internal/generated` skips any path starting with that string. |
 | disable_mutators     | []string(nil) | Mutator names to disable via config. Merged with `--disable` CLI flags. Supports trailing-`*` wildcard (e.g. `arithmetic/*`). |
 | enable_mutators      | []string(nil) | Allowlist: if non-empty, only matching mutators run. `--disable` can still exclude entries. Supports trailing-`*` wildcard. |
-| ignore_source_lines  | []string(nil) | List of regexes. Any source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate. |
+| ignore_source_lines  | []string(nil) | List of regexes. Any physical source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate. |
 
 Example config file:
 

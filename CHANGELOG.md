@@ -4,9 +4,12 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [v2.10.16] — 2026-09-19
+## [v2.10.16] — 2026-09-23
 
 ### Fixed
+- Apply `ignore_source_lines` and mutation annotations to physical source lines when `//line` directives alter reported positions, avoiding missed or mis-targeted exclusions (#224).
+- Prevent empty coverage-profile filenames from making coverage and per-test lookups match unrelated files, and distinguish empty suffix keys from misses in git-diff resolution (#223).
+- Strip LF and CRLF terminators before matching `mutator-disable-regexp` patterns so end-of-line anchors work on all source lines (#220).
 - Correct the agentic JSON `description` text for `arithmetic/assignment`, `loop/break`, and `loop/range_break` so it matches what each mutator actually does (#208).
 
 ## [v2.10.15] — 2026-09-18

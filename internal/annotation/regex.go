@@ -205,6 +205,8 @@ func (r *RegexAnnotation) findLinesMatchingRegex(filePath string, regex *regexp.
 		// file has no trailing newline. Process that partial line before breaking
 		// so a regex matching only the last line is not silently ignored.
 		if len(line) > 0 {
+			line = strings.TrimSuffix(line, "\n")
+			line = strings.TrimSuffix(line, "\r")
 			if regex.MatchString(line) {
 				matchedLineNumbers = append(matchedLineNumbers, lineNumber+1)
 			}
