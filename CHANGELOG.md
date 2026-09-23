@@ -4,7 +4,7 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v2.10.16] — 2026-09-23
 
 ### Fixed
 - Apply `ignore_source_lines` and mutation annotations to physical source lines when `//line` directives alter reported positions, avoiding missed or mis-targeted exclusions (#224).
@@ -617,7 +617,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.15...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.16...HEAD
 [v2.6.7]: https://github.com/quality-gates/mutago/releases/tag/v2.6.7
 [v2.6.10]: https://github.com/quality-gates/mutago/compare/v2.6.9...v2.6.10
 [v2.6.11]: https://github.com/quality-gates/mutago/compare/v2.6.10...v2.6.11
@@ -659,4 +659,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 [v2.10.11]: https://github.com/quality-gates/mutago/compare/v2.10.10...v2.10.11
 [v2.10.14]: https://github.com/quality-gates/mutago/compare/v2.10.12...v2.10.14
 [v2.10.15]: https://github.com/quality-gates/mutago/compare/v2.10.14...v2.10.15
+[v2.10.16]: https://github.com/quality-gates/mutago/compare/v2.10.15...v2.10.16
 [v2.10.12]: https://github.com/quality-gates/mutago/compare/v2.10.11...v2.10.12
