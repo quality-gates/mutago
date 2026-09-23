@@ -178,8 +178,8 @@ func shouldSkipMutator(mutatorInfo mutatorInfo, mutatorName string) bool {
 
 // getNodeLineRange calculates the line number range (start to end) that a given AST node occupies in the source file.
 func getNodeLineRange(fileSet *token.FileSet, node ast.Node) (startLine, endLine int) {
-	startPos := fileSet.Position(node.Pos())
-	endPos := fileSet.Position(node.End())
+	startPos := fileSet.PositionFor(node.Pos(), false)
+	endPos := fileSet.PositionFor(node.End(), false)
 
 	return startPos.Line, endPos.Line
 }

@@ -74,7 +74,7 @@ func (f *SourceLineRegexFilter) Collect(file *ast.File, fset *token.FileSet, fil
 		if n == nil {
 			return true
 		}
-		pos := fset.Position(n.Pos())
+		pos := fset.PositionFor(n.Pos(), false)
 		if _, skip := skippedLines[pos.Line]; skip {
 			f.skippedPositions[n.Pos()] = struct{}{}
 		}
