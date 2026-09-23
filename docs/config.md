@@ -40,7 +40,7 @@ ignore_source_lines: []
 | `exclude_dirs` | []string | `[]` | Directory path prefixes to exclude from mutation |
 | `disable_mutators` | []string | `[]` | Mutator names to disable. Merged with `--disable` CLI flags (union). Supports trailing-`*` wildcard, e.g. `arithmetic/*`. Run `mutago --list-mutators` for all names. |
 | `enable_mutators` | []string | `[]` | Allowlist: if non-empty, only matching mutators run. Supports trailing-`*` wildcard. `--disable` can still exclude entries from this list. |
-| `ignore_source_lines` | []string | `[]` | List of regexes. Any source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate. |
+| `ignore_source_lines` | []string | `[]` | List of regexes. Any physical source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate. |
 
 ## Notes
 
