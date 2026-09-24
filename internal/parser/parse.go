@@ -175,43 +175,51 @@ func ParseSource(data interface{}) (*ast.File, *token.FileSet, error) {
 	return src, fset, err
 }
 
+// CheckedFile is a parsed and type-checked source file.
+type CheckedFile struct {
+	File *ast.File
+	Fset *token.FileSet
+	Pkg  *types.Package
+	Info *types.Info
+}
+
 // ParseAndTypeCheckFile parses and type-checks the given file, and returns everything interesting about the file.
 // If a fatal error is encountered the error return argument is not nil.
-func ParseAndTypeCheckFile(file string, collectors []filter.NodeCollector) (*ast.File, *token.FileSet, *types.Package, *types.Info, error) {
+func ParseAndTypeCheckFile(file string, collectors []filter.NodeCollector) (*CheckedFile, error) {
 	fileAbs, err := filepath.Abs(file)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("Could not absolute the file path of %q: %v", file, err)
+		return nil, fmt.Errorf("Could not absolute the file path of %q: %v", file, err)
 	}
 	pkgCacheMu.Lock()
 	prepared, ok := preparedFiles[fileAbs]
 	pkgCacheMu.Unlock()
 	if ok {
 		applyCollectors(collectors, prepared.file, prepared.fset, fileAbs)
-		return prepared.file, prepared.fset, prepared.pkg.Types, prepared.pkg.TypesInfo, nil
+		return &CheckedFile{File: prepared.file, Fset: prepared.fset, Pkg: prepared.pkg.Types, Info: prepared.pkg.TypesInfo}, nil
 	}
 	entry := loadPkgForDir(filepath.Dir(fileAbs))
 	if entry.err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("Could not load package of file %q: %v", file, entry.err)
+		return nil, fmt.Errorf("Could not load package of file %q: %v", file, entry.err)
 	}
 
 	if pkg, f := fileInLoadedPkg(entry, fileAbs); f != nil {
 		applyCollectors(collectors, f, entry.fset, fileAbs)
-		return f, entry.fset, pkg.Types, pkg.TypesInfo, nil
+		return &CheckedFile{File: f, Fset: entry.fset, Pkg: pkg.Types, Info: pkg.TypesInfo}, nil
 	}
 
 	// The file was not found in the loaded package syntax (e.g., excluded by
 	// //go:build constraints in testdata fixtures). Fall back to direct parsing
 	// and standalone type-checking, bypassing build constraints.
-	src, typPkg, typInfo, err := parseAndTypeCheckDirect(entry.fset, fileAbs)
+	checked, err := parseAndTypeCheckDirect(entry.fset, fileAbs)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 
-	if src != nil {
-		applyCollectors(collectors, src, entry.fset, fileAbs)
+	if checked.File != nil {
+		applyCollectors(collectors, checked.File, entry.fset, fileAbs)
 	}
 
-	return src, entry.fset, typPkg, typInfo, nil
+	return checked, nil
 }
 
 // fileInLoadedPkg returns the loaded package and parsed syntax for fileAbs, or
@@ -240,10 +248,10 @@ func applyCollectors(collectors []filter.NodeCollector, f *ast.File, fset *token
 // parseAndTypeCheckDirect parses a file directly (ignoring build constraints)
 // and type-checks it as a standalone unit. Used as a fallback for files that
 // are excluded from their package by build tags.
-func parseAndTypeCheckDirect(fset *token.FileSet, fileAbs string) (*ast.File, *types.Package, *types.Info, error) {
+func parseAndTypeCheckDirect(fset *token.FileSet, fileAbs string) (*CheckedFile, error) {
 	src, err := parser.ParseFile(fset, fileAbs, nil, parser.AllErrors|parser.ParseComments)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Could not parse file %q: %v", fileAbs, err)
+		return nil, fmt.Errorf("Could not parse file %q: %v", fileAbs, err)
 	}
 
 	info := &types.Info{
@@ -262,5 +270,5 @@ func parseAndTypeCheckDirect(fset *token.FileSet, fileAbs string) (*ast.File, *t
 
 	pkg, _ := conf.Check("", fset, []*ast.File{src}, info)
 
-	return src, pkg, info, nil
+	return &CheckedFile{File: src, Fset: fset, Pkg: pkg, Info: info}, nil
 }

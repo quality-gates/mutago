@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/quality-gates/mutago/v2"
 	"github.com/quality-gates/mutago/v2/mutator"
@@ -35,8 +36,9 @@ func Mutator(t *testing.T, m mutator.Mutator, testFile string, count int) {
 	assert.Nil(t, err)
 
 	// Parse and type-check the original source code
-	src, fset, pkg, info, err := parser.ParseAndTypeCheckFile(testFile, collectors)
-	assert.Nil(t, err)
+	checked, err := parser.ParseAndTypeCheckFile(testFile, collectors)
+	require.NoError(t, err)
+	src, fset, pkg, info := checked.File, checked.Fset, checked.Pkg, checked.Info
 
 	// Mutate a non relevant node
 	assert.Nil(t, m(pkg, info, src))
