@@ -773,6 +773,30 @@ func TestMutantGoTestArgsUserVetWins(t *testing.T) {
 	}
 }
 
+func failfastArgs(args []string) []string {
+	var got []string
+	for _, arg := range args {
+		if arg == "-failfast" || arg == "--failfast" || strings.HasPrefix(arg, "-failfast=") || strings.HasPrefix(arg, "--failfast=") {
+			got = append(got, arg)
+		}
+	}
+	return got
+}
+
+func TestMutantGoTestArgsFailFastByDefault(t *testing.T) {
+	args := mutantGoTestArgs("overlay.json", 60, nil, "", "example")
+	if got := failfastArgs(args); len(got) != 1 || got[0] != "-failfast" {
+		t.Fatalf("expected exactly one -failfast argument, got %v in %v", got, args)
+	}
+}
+
+func TestMutantGoTestArgsUserFailFastWins(t *testing.T) {
+	args := mutantGoTestArgs("overlay.json", 60, []string{"-failfast=false"}, "", "example")
+	if got := failfastArgs(args); len(got) != 1 || got[0] != "-failfast=false" {
+		t.Fatalf("user -failfast must win with exactly one -failfast argument, got %v in %v", got, args)
+	}
+}
+
 func TestClassifyGoTestBuildFailureAsSkipped(t *testing.T) {
 	buildFailure := []byte("# example.com/aliasbug\nalias.go:8:9: undefined: url\nFAIL\texample.com/aliasbug [build failed]\n")
 	if got := classifyGoTestResult(1, buildFailure); got != 2 {

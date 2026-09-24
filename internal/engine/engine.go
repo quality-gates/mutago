@@ -1526,11 +1526,17 @@ func prepareOverlay(tmpDir, file, mutationFile string) (string, int) {
 // (see #106): `go test` runs a vet subset that exits 1 on any diagnostic, and
 // mapTestExitToResult would count such a mutant as KILLED even though no test
 // failed. An explicit -vet in the user's extra test flags wins.
+// -failfast is on by default: one failing test is enough to kill a mutant, so
+// the rest of the suite need not run. An explicit -failfast in the user's
+// extra test flags wins.
 func mutantGoTestArgs(overlayName string, timeoutSeconds uint, extraTestFlags []string, runFilter, pkgName string) []string {
 	args := []string{"test", "-overlay=" + overlayName, "-timeout", fmt.Sprintf("%ds", timeoutSeconds)}
 	args = append(args, extraTestFlags...)
 	if !hasVetFlag(extraTestFlags) {
 		args = append(args, "-vet=off")
+	}
+	if !hasTestFlag(extraTestFlags, "failfast") {
+		args = append(args, "-failfast")
 	}
 	if runFilter != "" {
 		args = append(args, "-run", runFilter)
@@ -1542,6 +1548,16 @@ func mutantGoTestArgs(overlayName string, timeoutSeconds uint, extraTestFlags []
 func hasVetFlag(testFlags []string) bool {
 	for _, flag := range testFlags {
 		if flag == "-vet" || flag == "--vet" || strings.HasPrefix(flag, "-vet=") || strings.HasPrefix(flag, "--vet=") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasTestFlag(testFlags []string, name string) bool {
+	for _, flag := range testFlags {
+		trimmed := strings.TrimPrefix(strings.TrimPrefix(flag, "-"), "-")
+		if trimmed == name || strings.HasPrefix(trimmed, name+"=") {
 			return true
 		}
 	}
