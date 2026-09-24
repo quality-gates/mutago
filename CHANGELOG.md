@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ### Changed
 - Mutant `go test` runs now pass `-failfast`, so a killed mutant stops at its first failing test. On a 39-mutant `internal/coverage` workload this cut wall time by 43% and CPU time by 46% with identical results. Override with `--test-flags=-failfast=false`.
 - Bumped the `messgo` CI quality gate and pre-commit hook from `v0.1.9` to `v0.5.0`, and refactored the six functions it newly flagged (too many return values, and one cognitive-complexity hit). No behaviour change.
+- The engine now sends all console output through its injected stdout and stderr writers. Before, some messages went straight to the terminal: baseline failures, quality-gate failures, GitHub annotations, per-test progress, `--debug` test output, custom `--exec` output, and worker errors. CLI output is unchanged.
 
 ## [v2.10.16] — 2026-09-23
 
