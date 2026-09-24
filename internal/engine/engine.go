@@ -162,7 +162,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 		return Result{ExitCode: returnError}, nil
 	}
 
-	cleanup := newRunCleanup(opts, setup.jobs, setup.jobWg, setup.stopProgress, setup.progressWg, run.tmpDir)
+	cleanup := newRunCleanup(setup)
 	defer cleanup()
 
 	report := run.report
@@ -197,7 +197,8 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	return Result{Report: report, ExitCode: exitCode}, nil
 }
 
-func newRunCleanup(opts *models.Options, jobs chan execJob, jobWg *sync.WaitGroup, stopProgress chan struct{}, progressWg *sync.WaitGroup, tmpDir string) func() {
+func newRunCleanup(setup *runSetup) func() {
+	opts := setup.run.opts
 	if opts.General.DryRun {
 		return func() {}
 	}
@@ -205,7 +206,7 @@ func newRunCleanup(opts *models.Options, jobs chan execJob, jobWg *sync.WaitGrou
 	return func() {
 		if !cleanedUp {
 			cleanedUp = true
-			shutdownAndCleanup(opts, jobs, jobWg, stopProgress, progressWg, tmpDir)
+			shutdownAndCleanup(opts, setup.jobs, setup.jobWg, setup.stopProgress, setup.progressWg, setup.run.tmpDir)
 		}
 	}
 }
