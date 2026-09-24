@@ -4,6 +4,11 @@ All notable changes to this project will be documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Mutant `go test` runs now pass `-failfast`, so a killed mutant stops at its first failing test. On a 39-mutant `internal/coverage` workload this cut wall time by 43% and CPU time by 46% with identical results. Override with `--test-flags=-failfast=false`.
+
 ## [v2.10.16] — 2026-09-23
 
 ### Fixed
