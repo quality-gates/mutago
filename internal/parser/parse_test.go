@@ -21,7 +21,7 @@ func TestParseAndTypeCheckFileTypeCheckWholePackage(t *testing.T) {
 		annotationProcessor,
 		skipFilterProcessor,
 	}
-	_, _, _, _, err := ParseAndTypeCheckFile("../../astutil/create.go", collectors)
+	_, err := ParseAndTypeCheckFile("../../astutil/create.go", collectors)
 	assert.Nil(t, err)
 }
 
@@ -33,11 +33,11 @@ func TestPreparePackagesIndexesMultipleTargetPackages(t *testing.T) {
 	}
 	assert.NoError(t, PreparePackages(files))
 
-	_, _, firstPkg, _, err := ParseAndTypeCheckFile(files[0], nil)
+	first, err := ParseAndTypeCheckFile(files[0], nil)
 	assert.NoError(t, err)
-	_, _, secondPkg, _, err := ParseAndTypeCheckFile(files[1], nil)
+	second, err := ParseAndTypeCheckFile(files[1], nil)
 	assert.NoError(t, err)
-	assert.NotEqual(t, firstPkg.Path(), secondPkg.Path())
+	assert.NotEqual(t, first.Pkg.Path(), second.Pkg.Path())
 }
 
 func TestPreparePackagesLoadsTargetDirectoriesInOneGraph(t *testing.T) {
@@ -51,7 +51,7 @@ func TestPreparePackagesLoadsTargetDirectoriesInOneGraph(t *testing.T) {
 			buildConstrained,
 		})
 		assert.NoError(t, err)
-		_, _, _, _, err = ParseAndTypeCheckFile(buildConstrained, nil)
+		_, err = ParseAndTypeCheckFile(buildConstrained, nil)
 		assert.NoError(t, err)
 		return
 	}

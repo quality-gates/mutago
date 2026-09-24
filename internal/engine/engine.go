@@ -152,16 +152,17 @@ func (e *Engine) Run(ctx context.Context, opts *models.Options, bl *baseline.Fil
 // RunResolved executes a mutation run using targets discovered by the caller.
 func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *baseline.File, targets importing.ResolvedTargets) (Result, error) {
 	e.initDefaults()
-	run, pkgs, jobs, jobWg, stopProgress, progressWg, _, err := e.validateAndInitRun(ctx, opts, targets)
+	setup, err := e.validateAndInitRun(ctx, opts, targets)
 	if err != nil {
 		return Result{ExitCode: returnError}, err
 	}
+	run, pkgs := setup.run, setup.pkgs
 	if run == nil {
 		// initRun returns a nil run with a non-nil result for early exits.
 		return Result{ExitCode: returnError}, nil
 	}
 
-	cleanup := newRunCleanup(opts, jobs, jobWg, stopProgress, progressWg, run.tmpDir)
+	cleanup := newRunCleanup(opts, setup.jobs, setup.jobWg, setup.stopProgress, setup.progressWg, run.tmpDir)
 	defer cleanup()
 
 	report := run.report
@@ -218,34 +219,45 @@ func (e *Engine) initDefaults() {
 	}
 }
 
-func (e *Engine) validateAndInitRun(ctx context.Context, opts *models.Options, targets importing.ResolvedTargets) (*mutationRun, []importing.Package, chan execJob, *sync.WaitGroup, chan struct{}, *sync.WaitGroup, gitdiff.ChangedLines, error) {
+// runSetup is the initialised run plus the worker and progress handles that
+// cleanup must shut down.
+type runSetup struct {
+	run          *mutationRun
+	pkgs         []importing.Package
+	jobs         chan execJob
+	jobWg        *sync.WaitGroup
+	stopProgress chan struct{}
+	progressWg   *sync.WaitGroup
+}
+
+func (e *Engine) validateAndInitRun(ctx context.Context, opts *models.Options, targets importing.ResolvedTargets) (*runSetup, error) {
 	if err := validateAdaptiveTimeoutTestCount(opts); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 	return e.initRun(ctx, opts, targets)
 }
 
-func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets importing.ResolvedTargets) (*mutationRun, []importing.Package, chan execJob, *sync.WaitGroup, chan struct{}, *sync.WaitGroup, gitdiff.ChangedLines, error) {
+func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets importing.ResolvedTargets) (*runSetup, error) {
 	files := targets.Files
 	if len(files) == 0 {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Could not find any suitable Go source files")
+		return nil, fmt.Errorf("Could not find any suitable Go source files")
 	}
 
 	mutationBlackList, err := loadBlacklist(opts.Files.Blacklist)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	gitChangedLines, err := loadGitDiffLines(opts)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Cannot load git diff: %w", err)
+		return nil, fmt.Errorf("Cannot load git diff: %w", err)
 	}
 
 	pkgs := targets.Packages
 	astutil.ClearIdentifierCache()
 	parser.ClearPackageCache()
 	if err := parser.PreparePackages(files); err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("Cannot load target packages: %w", err)
+		return nil, fmt.Errorf("Cannot load target packages: %w", err)
 	}
 
 	report := &models.Report{}
@@ -258,7 +270,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 
 	tmpDir, err := createTmpDir(opts)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	var jobs chan execJob
@@ -295,7 +307,14 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 		gitChangedLines:  gitChangedLines,
 	}
 
-	return run, pkgs, jobs, jobWg, stopProgress, progressWg, gitChangedLines, nil
+	return &runSetup{
+		run:          run,
+		pkgs:         pkgs,
+		jobs:         jobs,
+		jobWg:        jobWg,
+		stopProgress: stopProgress,
+		progressWg:   progressWg,
+	}, nil
 }
 
 func createTmpDir(opts *models.Options) (string, error) {
@@ -313,30 +332,27 @@ func createTmpDir(opts *models.Options) (string, error) {
 func buildActiveMutators(opts *models.Options) []mutatorItem {
 	effectiveDisable := append(opts.Mutator.DisableMutators, opts.Config.DisableMutators...)
 	var mutators []mutatorItem
-MUTATOR:
 	for _, name := range mutator.List() {
-		if len(opts.Config.EnableMutators) > 0 {
-			allowed := false
-			for _, e := range opts.Config.EnableMutators {
-				if matchesMutator(e, name) {
-					allowed = true
-					break
-				}
-			}
-			if !allowed {
-				continue MUTATOR
-			}
+		if len(opts.Config.EnableMutators) > 0 && !matchesAnyMutator(opts.Config.EnableMutators, name) {
+			continue
 		}
-		for _, d := range effectiveDisable {
-			if matchesMutator(d, name) {
-				continue MUTATOR
-			}
+		if matchesAnyMutator(effectiveDisable, name) {
+			continue
 		}
 		console.Verbose(opts, "Enable mutator %q", name)
 		m, _ := mutator.New(name)
 		mutators = append(mutators, mutatorItem{Name: name, Mutator: m})
 	}
 	return mutators
+}
+
+func matchesAnyMutator(patterns []string, name string) bool {
+	for _, pattern := range patterns {
+		if matchesMutator(pattern, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchesMutator(pattern, name string) bool {
@@ -480,10 +496,11 @@ func processFile(r *mutationRun, file string, coverProfile *coverage.Profile, pe
 	collectors := []filter.NodeCollector{annotationProcessor, skipFilterProcessor, sourceLineFilter}
 	nodeFilters := []filter.NodeFilter{annotationProcessor, skipFilterProcessor, sourceLineFilter}
 
-	src, fset, pkg, info, err := parser.ParseAndTypeCheckFile(file, collectors)
+	checked, err := parser.ParseAndTypeCheckFile(file, collectors)
 	if err != nil {
 		return 0, returnError
 	}
+	src, fset, pkg, info := checked.File, checked.Fset, checked.Pkg, checked.Info
 	originalSource, err := os.ReadFile(file)
 	if err != nil {
 		return 0, returnError

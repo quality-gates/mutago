@@ -138,12 +138,12 @@ func (p *Profile) parseLine(line, modulePfx string) error {
 		return nil
 	}
 
-	startLine, endLine, ok, err := parseCoverageRange(fields[0])
-	if err != nil || !ok {
+	lines, err := parseCoverageRange(fields[0])
+	if err != nil || lines == nil {
 		return err
 	}
 
-	p.recordCoveredLines(relFile, startLine, endLine)
+	p.recordCoveredLines(relFile, lines.start, lines.end)
 	return nil
 }
 
@@ -158,23 +158,28 @@ func relativeCoverageFile(rawFile, modulePfx string) string {
 	return filepath.ToSlash(relFile)
 }
 
+// lineRange is an inclusive span of source lines.
+type lineRange struct {
+	start, end int
+}
+
 // parseCoverageRange parses the "startLine.startCol,endLine.endCol" range field.
-// ok is false (with a nil error) when the field is malformed and should be
+// It returns nil (with a nil error) when the field is malformed and should be
 // skipped rather than treated as an error.
-func parseCoverageRange(field string) (startLine, endLine int, ok bool, err error) {
+func parseCoverageRange(field string) (*lineRange, error) {
 	rangeParts := strings.SplitN(field, ",", 2)
 	if len(rangeParts) != 2 {
-		return 0, 0, false, nil
+		return nil, nil
 	}
-	startLine, err = parseLineNum(rangeParts[0])
+	startLine, err := parseLineNum(rangeParts[0])
 	if err != nil {
-		return 0, 0, false, err
+		return nil, err
 	}
-	endLine, err = parseLineNum(rangeParts[1])
+	endLine, err := parseLineNum(rangeParts[1])
 	if err != nil {
-		return 0, 0, false, err
+		return nil, err
 	}
-	return startLine, endLine, true, nil
+	return &lineRange{start: startLine, end: endLine}, nil
 }
 
 // recordCoveredLines marks lines [startLine, endLine] of relFile as covered.
