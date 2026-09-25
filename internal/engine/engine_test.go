@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -152,6 +154,98 @@ func TestEngineDryRun(t *testing.T) {
 	if res.Report.Stats.TotalMutantsCount <= 0 {
 		t.Errorf("expected total mutants counted in dry run to be > 0, got %d", res.Report.Stats.TotalMutantsCount)
 	}
+}
+
+func TestEngineParallelWorkersSerializeInjectedStdout(t *testing.T) {
+	opts := parallelWriterOptions(t)
+	stdout := &concurrentWriteBuffer{}
+	var stderr bytes.Buffer
+	e := &Engine{Stdout: stdout, Stderr: &stderr}
+	res, err := e.Run(context.Background(), opts, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.ExitCode != returnOk {
+		t.Fatalf("expected exit code %d, got %d; stderr: %s", returnOk, res.ExitCode, stderr.String())
+	}
+	if stdout.overlapped.Load() {
+		t.Fatal("engine called the injected stdout writer concurrently")
+	}
+	completeTestOutput := "diagnostic=" + strings.Repeat("x", 1<<20)
+	if got, want := int64(strings.Count(stdout.String(), completeTestOutput)), res.Report.Stats.KilledCount; got != want {
+		t.Fatalf("expected complete go test output for every killed mutant, got %d complete outputs for %d killed mutants", got, want)
+	}
+}
+
+func TestEngineParallelWorkersSupportBytesBuffers(t *testing.T) {
+	opts := parallelWriterOptions(t)
+	var stdout, stderr bytes.Buffer
+	e := &Engine{Stdout: &stdout, Stderr: &stderr}
+	res, err := e.Run(context.Background(), opts, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.ExitCode != returnOk {
+		t.Fatalf("expected exit code %d, got %d; stderr: %s", returnOk, res.ExitCode, stderr.String())
+	}
+	completeTestOutput := "diagnostic=" + strings.Repeat("x", 1<<20)
+	if got, want := int64(strings.Count(stdout.String(), completeTestOutput)), res.Report.Stats.KilledCount; got != want {
+		t.Fatalf("expected complete go test output for every killed mutant, got %d complete outputs for %d killed mutants", got, want)
+	}
+}
+
+type concurrentWriteBuffer struct {
+	active     atomic.Int32
+	overlapped atomic.Bool
+	mu         sync.Mutex
+	buffer     bytes.Buffer
+}
+
+func (w *concurrentWriteBuffer) Write(p []byte) (int, error) {
+	if w.active.Add(1) > 1 {
+		w.overlapped.Store(true)
+	}
+	defer w.active.Add(-1)
+	time.Sleep(500 * time.Millisecond)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buffer.Write(p)
+}
+
+func (w *concurrentWriteBuffer) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buffer.String()
+}
+
+func parallelWriterOptions(t *testing.T) *models.Options {
+	t.Helper()
+	_ = os.MkdirAll("./testdata", 0755)
+	tempDir, err := os.MkdirTemp("./testdata", "parallel-writers-*")
+	if err != nil {
+		t.Fatalf("failed to create temp package: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+
+	src := "package parallelwriters\n\nfunc Add(a, b int) int { return a + b + a }\n"
+	testSrc := "package parallelwriters\n\nimport (\"strings\"; \"testing\")\n\nfunc TestAdd(t *testing.T) { if got := Add(1, 2); got != 4 { t.Errorf(\"unexpected result %d diagnostic=%s\", got, strings.Repeat(\"x\", 1<<20)) } }\n"
+	if err := os.WriteFile(filepath.Join(tempDir, "pkg.go"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "pkg_test.go"), []byte(testSrc), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := &models.Options{}
+	opts.Exec.Timeout = 30
+	opts.General.Workers = 2
+	opts.General.Debug = true
+	opts.Mutator.DisableMutators = []string{
+		"branch/*", "composite/*", "concurrency/*", "conditional/*",
+		"expression/*", "loop/*", "numbers/*", "select/*", "statement/*",
+	}
+	opts.Remaining.Targets = []string{"./" + tempDir}
+	return opts
 }
 
 // escapingPackageOptions writes a package whose test never checks results, so

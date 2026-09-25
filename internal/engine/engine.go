@@ -51,8 +51,26 @@ const (
 
 // Engine orchestrates the mutation testing lifecycle.
 type Engine struct {
+	// Stdout is the writer for engine output. Writes during Run are serialized.
 	Stdout io.Writer
+	// Stderr is the writer for engine diagnostics. Writes during Run are serialized.
 	Stderr io.Writer
+}
+
+type synchronizedWriter struct {
+	mu     *sync.Mutex
+	writer io.Writer
+}
+
+func (w *synchronizedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.writer.Write(p)
+}
+
+func synchronizedWriters(stdout, stderr io.Writer) (io.Writer, io.Writer) {
+	mu := &sync.Mutex{}
+	return &synchronizedWriter{mu: mu, writer: stdout}, &synchronizedWriter{mu: mu, writer: stderr}
 }
 
 // Result holds the final status of a mutation run.
@@ -159,7 +177,9 @@ func (e *Engine) Run(ctx context.Context, opts *models.Options, bl *baseline.Fil
 // RunResolved executes a mutation run using targets discovered by the caller.
 func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *baseline.File, targets importing.ResolvedTargets) (Result, error) {
 	e.initDefaults()
-	setup, err := e.validateAndInitRun(ctx, opts, targets)
+	stdout, stderr := synchronizedWriters(e.Stdout, e.Stderr)
+	runEngine := &Engine{Stdout: stdout, Stderr: stderr}
+	setup, err := runEngine.validateAndInitRun(ctx, opts, targets)
 	if err != nil {
 		return Result{ExitCode: returnError}, err
 	}
@@ -173,7 +193,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	defer cleanup()
 
 	report := run.report
-	if exitCode := runBaselineChecks(e.Stderr, opts, pkgs, run.exec.execs, run.exec.extraTestFlags); exitCode != 0 {
+	if exitCode := runBaselineChecks(runEngine.Stderr, opts, pkgs, run.exec.execs, run.exec.extraTestFlags); exitCode != 0 {
 		return Result{Report: report, ExitCode: exitCode}, nil
 	}
 
@@ -200,7 +220,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	}
 
 	report.Calculate()
-	exitCode := finalizeResults(e.Stdout, e.Stderr, opts, report, bl, run.moduleRoot, run.runMutantIDFound.Load())
+	exitCode := finalizeResults(runEngine.Stdout, runEngine.Stderr, opts, report, bl, run.moduleRoot, run.runMutantIDFound.Load())
 	return Result{Report: report, ExitCode: exitCode}, nil
 }
 
