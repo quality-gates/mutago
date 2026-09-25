@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Clean up test-generated temporary source files (`*.tmp`) and restore in-place mutated sources after integration test runs, preventing leftover untracked files such as `example/sub/sub.go.tmp` (#241).
+
 ### Changed
 - Engine writes to injected stdout and stderr writers are serialized, making ordinary non-thread-safe writers safe with multiple workers (#240).
 - Mutant `go test` runs now pass `-failfast`, so a killed mutant stops at its first failing test. On a 39-mutant `internal/coverage` workload this cut wall time by 43% and CPU time by 46% with identical results. Override with `--test-flags=-failfast=false`.

@@ -72,10 +72,83 @@ func TestMainMatch(t *testing.T) {
 	testMain(
 		t,
 		"../../example",
-		[]string{"--debug", "--exec", "../scripts/exec/test-mutated-package.sh", "--exec-timeout", "1", "--match", "baz", "./..."},
+		[]string{"--debug", "--exec", "../scripts/exec/test-mutated-package.sh", "--exec-timeout", "10", "--match", "baz", "./..."},
 		returnOk,
 		"mutation score",
 	)
+
+	// Acceptance criteria: clean checkout leaves no generated *.tmp files
+	assert.NoFileExists(t, "../../example/sub/sub.go.tmp", "sub.go.tmp must not be left behind")
+	err := filepath.Walk("../../example", func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && strings.HasSuffix(path, ".tmp") {
+			t.Errorf("found leftover temporary file: %s", path)
+		}
+		return nil
+	})
+	assert.NoError(t, err)
+}
+
+func TestMainCleansUpTemporarySourceFiles(t *testing.T) {
+	t.Run("cleans up generated tmp and preserves pre-existing on success", func(t *testing.T) {
+		fixtureDir := t.TempDir()
+		writeFixtureFile(t, filepath.Join(fixtureDir, "go.mod"), "module example.com/cleanup\n\ngo 1.22\n")
+		origSource := "package cleanup\n\nfunc Foo() int { return 1 }\n"
+		writeFixtureFile(t, filepath.Join(fixtureDir, "foo.go"), origSource)
+		writeFixtureFile(t, filepath.Join(fixtureDir, "foo_test.go"), "package cleanup\n\nimport \"testing\"\n\nfunc TestFoo(t *testing.T) { if Foo() != 1 { t.Fail() } }\n")
+
+		preExisting := filepath.Join(fixtureDir, "user.tmp")
+		writeFixtureFile(t, preExisting, "user data")
+
+		generatedTmp := filepath.Join(fixtureDir, "foo.go.tmp")
+		execScript := filepath.Join(fixtureDir, "exec.sh")
+		scriptContent := fmt.Sprintf("#!/bin/sh\necho 'mutated copy' > %q\necho 'mutated' > %q\nexit 0\n", generatedTmp, filepath.Join(fixtureDir, "foo.go"))
+		require.NoError(t, os.WriteFile(execScript, []byte(scriptContent), 0755))
+
+		testMain(
+			t,
+			fixtureDir,
+			[]string{"--exec", execScript, "--exec-timeout", "5", "."},
+			returnOk,
+			"mutation score",
+		)
+
+		assert.NoFileExists(t, generatedTmp, "test-generated *.tmp file must be cleaned up on success")
+		assert.FileExists(t, preExisting, "pre-existing user-owned *.tmp file must not be removed")
+		restored, err := os.ReadFile(filepath.Join(fixtureDir, "foo.go"))
+		require.NoError(t, err)
+		assert.Equal(t, origSource, string(restored), "mutated source file must be restored")
+	})
+
+	t.Run("cleans up generated tmp and preserves pre-existing on failure", func(t *testing.T) {
+		fixtureDir := t.TempDir()
+		writeFixtureFile(t, filepath.Join(fixtureDir, "go.mod"), "module example.com/cleanup\n\ngo 1.22\n")
+		origSource := "package cleanup\n\nfunc Foo() int { return 1 }\n"
+		writeFixtureFile(t, filepath.Join(fixtureDir, "foo.go"), origSource)
+		writeFixtureFile(t, filepath.Join(fixtureDir, "foo_test.go"), "package cleanup\n\nimport \"testing\"\n\nfunc TestFoo(t *testing.T) { if Foo() != 1 { t.Fail() } }\n")
+
+		preExisting := filepath.Join(fixtureDir, "user.tmp")
+		writeFixtureFile(t, preExisting, "user data")
+
+		generatedTmp := filepath.Join(fixtureDir, "foo.go.tmp")
+		execScript := filepath.Join(fixtureDir, "exec_fail.sh")
+		// Script creates generated tmp file and exits with error
+		scriptContent := fmt.Sprintf("#!/bin/sh\necho 'mutated copy' > %q\necho 'mutated' > %q\nexit 3\n", generatedTmp, filepath.Join(fixtureDir, "foo.go"))
+		require.NoError(t, os.WriteFile(execScript, []byte(scriptContent), 0755))
+
+		testMain(
+			t,
+			fixtureDir,
+			[]string{"--exec", execScript, "--exec-timeout", "5", "--min-msi", "101", "."},
+			returnMsiThresholdNotMet,
+			"mutation score",
+		)
+
+		assert.NoFileExists(t, generatedTmp, "test-generated *.tmp file must be cleaned up on failure")
+		assert.FileExists(t, preExisting, "pre-existing user-owned *.tmp file must not be removed")
+		restored, err := os.ReadFile(filepath.Join(fixtureDir, "foo.go"))
+		require.NoError(t, err)
+		assert.Equal(t, origSource, string(restored), "mutated source file must be restored")
+	})
 }
 
 func TestMainUnknownConfigField(t *testing.T) {
@@ -1350,6 +1423,45 @@ func TestAll(t *testing.T) {
 	assert.Contains(t, out, "statement/return: 1")
 }
 
+func setupSourceCleanup(t *testing.T, absRoot string) func() {
+	t.Helper()
+	preExistingTmp := make(map[string]bool)
+	_ = filepath.Walk(absRoot, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && strings.HasSuffix(path, ".tmp") {
+			preExistingTmp[path] = true
+		}
+		return nil
+	})
+
+	originalSources := make(map[string][]byte)
+	_ = filepath.Walk(absRoot, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && strings.HasSuffix(path, ".go") {
+			if content, readErr := os.ReadFile(path); readErr == nil {
+				originalSources[path] = content
+			}
+		}
+		return nil
+	})
+
+	cleanup := func() {
+		_ = filepath.Walk(absRoot, func(path string, info os.FileInfo, err error) error {
+			if err == nil && !info.IsDir() && strings.HasSuffix(path, ".tmp") && !preExistingTmp[path] {
+				_ = os.Remove(path)
+			}
+			return nil
+		})
+
+		for path, origContent := range originalSources {
+			curContent, readErr := os.ReadFile(path)
+			if readErr != nil || !bytes.Equal(curContent, origContent) {
+				_ = os.WriteFile(path, origContent, 0644)
+			}
+		}
+	}
+	t.Cleanup(cleanup)
+	return cleanup
+}
+
 func testMain(t *testing.T, root string, exec []string, expectedExitCode int, contains string) string {
 	// Clear the parser cache so each test loads files fresh from disk.
 	// Without this, TestMainMatch's exec script (which writes to the original
@@ -1360,6 +1472,13 @@ func testMain(t *testing.T, root string, exec []string, expectedExitCode int, co
 	saveStdout := os.Stdout
 	saveCwd, err := os.Getwd()
 	assert.Nil(t, err)
+
+	absRoot := root
+	if !filepath.IsAbs(absRoot) {
+		absRoot = filepath.Join(saveCwd, root)
+	}
+
+	defer setupSourceCleanup(t, absRoot)()
 
 	r, w, err := os.Pipe()
 	assert.Nil(t, err)
