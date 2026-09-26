@@ -86,3 +86,7 @@ If a generated mutant does not compile, it is skipped rather than counted as kil
 | 0 | All mutations tested; all quality gates passed |
 | 3 | Invalid input or tool failure, including a failed clean coverage run |
 | 4 | A quality gate was not met (`--min-msi`, `--min-covered-msi`, or `--fail-on-escaped`) |
+
+## Exploratory testing
+
+The dated [CLI exploratory testing reports](exploratory-testing/README.md) record end-to-end journeys, results, and supporting evidence.
