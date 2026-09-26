@@ -1,0 +1,9 @@
+package math
+
+import "testing"
+
+func TestCalculate(t *testing.T) {
+	if got := Calculate(5); got != 6 {
+		t.Fatalf("Calculate(5) = %d, want 6", got)
+	}
+}

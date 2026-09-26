@@ -1,0 +1,14 @@
+math/math.go:
+	arithmetic/base: 1
+	numbers/decrementer: 1
+	numbers/incrementer: 1
+	statement/return: 1
+
+Per-mutator totals across all files:
+  arithmetic/base                          1
+  numbers/decrementer                      1
+  numbers/incrementer                      1
+  statement/return                         1
+
+Total: 4 mutation(s) would be generated. No files written, no tests run.
+Note: this count is an upper bound. Mutations that produce byte-identical edits at the same location are deduplicated during an actual run.

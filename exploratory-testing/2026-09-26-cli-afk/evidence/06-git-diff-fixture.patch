@@ -1,0 +1,16 @@
+diff --git a/math/math.go b/math/math.go
+index 2bfb7b6..417668a 100644
+--- a/math/math.go
++++ b/math/math.go
+@@ -4 +4 @@ func Calculate(n int) int {
+-	return n + 1
++	return n + 2
+diff --git a/math/math_test.go b/math/math_test.go
+index b56ca78..fb2977c 100644
+--- a/math/math_test.go
++++ b/math/math_test.go
+@@ -6,2 +6,2 @@ func TestCalculate(t *testing.T) {
+-	if got := Calculate(5); got != 6 {
+-		t.Fatalf("Calculate(5) = %d, want 6", got)
++	if got := Calculate(5); got != 7 {
++		t.Fatalf("Calculate(5) = %d, want 7", got)

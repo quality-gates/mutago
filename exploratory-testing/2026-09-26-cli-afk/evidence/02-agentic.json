@@ -1,0 +1,7 @@
+{
+  "generated_at": "2026-09-26T00:29:24Z",
+  "msi": 0.7142857142857143,
+  "escaped_count": 0,
+  "reminder": "A mutant is an example of how this code could be wrong — it's not a script for the test. Don't assert on the mutant directly. Instead ask: if this code were buggy, what would a caller of the public API observe go wrong? Write a test for that.",
+  "mutants": []
+}
