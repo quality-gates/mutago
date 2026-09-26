@@ -1,0 +1,12 @@
+Building per-test coverage map for "example.com/xtest/calc" (3 tests)...
+The mutation score is 71.43% (10 killed, 0 escaped, 0 errored, 4 not covered, 0 skipped, 14 total)
+The covered-code mutation score is 100.00%
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   2 / 2    (100%)
+  branch/if                            killed   1 / 1    (100%)
+  conditional/negated                  killed   1 / 1    (100%)
+  expression/comparison                killed   1 / 1    (100%)
+  numbers/decrementer                  killed   1 / 1    (100%)
+  numbers/incrementer                  killed   1 / 1    (100%)
+  statement/return                     killed   3 / 3    (100%)

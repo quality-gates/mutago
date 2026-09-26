@@ -1,0 +1,133 @@
+Usage:
+  mutago Targets...
+
+General options:
+      --debug                         Debug log output
+      --do-not-remove-tmp-folder      Do not remove the tmp folder where all
+                                      mutations are saved to
+      --help                          Show this help message
+      --noop                          No-op: the baseline test check (run the
+                                      suite once unmutated first, exit with an
+                                      error if it fails) is now always on by
+                                      default. This flag is kept for backward
+                                      compatibility and has no effect.
+      --dry-run                       Count mutations per file and mutator
+                                      without generating files or running
+                                      tests; prints a summary table and exits
+                                      0. The count is an upper bound —
+                                      mutations that produce byte-identical
+                                      edits at the same location are
+                                      deduplicated in a real run.
+      --no-diffs                      Suppress diff output for all mutation
+                                      results (useful in CI where diffs are
+                                      noisy and the JSON report is consumed
+                                      instead)
+      --output-statuses=              Show only these result statuses in the
+                                      terminal: k=killed e=escaped s=skipped
+                                      n=not-covered x=errored (e.g.
+                                      --output-statuses=ke). Does not affect
+                                      JSON reports. Overrides --quiet when set.
+      --quiet                         Only print escaped mutants and the
+                                      summary (suppress killed/skipped output).
+                                      Combine with --no-diffs to also suppress
+                                      escaped-mutant diffs.
+      --verbose                       Verbose log output
+      --workers=                      Number of parallel workers for mutation
+                                      execution (0 = all CPUs). Forced to 1
+                                      when --exec is set. (default: 0)
+      --config=                       Path to config file
+      --html-output                   Generates a mutago-report.html file after
+                                      testing is complete
+  -v, --version                       Show version
+
+File options:
+      --blacklist=                    List of files containing MD5 checksums
+                                      (one per line) of mutations to ignore.
+      --list-files                    List found files
+      --print-ast                     Print the ASTs of all given files and exit
+
+Mutator options:
+      --disable=                      Disable mutator by their name or using *
+                                      as a suffix pattern (in order to check
+                                      remaining enabled mutators use --verbose
+                                      option)
+      --list-mutators                 List all available mutators (including
+                                      disabled)
+
+Filter options:
+      --match=                        Only functions are mutated that confirm
+                                      to the arguments regex
+
+Exec options:
+      --exec=                         Execute this command for every mutation
+                                      (by default the built-in exec command is
+                                      used)
+      --no-exec                       Skip the built-in exec command and just
+                                      generate the mutations
+      --exec-timeout=                 Sets a timeout for the command execution
+                                      (in seconds) (default: 10)
+      --run-mutant-id=                Run only the mutant with this stable ID.
+                                      Copy the id field from
+                                      mutago-agentic.json to target a specific
+                                      survivor. Quality gates and the summary
+                                      line are suppressed in this mode.
+      --coverage                      Run go test -coverprofile before mutating
+                                      to compute covered-code MSI and mark
+                                      uncovered mutants
+      --per-test                      Build a per-test coverage map and run
+                                      only covering tests for each mutation.
+                                      Fastest on packages with slow tests;
+                                      pairs well with --coverage.
+      --test-flags=                   Extra flags passed to each 'go test'
+                                      invocation. Use the = form to pass flag
+                                      values: --test-flags='-short'. Ignored
+                                      when --exec is set.
+      --timeout-coefficient=          Set per-mutation timeout as a multiple of
+                                      an uncached baseline test-suite run (e.g.
+                                      3 = 3× the clean run). Overrides
+                                      --exec-timeout when > 0. (default: 0)
+
+Git diff options:
+      --git-diff-lines                Only mutate lines changed since the git
+                                      diff base
+      --git-diff-base=                Git ref to diff against for
+                                      --git-diff-lines (default: auto-detected
+                                      from origin/HEAD, falling back to master)
+
+Logger options:
+      --logger-github                 Emit escaped mutants as GitHub Actions
+                                      ::warning annotations
+      --logger-gitlab                 Write mutago-gitlab.json in GitLab Code
+                                      Quality format (escaped mutants as
+                                      code-quality issues)
+      --logger-summary-json           Write a compact stats-only JSON to
+                                      mutago-summary.json
+      --logger-agentic-json           Write mutago-agentic.json with enriched
+                                      escaped-mutant data designed for LLM
+                                      consumption
+
+Baseline options:
+      --baseline=                     Path to baseline file of known-surviving
+                                      mutants (default: mutago-baseline.json)
+      --update-baseline               Write current escaped mutants to the
+                                      baseline file then exit 0
+
+Test options:
+      --test-recursive                Defines if the executer should test
+                                      recursively
+
+Score options:
+      --min-msi=                      Minimum required MSI (0-100). Exit code 4
+                                      when not met. (default: -1)
+      --min-covered-msi=              Minimum required covered-MSI (0-100).
+                                      Exit code 4 when not met. (default: -1)
+      --ignore-msi-with-no-mutations  Exit 0 even when MSI thresholds are not
+                                      met if no mutations were generated
+                                      (useful with --git-diff-lines)
+      --fail-on-escaped               Exit code 4 if any mutant escapes,
+                                      without requiring --min-msi
+
+Arguments:
+  Targets:                            Packages, directories and files even
+                                      with patterns (by default the current
+                                      directory)

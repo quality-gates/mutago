@@ -1,0 +1,6 @@
+date=2026-09-26
+commit=4df295676f656b20c24276ce76239c7d0fbd3a47
+go=go version go1.26.6 darwin/arm64
+os=Darwin-arm64
+fixture=disposable /tmp Go module
+mutation-run-settings=GOMAXPROCS=1 --workers=1 --exec-timeout=10s disposable GOCACHE

@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- CLI exploratory testing report and evidence for coverage gates, per-test filtering, and changed-line runs.
+
 ### Fixed
 - Clean up test-generated temporary source files (`*.tmp`) and restore in-place mutated sources after integration test runs, preventing leftover untracked files such as `example/sub/sub.go.tmp` (#241).
 
