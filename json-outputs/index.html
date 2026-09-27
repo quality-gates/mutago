@@ -831,7 +831,7 @@ remain accepted by the Go model for compatibility, but new reports omit them.</p
 <tr>
 <td style="text-align: left;"><code>mutants[].id</code></td>
 <td style="text-align: left;">string</td>
-<td style="text-align: left;">Stable hash of file + mutator + diff — survives refactors that shift line numbers</td>
+<td style="text-align: left;">Stable hash of file + mutator + diff — survives refactors that shift line numbers, and is the same however the file target is spelled on the command line</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>mutants[].checksum</code></td>
