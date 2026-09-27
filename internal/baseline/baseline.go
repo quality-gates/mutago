@@ -92,7 +92,7 @@ func (f *File) NewEscapes(escaped []models.Mutant, moduleRoot string) []models.M
 	knownIDs := f.IDSet()
 	var result []models.Mutant
 	for _, m := range escaped {
-		relFile := toRelPath(m.Mutator.OriginalFilePath, moduleRoot)
+		relFile := RelPath(m.Mutator.OriginalFilePath, moduleRoot)
 		id := MutantID(relFile, m.Mutator.MutatorName, m.Diff)
 		if _, known := knownIDs[id]; !known {
 			result = append(result, m)
@@ -106,7 +106,7 @@ func (f *File) NewEscapes(escaped []models.Mutant, moduleRoot string) []models.M
 func Write(path string, escaped []models.Mutant, moduleRoot string) error {
 	entries := make([]Entry, 0, len(escaped))
 	for _, m := range escaped {
-		relFile := toRelPath(m.Mutator.OriginalFilePath, moduleRoot)
+		relFile := RelPath(m.Mutator.OriginalFilePath, moduleRoot)
 		entries = append(entries, Entry{
 			ID:      MutantID(relFile, m.Mutator.MutatorName, m.Diff),
 			File:    relFile,
@@ -122,10 +122,21 @@ func Write(path string, escaped []models.Mutant, moduleRoot string) error {
 	return os.WriteFile(path, append(data, '\n'), 0644)
 }
 
-func toRelPath(absOrRel, moduleRoot string) string {
-	rel, err := filepath.Rel(moduleRoot, absOrRel)
+// RelPath returns the canonical identity path of a source file: slash-separated
+// and relative to moduleRoot. It is the single owner of the path that
+// MutantID hashes, so every spelling of one file ("./a/b.go", "a/b.go", an
+// absolute path, or "b.go" from inside a/) yields the same mutant ID.
+// A relative path is resolved against the process working directory first,
+// because that is the directory a command-line target refers to.
+func RelPath(path, moduleRoot string) string {
+	if filepath.IsAbs(moduleRoot) && !filepath.IsAbs(path) {
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+	}
+	rel, err := filepath.Rel(moduleRoot, path)
 	if err != nil {
-		return filepath.ToSlash(absOrRel)
+		return filepath.ToSlash(path)
 	}
 	return filepath.ToSlash(rel)
 }

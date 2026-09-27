@@ -270,7 +270,7 @@ func MakeAgenticJSONReport(report models.Report, moduleRoot string) error {
 	sourceLines := make(map[string][]string)
 	testFiles := make(map[string][]string)
 	for _, m := range report.Escaped {
-		relFile := toRelPath(m.Mutator.OriginalFilePath, moduleRoot)
+		relFile := baseline.RelPath(m.Mutator.OriginalFilePath, moduleRoot)
 		id := baseline.MutantID(relFile, m.Mutator.MutatorName, m.Diff)
 		const contextRadius = 3
 		source := report.Sources[m.Mutator.OriginalFilePath]
@@ -352,14 +352,6 @@ func extractContextFromLines(lines []string, line, radius int) ([]string, int) {
 	return lines[start : end+1], start + 1
 }
 
-func toRelPath(absOrRel, moduleRoot string) string {
-	rel, err := filepath.Rel(moduleRoot, absOrRel)
-	if err != nil {
-		return filepath.ToSlash(absOrRel)
-	}
-	return filepath.ToSlash(rel)
-}
-
 // findTestFiles returns relative paths to *_test.go files in dir.
 func findTestFiles(dir, moduleRoot string) []string {
 	matches, err := filepath.Glob(filepath.Join(dir, "*_test.go"))
@@ -368,12 +360,7 @@ func findTestFiles(dir, moduleRoot string) []string {
 	}
 	result := make([]string, 0, len(matches))
 	for _, f := range matches {
-		rel, err := filepath.Rel(moduleRoot, f)
-		if err != nil {
-			result = append(result, filepath.ToSlash(f))
-			continue
-		}
-		result = append(result, filepath.ToSlash(rel))
+		result = append(result, baseline.RelPath(f, moduleRoot))
 	}
 	return result
 }
@@ -402,7 +389,7 @@ type gitLabLines struct {
 func MakeGitLabReport(report models.Report, moduleRoot string) error {
 	issues := make([]gitLabIssue, 0, len(report.Escaped))
 	for _, m := range report.Escaped {
-		relFile := toRelPath(m.Mutator.OriginalFilePath, moduleRoot)
+		relFile := baseline.RelPath(m.Mutator.OriginalFilePath, moduleRoot)
 		id := baseline.MutantID(relFile, m.Mutator.MutatorName, m.Diff)
 		desc := fmt.Sprintf("Escaped mutant (%s) at %s:%d — no test kills this mutation",
 			m.Mutator.MutatorName, relFile, m.Mutator.OriginalStartLine)

@@ -483,7 +483,7 @@ Writes `mutago-agentic.json` — a richer payload designed for LLM consumption. 
 | `msi` | float | Overall MSI as a 0–1 ratio |
 | `escaped_count` | int | Number of survived mutants |
 | `reminder` | string | Plain-English reminder about how to interpret mutants; included as context for LLMs |
-| `mutants[].id` | string | Stable hash of file + mutator + diff — survives refactors |
+| `mutants[].id` | string | Stable hash of file + mutator + diff — survives refactors and does not depend on how the file target is spelled |
 | `mutants[].file` | string | Path to the mutated file, relative to the module root |
 | `mutants[].line` | int | Line number of the mutation |
 | `mutants[].mutator` | string | Mutator name (e.g. `branch/if`) |
