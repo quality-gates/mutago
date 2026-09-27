@@ -1512,3 +1512,68 @@ func testMain(t *testing.T, root string, exec []string, expectedExitCode int, co
 	assert.Contains(t, out, contains)
 	return out
 }
+
+// TestMainMutantIDsIgnoreTargetSpelling covers #248: a survivor accepted from a
+// package run, and an ID copied from the agentic report, must match the same
+// mutant however the file target is spelled and from whichever module
+// directory mutago runs.
+func TestMainMutantIDsIgnoreTargetSpelling(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	pkgDir := filepath.Join(root, "internal", "store")
+	require.NoError(t, os.MkdirAll(pkgDir, 0o755))
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/spelling\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - statement/return\n")
+	writeFixtureFile(t, filepath.Join(pkgDir, "store.go"), "package store\n\nfunc Value() int {\n\treturn 42\n}\n")
+	writeFixtureFile(t, filepath.Join(pkgDir, "other.go"), "package store\n\nfunc Other() int {\n\treturn 7\n}\n")
+	writeFixtureFile(t, filepath.Join(pkgDir, "store_test.go"), "package store\n")
+	writeFixtureFile(t, filepath.Join(pkgDir, "other_test.go"), "package store\n")
+
+	agenticPath := filepath.Join(root, "mutago-agentic.json")
+	previousAgentic := models.ReportAgenticJSONFileName
+	models.ReportAgenticJSONFileName = agenticPath
+	t.Cleanup(func() { models.ReportAgenticJSONFileName = previousAgentic })
+
+	baselinePath := filepath.Join(root, "mutago-baseline.json")
+	common := []string{"--workers", "1", "--exec-timeout", "5", "--config", filepath.Join(root, "mutago.yml"), "--baseline", baselinePath}
+
+	testMain(t, root, append([]string{"--update-baseline"}, append(common, "./internal/store")...), returnOk, "")
+	testMain(t, root, append([]string{"--logger-agentic-json"}, append(common, "./internal/store")...), returnOk, "mutation score")
+
+	var agentic struct {
+		Mutants []struct {
+			ID   string `json:"id"`
+			File string `json:"file"`
+		} `json:"mutants"`
+	}
+	data, err := os.ReadFile(agenticPath)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, &agentic))
+	require.Len(t, agentic.Mutants, 2, "fixture must yield one survivor per source file")
+	storeID := ""
+	for _, m := range agentic.Mutants {
+		if m.File == "internal/store/store.go" {
+			storeID = m.ID
+		}
+	}
+	require.NotEmpty(t, storeID, "agentic report must name internal/store/store.go canonically")
+
+	spellings := []struct{ dir, target string }{
+		{root, "./internal/store/store.go"},
+		{root, "internal/store/store.go"},
+		{root, filepath.Join(pkgDir, "store.go")},
+		{root, "./internal/store"},
+		{pkgDir, "store.go"},
+		{pkgDir, "./store.go"},
+		{pkgDir, "."},
+	}
+	for _, s := range spellings {
+		t.Run(s.target+" from "+filepath.Base(s.dir), func(t *testing.T) {
+			testMain(t, s.dir, append([]string{"--fail-on-escaped"}, append(common, s.target)...), returnOk, "mutation score")
+
+			out := testMain(t, s.dir, append([]string{"--run-mutant-id", storeID}, append(common, s.target)...), returnOk, "ESCAPED")
+			assert.Contains(t, out, "store.go")
+			assert.NotContains(t, out, "other.go")
+		})
+	}
+}

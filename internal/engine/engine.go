@@ -641,7 +641,7 @@ func applyMutator(r *mutationRun, m mutatorItem, fc *fileContext, node ast.Node,
 
 func recordOneMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
 	if r.opts.General.DryRun {
-		relFile := toRelPath(fc.absFile, r.moduleRoot)
+		relFile := baseline.RelPath(fc.absFile, r.moduleRoot)
 		if isGitDiffSkipped(r.gitChangedLines, relFile, fc.absFile, int(originalStartLine)) {
 			return
 		}
@@ -669,7 +669,7 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 		r.mu.Unlock()
 		return
 	}
-	checksum := stableMutationEditKey(toRelPath(fc.absFile, r.moduleRoot), originalSourceCode, edit)
+	checksum := stableMutationEditKey(baseline.RelPath(fc.absFile, r.moduleRoot), originalSourceCode, edit)
 	mutant.Checksum = checksum
 	if _, duplicate := r.blacklist[checksum]; duplicate {
 		r.mu.Lock()
@@ -702,14 +702,14 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 			originalFile: fc.sourceFile,
 			mutationFile: mutationFile,
 			absFile:      fc.absFile,
-			relFile:      toRelPath(fc.absFile, r.moduleRoot),
+			relFile:      baseline.RelPath(fc.absFile, r.moduleRoot),
 			moduleRoot:   r.moduleRoot,
 			original:     originalSourceCode,
 			edit:         edit,
 		},
 		packageLevelDecl: isPackageLevelDecl(fc.src, mutation.Position),
 		directiveShifted: directiveShifted,
-		adjRelFile:       toRelPath(filepath.Join(r.moduleRoot, adjPos.Filename), r.moduleRoot),
+		adjRelFile:       baseline.RelPath(filepath.Join(r.moduleRoot, adjPos.Filename), r.moduleRoot),
 		runMutantIDFound: r.runMutantIDFound,
 	}
 	select {
@@ -1199,11 +1199,11 @@ func printGitHubAnnotations(stdout io.Writer, report *models.Report) {
 	}
 
 	for _, m := range report.Escaped {
+		// GitHub resolves annotation paths against the repository root, which
+		// differs from the module root when the module lives in a subdirectory.
 		filePath := filepath.ToSlash(m.Mutator.OriginalFilePath)
 		if repoRoot != "" {
-			if rel, err := filepath.Rel(repoRoot, m.Mutator.OriginalFilePath); err == nil {
-				filePath = filepath.ToSlash(rel)
-			}
+			filePath = baseline.RelPath(m.Mutator.OriginalFilePath, repoRoot)
 		}
 		fmt.Fprintf(stdout, "::warning file=%s,line=%d,title=Mutant escaped (%s)::Escaped mutation at %s:%d — add a test to kill it\n",
 			filePath,
@@ -1456,6 +1456,9 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, gitChangedLin
 }
 
 func mutantLocation(opts *models.Options, mutant models.Mutant) string {
+	// Console locations are for the user at the terminal, so they stay
+	// relative to the working directory rather than using the module-root
+	// identity path from baseline.RelPath.
 	loc := mutant.Mutator.OriginalFilePath
 	if rel, err := filepath.Rel(".", loc); err == nil {
 		loc = filepath.ToSlash(rel)
@@ -1489,19 +1492,11 @@ func skipForGitDiff(job execJob, gitChangedLines gitdiff.ChangedLines) bool {
 	return false
 }
 
-func toRelPath(absOrRel, moduleRoot string) string {
-	rel, err := filepath.Rel(moduleRoot, absOrRel)
-	if err != nil {
-		return filepath.ToSlash(absOrRel)
-	}
-	return filepath.ToSlash(rel)
-}
-
 func skipForMutantID(job execJob) bool {
 	if job.opts.Exec.RunMutantID == "" {
 		return false
 	}
-	relFile := toRelPath(job.mutant.Mutator.OriginalFilePath, job.source.moduleRoot)
+	relFile := baseline.RelPath(job.mutant.Mutator.OriginalFilePath, job.source.moduleRoot)
 	diffOut, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", job.source.originalFile, job.source.mutationFile).CombinedOutput()
 	id := baseline.MutantID(relFile, job.mutant.Mutator.MutatorName, string(diffOut))
 	return id != job.opts.Exec.RunMutantID

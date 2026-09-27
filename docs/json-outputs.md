@@ -82,7 +82,7 @@ Writes `mutago-agentic.json`. A richer payload designed for LLM consumption. Eac
 | `msi` | float | Overall MSI as a 0–1 ratio |
 | `escaped_count` | int | Number of survived mutants |
 | `reminder` | string | A plain-English reminder about how to interpret mutants — useful context when feeding the file to an LLM |
-| `mutants[].id` | string | Stable hash of file + mutator + diff — survives refactors that shift line numbers |
+| `mutants[].id` | string | Stable hash of file + mutator + diff — survives refactors that shift line numbers, and is the same however the file target is spelled on the command line |
 | `mutants[].checksum` | string | 32-character checksum accepted by `--blacklist` |
 | `mutants[].file` | string | Path to the mutated file, relative to the module root |
 | `mutants[].line` | int | Line number of the mutation |
