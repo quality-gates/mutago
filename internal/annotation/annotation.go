@@ -150,6 +150,17 @@ func (p *Processor) collectNodesForBlockStmt() {
 	p.LineAnnotation.copyToStatNodesInBlock()
 }
 
+func allMutators() mutatorInfo {
+	return mutatorInfo{Names: []string{"*"}}
+}
+
+func namesOrAll(names []string) []string {
+	if len(names) == 0 {
+		return []string{"*"}
+	}
+	return names
+}
+
 // parseMutators parses a comma-separated string of mutator names into a clean slice of strings.
 func parseMutators(mutatorList string) []string {
 	mutators := make([]string, 0)
@@ -167,6 +178,9 @@ func parseMutators(mutatorList string) []string {
 
 // shouldSkipMutator determines whether a specific mutator should be skipped
 func shouldSkipMutator(mutatorInfo mutatorInfo, mutatorName string) bool {
+	if len(mutatorInfo.Names) == 0 {
+		return true
+	}
 	for _, name := range mutatorInfo.Names {
 		if name == mutatorName || name == "*" {
 			return true

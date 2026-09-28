@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - CLI exploratory testing report and evidence for coverage gates, per-test filtering, and changed-line runs.
 
 ### Fixed
+- A bare `// mutator-disable-next-line` and a pattern-only `// mutator-disable-regexp <pattern>` now disable every mutator on the target lines. Before, an omitted mutator list suppressed nothing and said so silently (#221).
 - Clean up test-generated temporary source files (`*.tmp`) and restore in-place mutated sources after integration test runs, preventing leftover untracked files such as `example/sub/sub.go.tmp` (#241).
 - Mutant IDs no longer depend on how a file target is spelled. `./a/b.go`, `a/b.go`, an absolute path, a package target, and `b.go` run from inside `a/` now give the same ID, so baseline matching, `--run-mutant-id`, the agentic and GitLab reports, and GitHub annotations all agree (#248). IDs from canonical module-relative paths do not change. A baseline entry that was accepted from a `./`-prefixed or subdirectory-relative target can now show up as a new escape: examine each such entry before you update the baseline, rather than re-accepting every current escape.
 - With `--test-recursive`, the baseline pre-flight and `--coverage` runs now target `<package>/...` like the mutant runs, and coverage uses `-coverpkg` so subpackage tests count. Before, they checked fewer tests than the mutants ran. A failing subpackage test now stops the run with exit 3 (#235).
