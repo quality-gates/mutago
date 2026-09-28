@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.18] — 2026-09-28
+
 ### Fixed
 - With `--test-recursive`, `--per-test` now maps the tests of every subpackage too, built with `-coverpkg` for the target. Before, its `-run` filter left out subpackage tests, so a mutant that only a subpackage test catches escaped (#250).
 
@@ -640,7 +642,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.17...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.18...HEAD
+[v2.10.18]: https://github.com/quality-gates/mutago/compare/v2.10.17...v2.10.18
 [v2.10.17]: https://github.com/quality-gates/mutago/compare/v2.10.16...v2.10.17
 [v2.6.7]: https://github.com/quality-gates/mutago/releases/tag/v2.6.7
 [v2.6.10]: https://github.com/quality-gates/mutago/compare/v2.6.9...v2.6.10
