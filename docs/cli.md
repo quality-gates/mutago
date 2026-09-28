@@ -52,7 +52,7 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | Flag | Description |
 | :--- | :---------- |
 | `--coverage` | Run `go test -coverprofile` first; stop with exit 3 if it fails, otherwise skip test execution for uncovered lines and exclude them from covered-MSI |
-| `--per-test` | Build a per-test coverage map and run only the tests that cover each mutation. Best for packages with slow tests. Pairs well with `--coverage`. |
+| `--per-test` | Build a per-test coverage map and run only the tests that cover each mutation. Best for packages with slow tests. Pairs well with `--coverage`. With `--test-recursive`, the map also covers subpackage tests. |
 | `--test-flags` | Extra flags passed to every `go test` call (e.g. `--test-flags=-short`). Use the `=` form for values starting with a dash. Adaptive timeout preserves a positive `-count=N`, adds `-count=1` when absent, and rejects `-count=0`. Ignored when `--exec` is set. |
 
 ## Vet

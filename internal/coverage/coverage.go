@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -278,6 +279,45 @@ func listTestNames(pkgPath string) ([]string, error) {
 	return names, nil
 }
 
+// TestPackage names one package and the runnable top-level tests it declares.
+type TestPackage struct {
+	ImportPath string
+	Tests      []string
+}
+
+// ListTestPackages returns the runnable tests of pkgPath. With recursive it
+// also returns those of every package beneath pkgPath, matching the pkgPath/...
+// target that --test-recursive gives mutant runs. Packages without tests are
+// left out.
+func ListTestPackages(pkgPath string, recursive bool) ([]TestPackage, error) {
+	paths := []string{pkgPath}
+	if recursive {
+		var err error
+		if paths, err = listPackages(pkgPath + "/..."); err != nil {
+			return nil, err
+		}
+	}
+	var pkgs []TestPackage
+	for _, path := range paths {
+		names, err := ListTests(path)
+		if err != nil {
+			return nil, err
+		}
+		if len(names) > 0 {
+			pkgs = append(pkgs, TestPackage{ImportPath: path, Tests: names})
+		}
+	}
+	return pkgs, nil
+}
+
+func listPackages(pattern string) ([]string, error) {
+	out, err := exec.Command("go", "list", pattern).Output()
+	if err != nil {
+		return nil, err
+	}
+	return strings.Fields(string(out)), nil
+}
+
 // BuildPerTestProfile runs each test function in pkgPath individually with
 // -coverprofile to build a map of which lines each test covers.  It uses up
 // to workers goroutines in parallel.  Returns nil on any hard failure (the
@@ -286,17 +326,6 @@ func listTestNames(pkgPath string) ([]string, error) {
 // timeout is the per-test run timeout in seconds (same value as --exec-timeout).
 // extraTestFlags are appended before the explicit -run flag so that -short, -race,
 // etc. are consistent between profile-building and actual mutation test runs.
-// perTestJob is a work item for a per-test profiling worker.
-type perTestJob struct {
-	name string
-}
-
-// perTestResult carries the coverage profile produced by one worker.
-type perTestResult struct {
-	name string
-	prof *Profile
-}
-
 func BuildPerTestProfile(pkgPath, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags []string) (*PerTestProfile, error) {
 	// List test functions (not subtests).
 	testNames, err := ListTests(pkgPath)
@@ -312,24 +341,54 @@ func BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir string, timeout uin
 	if len(testNames) == 0 {
 		return nil, nil
 	}
+	pkgs := []TestPackage{{ImportPath: pkgPath, Tests: testNames}}
+	return BuildPerTestProfileForPackages(pkgPath, pkgs, modulePath, tmpDir, timeout, workers, extraTestFlags)
+}
+
+// BuildPerTestProfileForPackages builds one profile from the tests of every
+// package in pkgs, as listed by ListTestPackages. Each test binary is built
+// with -coverpkg=pkgPath, so tests in subpackages are credited with the
+// pkgPath lines they cover.
+func BuildPerTestProfileForPackages(pkgPath string, pkgs []TestPackage, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags []string) (*PerTestProfile, error) {
+	if len(pkgs) == 0 {
+		return nil, nil
+	}
+	var jobs []perTestJob
+	for _, pkg := range pkgs {
+		binaryPath, err := compileCoverageTestBinary(pkg.ImportPath, pkgPath, tmpDir, extraTestFlags)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range pkg.Tests {
+			jobs = append(jobs, perTestJob{name: name, binaryPath: binaryPath})
+		}
+	}
 	if workers <= 0 {
 		workers = 1
 	}
-	binaryPath, err := compileCoverageTestBinary(pkgPath, tmpDir, extraTestFlags)
-	if err != nil {
-		return nil, err
-	}
-	results := profileTests(testNames, workers, binaryPath, modulePath, tmpDir, timeout, testBinaryFlags(extraTestFlags))
-	return mergePerTestProfiles(results, len(testNames)), nil
+	results := profileTests(jobs, workers, modulePath, timeout, testBinaryFlags(extraTestFlags))
+	return mergePerTestProfiles(results, len(jobs)), nil
 }
 
-func compileCoverageTestBinary(pkgPath, tmpDir string, extraTestFlags []string) (string, error) {
+// perTestJob is a work item for a per-test profiling worker.
+type perTestJob struct {
+	name       string
+	binaryPath string
+}
+
+// perTestResult carries the coverage profile produced by one worker.
+type perTestResult struct {
+	name string
+	prof *Profile
+}
+
+func compileCoverageTestBinary(pkgPath, coverPkg, tmpDir string, extraTestFlags []string) (string, error) {
 	binaryDir := filepath.Join(tmpDir, "per-test", strings.NewReplacer("/", "_", "\\", "_").Replace(pkgPath))
 	if err := os.MkdirAll(binaryDir, 0755); err != nil {
 		return "", err
 	}
 	binaryPath := filepath.Join(binaryDir, "tests")
-	compileArgs := []string{"test", "-c", "-cover", "-covermode=set", "-o", binaryPath}
+	compileArgs := []string{"test", "-c", "-cover", "-covermode=set", "-coverpkg=" + coverPkg, "-o", binaryPath}
 	compileArgs = append(compileArgs, extraTestFlags...)
 	compileArgs = append(compileArgs, pkgPath)
 	compile := exec.Command("go", compileArgs...)
@@ -340,14 +399,14 @@ func compileCoverageTestBinary(pkgPath, tmpDir string, extraTestFlags []string) 
 	return binaryPath, nil
 }
 
-func profileTests(testNames []string, workers int, binaryPath, modulePath, tmpDir string, timeout uint, binaryTestFlags []string) <-chan perTestResult {
-	jobs := make(chan perTestJob, len(testNames))
-	results := make(chan perTestResult, len(testNames))
+func profileTests(jobList []perTestJob, workers int, modulePath string, timeout uint, binaryTestFlags []string) <-chan perTestResult {
+	jobs := make(chan perTestJob, len(jobList))
+	results := make(chan perTestResult, len(jobList))
 	for i := 0; i < workers; i++ {
-		go runPerTestWorker(jobs, results, binaryPath, modulePath, tmpDir, timeout, binaryTestFlags)
+		go runPerTestWorker(jobs, results, modulePath, timeout, binaryTestFlags)
 	}
-	for _, name := range testNames {
-		jobs <- perTestJob{name: name}
+	for _, job := range jobList {
+		jobs <- job
 	}
 	close(jobs)
 	return results
@@ -359,16 +418,19 @@ func mergePerTestProfiles(results <-chan perTestResult, count int) *PerTestProfi
 		applyPerTestResult(p, <-results)
 	}
 	for _, lines := range p.data {
-		for line := range lines {
-			sort.Strings(lines[line])
+		for line, names := range lines {
+			sort.Strings(names)
+			lines[line] = slices.Compact(names)
 		}
 	}
 	return p
 }
 
-func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, binaryPath, modulePath, tmpDir string, timeout uint, binaryTestFlags []string) {
+// runPerTestWorker writes each test's profile beside its binary, so tests that
+// share a name across packages do not overwrite each other's profiles.
+func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, modulePath string, timeout uint, binaryTestFlags []string) {
 	for job := range jobs {
-		profDir := filepath.Join(tmpDir, "per-test", job.name)
+		profDir := filepath.Join(filepath.Dir(job.binaryPath), job.name)
 		_ = os.MkdirAll(profDir, 0755)
 		profPath := filepath.Join(profDir, "coverage.out")
 
@@ -377,7 +439,7 @@ func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, bina
 			"-test.run=^"+job.name+"$",
 			"-test.coverprofile="+profPath,
 			"-test.timeout="+fmt.Sprintf("%ds", timeout))
-		cmd := exec.Command(binaryPath, args...)
+		cmd := exec.Command(job.binaryPath, args...)
 		cmd.Env = os.Environ()
 		_ = cmd.Run() // test failures are expected; we only care about coverage
 

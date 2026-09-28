@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- With `--test-recursive`, `--per-test` now maps the tests of every subpackage too, built with `-coverpkg` for the target. Before, its `-run` filter left out subpackage tests, so a mutant that only a subpackage test catches escaped (#250).
+
 ## [v2.10.17] — 2026-09-28
 
 ### Added
