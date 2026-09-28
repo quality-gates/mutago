@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.17] — 2026-09-28
+
 ### Added
 - CLI exploratory testing report and evidence for coverage gates, per-test filtering, and changed-line runs.
 
@@ -635,7 +637,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.16...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.17...HEAD
+[v2.10.17]: https://github.com/quality-gates/mutago/compare/v2.10.16...v2.10.17
 [v2.6.7]: https://github.com/quality-gates/mutago/releases/tag/v2.6.7
 [v2.6.10]: https://github.com/quality-gates/mutago/compare/v2.6.9...v2.6.10
 [v2.6.11]: https://github.com/quality-gates/mutago/compare/v2.6.10...v2.6.11
