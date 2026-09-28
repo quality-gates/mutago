@@ -29,13 +29,8 @@ func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, 
 		return nil, mutatorInfo{}
 	}
 
-	var mutators []string
-	if mutatorList != "" {
-		mutators = parseMutators(mutatorList)
-	}
-
 	return re, mutatorInfo{
-		Names: mutators,
+		Names: namesOrAll(parseMutators(mutatorList)),
 	}
 }
 

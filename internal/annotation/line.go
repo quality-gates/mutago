@@ -10,13 +10,11 @@ import (
 func (l *LineAnnotation) parseLineAnnotation(comment string) mutatorInfo {
 	content := strings.TrimSpace(strings.TrimPrefix(comment, l.Name))
 	if content == "" {
-		return mutatorInfo{}
+		return allMutators()
 	}
 
-	mutators := parseMutators(content)
-
 	return mutatorInfo{
-		Names: mutators,
+		Names: namesOrAll(parseMutators(content)),
 	}
 }
 

@@ -123,7 +123,7 @@ func TestParseRegexAnnotation(t *testing.T) {
 				return re
 			}(),
 			expectedInfo: mutatorInfo{
-				Names: []string{},
+				Names: []string{"*"},
 			},
 		},
 		{
@@ -283,21 +283,21 @@ func TestParseLineAnnotation(t *testing.T) {
 			name:        "Empty comment",
 			commentText: "LineName ",
 			expectedInfo: mutatorInfo{
-				Names: []string{},
+				Names: []string{"*"},
 			},
 		},
 		{
 			name:        "Only spaces in mutators",
 			commentText: "LineName ,,,",
 			expectedInfo: mutatorInfo{
-				Names: []string{},
+				Names: []string{"*"},
 			},
 		},
 		{
 			name:        "Empty mutators",
 			commentText: "LineName",
 			expectedInfo: mutatorInfo{
-				Names: []string{},
+				Names: []string{"*"},
 			},
 		},
 	}
@@ -617,4 +617,66 @@ func TestCollectNextLineAnnotationUsesPhysicalLinesWithLineDirective(t *testing.
 			assert.True(t, processor.ShouldSkip(statement, "statement/remove"), "next-line annotation should target the following physical source line")
 		})
 	}
+}
+
+func collectAnnotationFixture(t *testing.T, src string) (*Processor, *ast.File) {
+	t.Helper()
+	tmp := filepath.Join(t.TempDir(), "sample.go")
+	if err := os.WriteFile(tmp, []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, tmp, src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processor := NewProcessor()
+	processor.Collect(file, fset, tmp)
+	return processor, file
+}
+
+func TestOmittedMutatorListDisablesEveryMutatorOnTargetLines(t *testing.T) {
+	const src = "package pkg\n\nfunc Add(a, b int) int {\n\t// mutator-disable-next-line\n\tc := a + 1\n\treturn c + b\n}\n"
+	processor, file := collectAnnotationFixture(t, src)
+	fn := file.Decls[0].(*ast.FuncDecl)
+	assign := fn.Body.List[0].(*ast.AssignStmt)
+	add := assign.Rhs[0].(*ast.BinaryExpr)
+	one := add.Y
+	ret := fn.Body.List[1].(*ast.ReturnStmt)
+	laterAdd := ret.Results[0].(*ast.BinaryExpr)
+
+	for _, mutatorName := range []string{"arithmetic/base", "numbers/incrementer", "numbers/decrementer", "statement/remove"} {
+		assert.True(t, processor.ShouldSkip(assign, mutatorName), "bare next-line should suppress %s on the following line", mutatorName)
+		assert.True(t, processor.ShouldSkip(add, mutatorName), "bare next-line should suppress %s on the following line's expression", mutatorName)
+		assert.True(t, processor.ShouldSkip(one, mutatorName), "bare next-line should suppress %s on the following line's literal", mutatorName)
+		assert.True(t, HandleBlockStmt(assign, mutatorName), "bare next-line should suppress %s via the statement filter", mutatorName)
+		assert.False(t, processor.ShouldSkip(laterAdd, mutatorName), "bare next-line must not suppress %s on a later line", mutatorName)
+		assert.False(t, HandleBlockStmt(ret, mutatorName), "bare next-line must not suppress %s on a later statement", mutatorName)
+	}
+}
+
+func TestPatternOnlyRegexDisablesEveryMutatorOnMatchingLines(t *testing.T) {
+	const src = "package pkg\n\n// mutator-disable-regexp Mutated\nfunc Add(a, b int) int {\n\tc := a + 1 // Mutated\n\treturn c + b\n}\n"
+	processor, file := collectAnnotationFixture(t, src)
+	fn := file.Decls[0].(*ast.FuncDecl)
+	assign := fn.Body.List[0].(*ast.AssignStmt)
+	add := assign.Rhs[0].(*ast.BinaryExpr)
+	ret := fn.Body.List[1].(*ast.ReturnStmt)
+	laterAdd := ret.Results[0].(*ast.BinaryExpr)
+
+	for _, mutatorName := range []string{"arithmetic/base", "numbers/incrementer", "statement/return"} {
+		assert.True(t, processor.ShouldSkip(add, mutatorName), "pattern-only regex should suppress %s on a matching line", mutatorName)
+		assert.True(t, HandleBlockStmt(assign, mutatorName), "pattern-only regex should suppress %s via the statement filter", mutatorName)
+		assert.False(t, processor.ShouldSkip(laterAdd, mutatorName), "pattern-only regex must not suppress %s on a non-matching line", mutatorName)
+	}
+}
+
+func TestExplicitMutatorListStaysSelectiveWhenListIsPresent(t *testing.T) {
+	const src = "package pkg\n\nfunc Add(a, b int) int {\n\t// mutator-disable-next-line arithmetic/base\n\tc := a + 1\n\treturn c + b\n}\n"
+	processor, file := collectAnnotationFixture(t, src)
+	fn := file.Decls[0].(*ast.FuncDecl)
+	add := fn.Body.List[0].(*ast.AssignStmt).Rhs[0].(*ast.BinaryExpr)
+
+	assert.True(t, processor.ShouldSkip(add, "arithmetic/base"))
+	assert.False(t, processor.ShouldSkip(add, "numbers/incrementer"))
 }

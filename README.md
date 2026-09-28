@@ -512,9 +512,12 @@ func CalculateDiscount(price float64) float64 {
 }
 ```
 
-2. `// mutator-disable-next-line <mutator1>, <mutator2>` — disables mutations on the next line. Use `*` for all mutators.
+2. `// mutator-disable-next-line <mutator1>, <mutator2>` — disables mutations on the next line. Omit the list, or use `*`, to disable every mutator.
 
 ```go
+// mutator-disable-next-line
+x = 42
+
 // mutator-disable-next-line *
 x = 42
 
@@ -524,12 +527,13 @@ if x > 0 {
 }
 ```
 
-3. `// mutator-disable-regexp <pattern> <mutator1>, <mutator2>` — disables mutations on any line in the file matching the regex. Use `*` for all mutators.
+3. `// mutator-disable-regexp <pattern> <mutator1>, <mutator2>` — disables mutations on any line in the file matching the regex. Omit the mutator list, or use `*`, to disable every mutator. A pattern-only annotation is `// mutator-disable-regexp <pattern>`.
 
 ```go
 s := MyStruct{name: "Go"}
 s.Method()
 
+// mutator-disable-regexp s\.Method\(\)
 // mutator-disable-regexp s\.Method\(\) *
 ```
 
