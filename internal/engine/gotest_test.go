@@ -49,7 +49,32 @@ func TestGoTestInvocationArgs(t *testing.T) {
 			want: []string{"test", "-overlay=o.json", "-timeout", "5s", "-vet=atomic", "-failfast=false", "-run", "^(TestA)$", pkg + "/..."},
 		},
 		{
-			name: "run filter is only applied to mutant runs",
+			name: "baseline with user flags",
+			inv:  goTestInvocation{kind: baselineRun, target: pkg, timeoutSeconds: 10, testFlags: []string{"-short"}},
+			want: []string{"test", "-timeout", "10s", "-short", "-vet=off", pkg},
+		},
+		{
+			name: "coverage recursive with user flags",
+			inv:  goTestInvocation{kind: coverageRun, target: pkg, recursive: true, timeoutSeconds: 20, profilePath: "/tmp/c.out", testFlags: []string{"-short"}},
+			want: []string{"test", "-coverprofile=/tmp/c.out", "-coverpkg=" + pkg, "-timeout", "20s", "-short", "-vet=off", pkg + "/..."},
+		},
+		{
+			name: "mutant recursive",
+			inv:  goTestInvocation{kind: mutantRun, target: pkg, recursive: true, timeoutSeconds: 5, overlay: "o.json"},
+			want: []string{"test", "-overlay=o.json", "-timeout", "5s", "-vet=off", "-failfast", pkg + "/..."},
+		},
+		{
+			name: "mutant with run filter",
+			inv:  goTestInvocation{kind: mutantRun, target: pkg, timeoutSeconds: 5, overlay: "o.json", runFilter: "^(TestA)$"},
+			want: []string{"test", "-overlay=o.json", "-timeout", "5s", "-vet=off", "-failfast", "-run", "^(TestA)$", pkg},
+		},
+		{
+			name: "run filter is ignored for coverage runs",
+			inv:  goTestInvocation{kind: coverageRun, target: pkg, timeoutSeconds: 20, profilePath: "/tmp/c.out", runFilter: "^(TestA)$"},
+			want: []string{"test", "-coverprofile=/tmp/c.out", "-timeout", "20s", "-vet=off", pkg},
+		},
+		{
+			name: "run filter is ignored for baseline runs",
 			inv:  goTestInvocation{kind: baselineRun, target: pkg, timeoutSeconds: 10, runFilter: "^(TestA)$"},
 			want: []string{"test", "-timeout", "10s", "-vet=off", pkg},
 		},

@@ -871,7 +871,7 @@ func buildCoverageProfile(opts *models.Options, pkgPath string, tmpDir string, m
 		testFlags:      coverageTestFlags,
 		profilePath:    profilePath,
 	}
-	if err := runCoverageProfile(pkgPath, profilePath, inv.args()); err != nil {
+	if err := runCoverageProfile(inv); err != nil {
 		return nil, time.Since(start), err
 	}
 	elapsed := time.Since(start)
@@ -927,15 +927,15 @@ func testCountValue(testFlags []string, index int) (string, bool) {
 	return testFlags[index+1], true
 }
 
-func runCoverageProfile(pkg, profilePath string, args []string) error {
-	cmd := exec.Command("go", args...)
+func runCoverageProfile(inv goTestInvocation) error {
+	cmd := exec.Command("go", inv.args()...)
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("coverage test failed for %q: %w\n%s", pkg, err, out)
+		return fmt.Errorf("coverage test failed for %q: %w\n%s", inv.target, err, out)
 	}
-	if _, err := os.Stat(profilePath); err != nil {
-		return fmt.Errorf("coverage profile not created for %q", pkg)
+	if _, err := os.Stat(inv.profilePath); err != nil {
+		return fmt.Errorf("coverage profile not created for %q", inv.target)
 	}
 	return nil
 }
