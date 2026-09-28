@@ -711,3 +711,55 @@ func TestBuildPerTestProfile_SingleTestPackage(t *testing.T) {
 	}
 	assert.True(t, found, "profile must contain coverage data for mutator.go")
 }
+
+// writeRecursiveModule writes a module whose root package is checked only by a
+// subpackage test, and makes it the working directory.
+func writeRecursiveModule(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":      "module example.com/rec\n\ngo 1.22\n",
+		"rec.go":      "package rec\n\nfunc Double(x int) int {\n\treturn x * 2\n}\n",
+		"rec_test.go": "package rec\n\nimport \"testing\"\n\nfunc TestTouch(t *testing.T) { _ = Double(1) }\n",
+		"sub/sub.go":  "package sub\n",
+		"sub/sub_test.go": "package sub\n\nimport (\n\t\"testing\"\n\n\t\"example.com/rec\"\n)\n\n" +
+			"func TestDouble(t *testing.T) {\n\tif rec.Double(3) != 6 {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n\n" +
+			"func TestTouch(t *testing.T) { _ = rec.Double(2) }\n",
+		"notests/notests.go": "package notests\n",
+	}
+	for name, content := range files {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	}
+	t.Chdir(dir)
+}
+
+func TestListTestPackages(t *testing.T) {
+	writeRecursiveModule(t)
+
+	flat, err := ListTestPackages("example.com/rec", false)
+	require.NoError(t, err)
+	assert.Equal(t, []TestPackage{{ImportPath: "example.com/rec", Tests: []string{"TestTouch"}}}, flat)
+
+	tree, err := ListTestPackages("example.com/rec", true)
+	require.NoError(t, err)
+	assert.Equal(t, []TestPackage{
+		{ImportPath: "example.com/rec", Tests: []string{"TestTouch"}},
+		{ImportPath: "example.com/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
+	}, tree, "packages without tests are left out")
+}
+
+func TestBuildRecursivePerTestProfile_AttributesSubpackageTests(t *testing.T) {
+	writeRecursiveModule(t)
+	pkgs := []TestPackage{
+		{ImportPath: "example.com/rec", Tests: []string{"TestTouch"}},
+		{ImportPath: "example.com/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
+	}
+
+	prof, err := BuildPerTestProfileForPackages("example.com/rec", true, pkgs, "example.com/rec", t.TempDir(), 30, 1, nil)
+	require.NoError(t, err)
+	require.NotNil(t, prof)
+	assert.Equal(t, []string{"TestDouble", "TestTouch"}, prof.CoveringTestsRelative("rec.go", 4),
+		"subpackage tests cover the target, and a name shared across packages is listed once")
+}

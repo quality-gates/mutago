@@ -940,19 +940,26 @@ func runCoverageProfile(inv goTestInvocation) error {
 	return nil
 }
 
+// buildPerTestCoverageProfile maps each line of pkgPath to the tests that cover
+// it. With --test-recursive the tests of every subpackage are profiled too, so
+// the -run filter keeps them eligible just as the recursive mutant run does.
 func buildPerTestCoverageProfile(stdout io.Writer, opts *models.Options, pkgPath string, modulePath string, tmpDir string, numWorkers int, extraTestFlags []string) *coverage.PerTestProfile {
 	if pkgPath == "" {
 		return nil
 	}
-	testNames, err := coverage.ListTests(pkgPath)
+	pkgs, err := coverage.ListTestPackages(pkgPath, opts.Test.Recursive)
 	if err != nil {
 		console.Verbose(opts, "Per-test coverage unavailable for %q: %v", pkgPath, err)
 		return nil
 	}
-	if len(testNames) > 0 {
-		fmt.Fprintf(stdout, "Building per-test coverage map for %q (%d tests)...\n", pkgPath, len(testNames))
+	testCount := 0
+	for _, pkg := range pkgs {
+		testCount += len(pkg.Tests)
 	}
-	prof, err := coverage.BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir, opts.Exec.Timeout, numWorkers, extraTestFlags, testNames)
+	if testCount > 0 {
+		fmt.Fprintf(stdout, "Building per-test coverage map for %q (%d tests)...\n", pkgPath, testCount)
+	}
+	prof, err := coverage.BuildPerTestProfileForPackages(pkgPath, opts.Test.Recursive, pkgs, modulePath, tmpDir, opts.Exec.Timeout, numWorkers, extraTestFlags)
 	if err != nil {
 		console.Verbose(opts, "Per-test coverage unavailable for %q: %v", pkgPath, err)
 		return nil
