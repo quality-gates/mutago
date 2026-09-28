@@ -712,20 +712,23 @@ func TestBuildPerTestProfile_SingleTestPackage(t *testing.T) {
 	assert.True(t, found, "profile must contain coverage data for mutator.go")
 }
 
-// writeRecursiveModule writes a module whose root package is checked only by a
-// subpackage test, and makes it the working directory.
+// writeRecursiveModule writes a module whose rec package is checked only by a
+// subpackage test, plus a directory go list rejects, and makes it the
+// working directory.
 func writeRecursiveModule(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		"go.mod":      "module example.com/rec\n\ngo 1.22\n",
-		"rec.go":      "package rec\n\nfunc Double(x int) int {\n\treturn x * 2\n}\n",
-		"rec_test.go": "package rec\n\nimport \"testing\"\n\nfunc TestTouch(t *testing.T) { _ = Double(1) }\n",
-		"sub/sub.go":  "package sub\n",
-		"sub/sub_test.go": "package sub\n\nimport (\n\t\"testing\"\n\n\t\"example.com/rec\"\n)\n\n" +
+		"go.mod":          "module example.com/m\n\ngo 1.22\n",
+		"rec/rec.go":      "package rec\n\nfunc Double(x int) int {\n\treturn x * 2\n}\n",
+		"rec/rec_test.go": "package rec\n\nimport \"testing\"\n\nfunc TestTouch(t *testing.T) { _ = Double(1) }\n",
+		"rec/sub/sub.go":  "package sub\n",
+		"rec/sub/sub_test.go": "package sub\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/rec\"\n)\n\n" +
 			"func TestDouble(t *testing.T) {\n\tif rec.Double(3) != 6 {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n\n" +
 			"func TestTouch(t *testing.T) { _ = rec.Double(2) }\n",
-		"notests/notests.go": "package notests\n",
+		"rec/notests/notests.go": "package notests\n",
+		"broken/a.go":            "package a\n",
+		"broken/b.go":            "package b\n",
 	}
 	for name, content := range files {
 		path := filepath.Join(dir, filepath.FromSlash(name))
@@ -738,28 +741,44 @@ func writeRecursiveModule(t *testing.T) {
 func TestListTestPackages(t *testing.T) {
 	writeRecursiveModule(t)
 
-	flat, err := ListTestPackages("example.com/rec", false)
+	flat, err := ListTestPackages("example.com/m/rec", false)
 	require.NoError(t, err)
-	assert.Equal(t, []TestPackage{{ImportPath: "example.com/rec", Tests: []string{"TestTouch"}}}, flat)
+	assert.Equal(t, []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}}}, flat)
 
-	tree, err := ListTestPackages("example.com/rec", true)
+	tree, err := ListTestPackages("example.com/m/rec", true)
 	require.NoError(t, err)
 	assert.Equal(t, []TestPackage{
-		{ImportPath: "example.com/rec", Tests: []string{"TestTouch"}},
-		{ImportPath: "example.com/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
+		{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}},
+		{ImportPath: "example.com/m/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
 	}, tree, "packages without tests are left out")
+
+	_, err = ListTestPackages("example.com/m/broken", true)
+	assert.Error(t, err, "a package tree that go list rejects")
+	_, err = ListTestPackages("example.com/m/nope", false)
+	assert.Error(t, err, "a package whose tests cannot be listed")
 }
 
-func TestBuildRecursivePerTestProfile_AttributesSubpackageTests(t *testing.T) {
+func TestBuildPerTestProfileForPackages_AttributesSubpackageTests(t *testing.T) {
 	writeRecursiveModule(t)
 	pkgs := []TestPackage{
-		{ImportPath: "example.com/rec", Tests: []string{"TestTouch"}},
-		{ImportPath: "example.com/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
+		{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}},
+		{ImportPath: "example.com/m/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
 	}
 
-	prof, err := BuildPerTestProfileForPackages("example.com/rec", true, pkgs, "example.com/rec", t.TempDir(), 30, 1, nil)
+	prof, err := BuildPerTestProfileForPackages("example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 30, 1, nil)
 	require.NoError(t, err)
 	require.NotNil(t, prof)
-	assert.Equal(t, []string{"TestDouble", "TestTouch"}, prof.CoveringTestsRelative("rec.go", 4),
+	assert.Equal(t, []string{"TestDouble", "TestTouch"}, prof.CoveringTestsRelative("rec/rec.go", 4),
 		"subpackage tests cover the target, and a name shared across packages is listed once")
+}
+
+func TestBuildPerTestProfile_NoTests(t *testing.T) {
+	tmp := filepath.Join(t.TempDir(), "never-created")
+	prof, err := BuildPerTestProfileForPackages("example.com/m/rec", nil, "example.com/m", tmp, 30, 1, nil)
+	assert.NoError(t, err)
+	assert.Nil(t, prof)
+	prof, err = BuildPerTestProfileForTests("example.com/m/rec", "example.com/m", tmp, 30, 1, nil, nil)
+	assert.NoError(t, err)
+	assert.Nil(t, prof)
+	assert.NoDirExists(t, tmp, "nothing is compiled when there are no tests")
 }

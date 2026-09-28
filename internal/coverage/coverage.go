@@ -338,34 +338,30 @@ func BuildPerTestProfile(pkgPath, modulePath, tmpDir string, timeout uint, worke
 // BuildPerTestProfileForTests builds a profile from an already-discovered test
 // list, avoiding a second go test -list invocation in callers that show counts.
 func BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags, testNames []string) (*PerTestProfile, error) {
+	if len(testNames) == 0 {
+		return nil, nil
+	}
 	pkgs := []TestPackage{{ImportPath: pkgPath, Tests: testNames}}
-	return BuildPerTestProfileForPackages(pkgPath, false, pkgs, modulePath, tmpDir, timeout, workers, extraTestFlags)
+	return BuildPerTestProfileForPackages(pkgPath, pkgs, modulePath, tmpDir, timeout, workers, extraTestFlags)
 }
 
 // BuildPerTestProfileForPackages builds one profile from the tests of every
-// package in pkgs, as listed by ListTestPackages. With recursive, each test
-// binary is built with -coverpkg=pkgPath so subpackage tests are credited
-// with the target lines they cover.
-func BuildPerTestProfileForPackages(pkgPath string, recursive bool, pkgs []TestPackage, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags []string) (*PerTestProfile, error) {
+// package in pkgs, as listed by ListTestPackages. Each test binary is built
+// with -coverpkg=pkgPath, so tests in subpackages are credited with the
+// pkgPath lines they cover.
+func BuildPerTestProfileForPackages(pkgPath string, pkgs []TestPackage, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags []string) (*PerTestProfile, error) {
+	if len(pkgs) == 0 {
+		return nil, nil
+	}
 	var jobs []perTestJob
 	for _, pkg := range pkgs {
-		if len(pkg.Tests) == 0 {
-			continue
-		}
-		coverPkg := ""
-		if recursive {
-			coverPkg = pkgPath
-		}
-		binaryPath, err := compileCoverageTestBinary(pkg.ImportPath, coverPkg, tmpDir, extraTestFlags)
+		binaryPath, err := compileCoverageTestBinary(pkg.ImportPath, pkgPath, tmpDir, extraTestFlags)
 		if err != nil {
 			return nil, err
 		}
 		for _, name := range pkg.Tests {
 			jobs = append(jobs, perTestJob{name: name, binaryPath: binaryPath})
 		}
-	}
-	if len(jobs) == 0 {
-		return nil, nil
 	}
 	if workers <= 0 {
 		workers = 1
@@ -392,10 +388,7 @@ func compileCoverageTestBinary(pkgPath, coverPkg, tmpDir string, extraTestFlags 
 		return "", err
 	}
 	binaryPath := filepath.Join(binaryDir, "tests")
-	compileArgs := []string{"test", "-c", "-cover", "-covermode=set", "-o", binaryPath}
-	if coverPkg != "" {
-		compileArgs = append(compileArgs, "-coverpkg="+coverPkg)
-	}
+	compileArgs := []string{"test", "-c", "-cover", "-covermode=set", "-coverpkg=" + coverPkg, "-o", binaryPath}
 	compileArgs = append(compileArgs, extraTestFlags...)
 	compileArgs = append(compileArgs, pkgPath)
 	compile := exec.Command("go", compileArgs...)

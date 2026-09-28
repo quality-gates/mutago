@@ -959,7 +959,7 @@ func buildPerTestCoverageProfile(stdout io.Writer, opts *models.Options, pkgPath
 	if testCount > 0 {
 		fmt.Fprintf(stdout, "Building per-test coverage map for %q (%d tests)...\n", pkgPath, testCount)
 	}
-	prof, err := coverage.BuildPerTestProfileForPackages(pkgPath, opts.Test.Recursive, pkgs, modulePath, tmpDir, opts.Exec.Timeout, numWorkers, extraTestFlags)
+	prof, err := coverage.BuildPerTestProfileForPackages(pkgPath, pkgs, modulePath, tmpDir, opts.Exec.Timeout, numWorkers, extraTestFlags)
 	if err != nil {
 		console.Verbose(opts, "Per-test coverage unavailable for %q: %v", pkgPath, err)
 		return nil
