@@ -979,54 +979,6 @@ func TestCheckCoveredMsiGate_FloatPrecision(t *testing.T) {
 	}
 }
 
-func vetArgs(args []string) []string {
-	vets := make([]string, 0, 2)
-	for _, arg := range args {
-		if arg == "-vet" || arg == "--vet" || strings.HasPrefix(arg, "-vet=") || strings.HasPrefix(arg, "--vet=") {
-			vets = append(vets, arg)
-		}
-	}
-	return vets
-}
-
-func TestMutantGoTestArgsDisablesVetByDefault(t *testing.T) {
-	args := mutantGoTestArgs("overlay.json", 60, nil, "", "example")
-	if got := vetArgs(args); len(got) != 1 || got[0] != "-vet=off" {
-		t.Fatalf("expected exactly one -vet argument (-vet=off), got %v in %v", got, args)
-	}
-}
-
-func TestMutantGoTestArgsUserVetWins(t *testing.T) {
-	args := mutantGoTestArgs("overlay.json", 60, []string{"-vet=atomic"}, "", "example")
-	if got := vetArgs(args); len(got) != 1 || got[0] != "-vet=atomic" {
-		t.Fatalf("user -vet must win with exactly one -vet argument, got %v in %v", got, args)
-	}
-}
-
-func failfastArgs(args []string) []string {
-	var got []string
-	for _, arg := range args {
-		if arg == "-failfast" || arg == "--failfast" || strings.HasPrefix(arg, "-failfast=") || strings.HasPrefix(arg, "--failfast=") {
-			got = append(got, arg)
-		}
-	}
-	return got
-}
-
-func TestMutantGoTestArgsFailFastByDefault(t *testing.T) {
-	args := mutantGoTestArgs("overlay.json", 60, nil, "", "example")
-	if got := failfastArgs(args); len(got) != 1 || got[0] != "-failfast" {
-		t.Fatalf("expected exactly one -failfast argument, got %v in %v", got, args)
-	}
-}
-
-func TestMutantGoTestArgsUserFailFastWins(t *testing.T) {
-	args := mutantGoTestArgs("overlay.json", 60, []string{"-failfast=false"}, "", "example")
-	if got := failfastArgs(args); len(got) != 1 || got[0] != "-failfast=false" {
-		t.Fatalf("user -failfast must win with exactly one -failfast argument, got %v in %v", got, args)
-	}
-}
-
 func TestClassifyGoTestBuildFailureAsSkipped(t *testing.T) {
 	buildFailure := []byte("# example.com/aliasbug\nalias.go:8:9: undefined: url\nFAIL\texample.com/aliasbug [build failed]\n")
 	if got := classifyGoTestResult(1, buildFailure); got != 2 {

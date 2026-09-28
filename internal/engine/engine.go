@@ -88,6 +88,7 @@ type execConfig struct {
 	numWorkers     int
 	execs          []string
 	extraTestFlags []string
+	importPaths    *importPaths
 }
 
 type mutationRun struct {
@@ -193,7 +194,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	defer cleanup()
 
 	report := run.report
-	if exitCode := runBaselineChecks(runEngine.Stderr, opts, pkgs, run.exec.execs, run.exec.extraTestFlags); exitCode != 0 {
+	if exitCode := runBaselineChecks(runEngine.Stderr, opts, pkgs, run.exec.importPaths, run.exec.execs, run.exec.extraTestFlags); exitCode != 0 {
 		return Result{Report: report, ExitCode: exitCode}, nil
 	}
 
@@ -324,6 +325,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 			numWorkers:     numWorkers,
 			execs:          execs,
 			extraTestFlags: extraTestFlags,
+			importPaths:    newImportPaths(),
 		},
 		report:           report,
 		mu:               &reportMu,
@@ -477,7 +479,7 @@ func mutateAll(r *mutationRun, pkgs []importing.Package, coverageProfiles []*cov
 
 func configureAdaptiveTimeoutAndCoverage(opts *models.Options, pkgs []importing.Package, run *mutationRun) ([]*coverage.Profile, error) {
 	if opts.Exec.Coverage && !opts.Exec.NoExec && !opts.General.DryRun {
-		profiles, maxBaseline, err := prepareCoverageProfiles(opts, pkgs, run.tmpDir, run.modulePath, run.exec.extraTestFlags, run.report)
+		profiles, maxBaseline, err := prepareCoverageProfiles(opts, pkgs, run.exec.importPaths, run.tmpDir, run.modulePath, run.exec.extraTestFlags, run.report)
 		if err != nil {
 			return nil, err
 		}
@@ -489,11 +491,11 @@ func configureAdaptiveTimeoutAndCoverage(opts *models.Options, pkgs []importing.
 	return nil, nil
 }
 
-func prepareCoverageProfiles(opts *models.Options, pkgs []importing.Package, tmpDir string, modulePath string, extraTestFlags []string, report *models.Report) ([]*coverage.Profile, time.Duration, error) {
+func prepareCoverageProfiles(opts *models.Options, pkgs []importing.Package, paths *importPaths, tmpDir string, modulePath string, extraTestFlags []string, report *models.Report) ([]*coverage.Profile, time.Duration, error) {
 	profiles := make([]*coverage.Profile, len(pkgs))
 	var maxBaseline time.Duration
 	for i, importPkg := range pkgs {
-		profile, elapsed, err := buildCoverageProfile(opts, importPkg.Files, tmpDir, modulePath, extraTestFlags)
+		profile, elapsed, err := buildCoverageProfile(opts, paths.forFiles(importPkg.Files), tmpDir, modulePath, extraTestFlags)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -512,7 +514,7 @@ func perTestForPackage(r *mutationRun, importPkg importing.Package) *coverage.Pe
 	if !r.opts.Exec.PerTest || r.opts.Exec.NoExec || r.opts.General.DryRun || len(r.exec.execs) != 0 {
 		return nil
 	}
-	return buildPerTestCoverageProfile(r.stdout, r.opts, importPkg.Files, r.modulePath, r.tmpDir, r.exec.numWorkers, r.exec.extraTestFlags)
+	return buildPerTestCoverageProfile(r.stdout, r.opts, r.exec.importPaths.forFiles(importPkg.Files), r.modulePath, r.tmpDir, r.exec.numWorkers, r.exec.extraTestFlags)
 }
 
 func processFile(r *mutationRun, file string, coverProfile *coverage.Profile, perTestProf *coverage.PerTestProfile, dryRunMutatorTotals map[string]int) (int, int) {
@@ -785,7 +787,7 @@ func skipBaselineChecks(opts *models.Options, execs []string) bool {
 	return opts.Exec.Coverage || opts.Exec.NoExec || opts.General.DryRun || len(execs) > 0
 }
 
-func runBaselineChecks(stderr io.Writer, opts *models.Options, pkgs []importing.Package, execs []string, extraTestFlags []string) int {
+func runBaselineChecks(stderr io.Writer, opts *models.Options, pkgs []importing.Package, paths *importPaths, execs []string, extraTestFlags []string) int {
 	if skipBaselineChecks(opts, execs) {
 		return 0 // returnOk
 	}
@@ -798,14 +800,18 @@ func runBaselineChecks(stderr io.Writer, opts *models.Options, pkgs []importing.
 	}
 	var maxBaseline time.Duration
 	for _, importPkg := range pkgs {
-		pkgPath := packageImportPath(importPkg.Files)
+		pkgPath := paths.forFiles(importPkg.Files)
 		if pkgPath == "" {
 			continue
 		}
-		args := []string{"test", "-timeout", fmt.Sprintf("%ds", timeout)}
-		args = append(args, flags...)
-		args = append(args, pkgPath)
-		cmd := exec.Command("go", args...)
+		inv := goTestInvocation{
+			kind:           baselineRun,
+			target:         pkgPath,
+			recursive:      opts.Test.Recursive,
+			timeoutSeconds: timeout,
+			testFlags:      flags,
+		}
+		cmd := exec.Command("go", inv.args()...)
 		cmd.Env = os.Environ()
 		start := time.Now()
 		out, err := cmd.CombinedOutput()
@@ -825,24 +831,6 @@ func runBaselineChecks(stderr io.Writer, opts *models.Options, pkgs []importing.
 	return 0 // returnOk
 }
 
-func packageImportPath(files []string) string {
-	if len(files) == 0 {
-		return ""
-	}
-	f, err := filepath.Abs(files[0])
-	if err != nil {
-		return ""
-	}
-	dir := filepath.Dir(f)
-	cmd := exec.Command("go", "list", dir)
-	cmd.Env = os.Environ()
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func applyAdaptiveTimeoutFromBaseline(opts *models.Options, baseline time.Duration) {
 	if opts.Exec.TimeoutCoefficient <= 0 || baseline <= 0 {
 		return
@@ -856,11 +844,10 @@ func applyAdaptiveTimeoutFromBaseline(opts *models.Options, baseline time.Durati
 		baseline.Seconds(), opts.Exec.TimeoutCoefficient, derived)
 }
 
-func buildCoverageProfile(opts *models.Options, pkgFiles []string, tmpDir string, modulePath string, extraTestFlags []string) (*coverage.Profile, time.Duration, error) {
+func buildCoverageProfile(opts *models.Options, pkgPath string, tmpDir string, modulePath string, extraTestFlags []string) (*coverage.Profile, time.Duration, error) {
 	if opts.Exec.NoExec || !opts.Exec.Coverage {
 		return nil, 0, nil
 	}
-	pkgPath := packageImportPath(pkgFiles)
 	if pkgPath == "" {
 		return nil, 0, fmt.Errorf("cannot determine package path for coverage")
 	}
@@ -876,7 +863,15 @@ func buildCoverageProfile(opts *models.Options, pkgFiles []string, tmpDir string
 		timeout = adaptiveBaselineTimeoutSeconds
 	}
 	start := time.Now()
-	if err := runCoverageProfile(pkgPath, profilePath, timeout, coverageTestFlags); err != nil {
+	inv := goTestInvocation{
+		kind:           coverageRun,
+		target:         pkgPath,
+		recursive:      opts.Test.Recursive,
+		timeoutSeconds: timeout,
+		testFlags:      coverageTestFlags,
+		profilePath:    profilePath,
+	}
+	if err := runCoverageProfile(inv); err != nil {
 		return nil, time.Since(start), err
 	}
 	elapsed := time.Since(start)
@@ -932,24 +927,20 @@ func testCountValue(testFlags []string, index int) (string, bool) {
 	return testFlags[index+1], true
 }
 
-func runCoverageProfile(pkg, profilePath string, timeoutSeconds uint, extraTestFlags []string) error {
-	args := []string{"test", "-coverprofile=" + profilePath, "-timeout", fmt.Sprintf("%ds", timeoutSeconds)}
-	args = append(args, extraTestFlags...)
-	args = append(args, pkg)
-	cmd := exec.Command("go", args...)
+func runCoverageProfile(inv goTestInvocation) error {
+	cmd := exec.Command("go", inv.args()...)
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("coverage test failed for %q: %w\n%s", pkg, err, out)
+		return fmt.Errorf("coverage test failed for %q: %w\n%s", inv.target, err, out)
 	}
-	if _, err := os.Stat(profilePath); err != nil {
-		return fmt.Errorf("coverage profile not created for %q", pkg)
+	if _, err := os.Stat(inv.profilePath); err != nil {
+		return fmt.Errorf("coverage profile not created for %q", inv.target)
 	}
 	return nil
 }
 
-func buildPerTestCoverageProfile(stdout io.Writer, opts *models.Options, pkgFiles []string, modulePath string, tmpDir string, numWorkers int, extraTestFlags []string) *coverage.PerTestProfile {
-	pkgPath := packageImportPath(pkgFiles)
+func buildPerTestCoverageProfile(stdout io.Writer, opts *models.Options, pkgPath string, modulePath string, tmpDir string, numWorkers int, extraTestFlags []string) *coverage.PerTestProfile {
 	if pkgPath == "" {
 		return nil
 	}
@@ -1562,62 +1553,22 @@ func prepareOverlay(stderr io.Writer, tmpDir, file, mutationFile string) (string
 	return overlayName, 0
 }
 
-// mutantGoTestArgs assembles the `go test` argument list for a mutant run.
-// Mutants are not meant to be lint-clean, so `go vet` is disabled by default
-// (see #106): `go test` runs a vet subset that exits 1 on any diagnostic, and
-// mapTestExitToResult would count such a mutant as KILLED even though no test
-// failed. An explicit -vet in the user's extra test flags wins.
-// -failfast is on by default: one failing test is enough to kill a mutant, so
-// the rest of the suite need not run. An explicit -failfast in the user's
-// extra test flags wins.
-func mutantGoTestArgs(overlayName string, timeoutSeconds uint, extraTestFlags []string, runFilter, pkgName string) []string {
-	args := []string{"test", "-overlay=" + overlayName, "-timeout", fmt.Sprintf("%ds", timeoutSeconds)}
-	args = append(args, extraTestFlags...)
-	if !hasVetFlag(extraTestFlags) {
-		args = append(args, "-vet=off")
-	}
-	if !hasTestFlag(extraTestFlags, "failfast") {
-		args = append(args, "-failfast")
-	}
-	if runFilter != "" {
-		args = append(args, "-run", runFilter)
-	}
-	args = append(args, pkgName)
-	return args
-}
-
-func hasVetFlag(testFlags []string) bool {
-	for _, flag := range testFlags {
-		if flag == "-vet" || flag == "--vet" || strings.HasPrefix(flag, "-vet=") || strings.HasPrefix(flag, "--vet=") {
-			return true
-		}
-	}
-	return false
-}
-
-func hasTestFlag(testFlags []string, name string) bool {
-	for _, flag := range testFlags {
-		trimmed := strings.TrimPrefix(strings.TrimPrefix(flag, "-"), "-")
-		if trimmed == name || strings.HasPrefix(trimmed, name+"=") {
-			return true
-		}
-	}
-	return false
-}
-
 func runGoTest(job execJob, overlayName string, startLine int) int {
 	ctx, opts := job.ctx, job.opts
-	pkgName := job.pkg.Path()
-	if opts.Test.Recursive {
-		pkgName += "/..."
+	inv := goTestInvocation{
+		kind:           mutantRun,
+		target:         job.pkg.Path(),
+		recursive:      opts.Test.Recursive,
+		timeoutSeconds: opts.Exec.Timeout,
+		testFlags:      job.extraTestFlags,
+		overlay:        overlayName,
+		runFilter:      perTestRunFilter(job.perTestProf, job.source.absFile, startLine),
 	}
-
-	runFilter := perTestRunFilter(job.perTestProf, job.source.absFile, startLine)
 
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	goTestCmd := exec.CommandContext(ctx, "go", mutantGoTestArgs(overlayName, opts.Exec.Timeout, job.extraTestFlags, runFilter, pkgName)...)
+	goTestCmd := exec.CommandContext(ctx, "go", inv.args()...)
 	goTestCmd.Env = os.Environ()
 	test, err := goTestCmd.CombinedOutput()
 
