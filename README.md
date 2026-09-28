@@ -101,7 +101,7 @@ Beyond finding escaped mutants, mutago can enforce quality gates in CI — faili
 | Compact stats JSON for badges/dashboards | `--logger-summary-json` |
 | Per-mutator allowlist / denylist in config | `enable_mutators`, `disable_mutators` |
 | Extra flags for every `go test` call | `--test-flags` |
-| Vet disabled for mutant runs (`-vet=off`) | `--test-flags=-vet=all` to re-enable |
+| Vet disabled for built-in `go test` runs (`-vet=off`) | `--test-flags=-vet=all` to re-enable |
 | Mutant runs stop at the first failing test (`-failfast`) | `--test-flags=-failfast=false` to run every test |
 | Fine-grained output filter | `--output-statuses` |
 | Quiet mode — suppress killed/skip noise | `--quiet` |

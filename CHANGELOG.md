@@ -12,8 +12,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ### Fixed
 - Clean up test-generated temporary source files (`*.tmp`) and restore in-place mutated sources after integration test runs, preventing leftover untracked files such as `example/sub/sub.go.tmp` (#241).
 - Mutant IDs no longer depend on how a file target is spelled. `./a/b.go`, `a/b.go`, an absolute path, a package target, and `b.go` run from inside `a/` now give the same ID, so baseline matching, `--run-mutant-id`, the agentic and GitLab reports, and GitHub annotations all agree (#248). IDs from canonical module-relative paths do not change. A baseline entry that was accepted from a `./`-prefixed or subdirectory-relative target can now show up as a new escape: examine each such entry before you update the baseline, rather than re-accepting every current escape.
+- With `--test-recursive`, the baseline pre-flight and `--coverage` runs now target `<package>/...` like the mutant runs, and coverage uses `-coverpkg` so subpackage tests count. Before, they checked fewer tests than the mutants ran (#235).
 
 ### Changed
+- The baseline pre-flight and `--coverage` runs now pass `-vet=off` by default, like mutant runs; a `-vet` in `--test-flags` wins in all three. All three `go test` command lines are built in one place, and `go list` runs at most once per package (#235).
 - Engine writes to injected stdout and stderr writers are serialized, making ordinary non-thread-safe writers safe with multiple workers (#240).
 - Mutant `go test` runs now pass `-failfast`, so a killed mutant stops at its first failing test. On a 39-mutant `internal/coverage` workload this cut wall time by 43% and CPU time by 46% with identical results. Override with `--test-flags=-failfast=false`.
 - Bumped the `messgo` CI quality gate and pre-commit hook from `v0.1.9` to `v0.5.0`, and refactored the six functions it newly flagged (too many return values, and one cognitive-complexity hit). No behaviour change.

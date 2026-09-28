@@ -57,7 +57,9 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 
 ## Vet
 
-Mutant test runs pass `-vet=off` to `go test` by default. A mutant is not meant to be lint-clean, and a `go vet` diagnostic on mutated code would fail the run and be miscounted as KILLED. Pass your own `-vet` via `--test-flags` to re-enable it (e.g. `--test-flags=-vet=all`); your flag wins and no duplicate is added. The baseline pre-flight and coverage runs execute the original, unmutated code, so vet stays on there.
+Every built-in `go test` run (baseline pre-flight, coverage, and mutant runs) passes `-vet=off` by default. A mutant is not meant to be lint-clean, and a `go vet` diagnostic on mutated code would fail the run and be miscounted as KILLED. The baseline and coverage runs use the same setting so they judge tests the same way the mutant runs do. Pass your own `-vet` via `--test-flags` to re-enable it (e.g. `--test-flags=-vet=all`); your flag wins in every run and no duplicate is added.
+
+With `--test-recursive`, every run targets `<package>/...`, so the baseline and coverage runs cover the same tests as the mutant runs. The coverage run also passes `-coverpkg=<package>`, so tests in subpackages count towards the package's coverage.
 
 Mutant test runs also pass `-failfast`. One failing test is enough to kill a mutant, so `go test` starts no new tests after the first failure. Pass `--test-flags=-failfast=false` to run the whole suite for every mutant; your flag wins and no duplicate is added.
 
