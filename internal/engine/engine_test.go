@@ -9,10 +9,12 @@ import (
 	"go/types"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1001,5 +1003,122 @@ func TestClassifyGoTestBuildFailureAsSkipped(t *testing.T) {
 
 	if got := classifyGoTestResult(0, setupFailure); got != 0 {
 		t.Fatalf("expected successful go test to remain successful, got exit code %d", got)
+	}
+}
+
+func TestStableExecWrapperRunsLatestBytesFromTheSameInode(t *testing.T) {
+	dir := t.TempDir()
+	wrapper, err := writeStableExecWrapper(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stableDir := filepath.Join(dir, "stable")
+	srcDir := filepath.Join(dir, "src")
+	if err := os.Mkdir(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(payload, arg string) (string, int, uint64) {
+		src := filepath.Join(srcDir, "payload.sh")
+		script := "#!/bin/sh\necho " + payload + " \"$1\"\nexit 9\n"
+		if err := os.WriteFile(src, []byte(script), 0755); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(wrapper, src, arg)
+		cmd.Env = append(os.Environ(), "MUTAGO_STABLE_DIR="+stableDir)
+		out, err := cmd.CombinedOutput()
+		code := 0
+		if err != nil {
+			exit, ok := err.(*exec.ExitError)
+			if !ok {
+				t.Fatal(err)
+			}
+			code = exit.Sys().(syscall.WaitStatus).ExitStatus()
+		}
+		info, statErr := os.Stat(filepath.Join(stableDir, "payload.sh"))
+		if statErr != nil {
+			t.Fatal(statErr)
+		}
+		return string(out), code, info.Sys().(*syscall.Stat_t).Ino
+	}
+
+	out, code, ino := run("one", "alpha")
+	if code != 9 || !strings.Contains(out, "one alpha") {
+		t.Fatalf("first run: code=%d out=%q", code, out)
+	}
+	out, code, ino2 := run("two", "beta")
+	if code != 9 || !strings.Contains(out, "two beta") {
+		t.Fatalf("second run: code=%d out=%q", code, out)
+	}
+	if ino2 != ino {
+		t.Fatalf("stable binary inode changed from %d to %d", ino, ino2)
+	}
+}
+
+func TestStableExecWrapperKeepsConcurrentBinariesApart(t *testing.T) {
+	dir := t.TempDir()
+	wrapper, err := writeStableExecWrapper(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stableDir := filepath.Join(dir, "stable")
+	write := func(name, payload string) string {
+		path := filepath.Join(dir, name)
+		script := "#!/bin/sh\necho " + payload + "\nexit 0\n"
+		if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	rec := write("rec.test", "rec")
+	sub := write("sub.test", "sub")
+
+	run := func(src string) string {
+		cmd := exec.Command(wrapper, src)
+		cmd.Env = append(os.Environ(), "MUTAGO_STABLE_DIR="+stableDir)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", src, err, out)
+		}
+		return string(out)
+	}
+
+	type result struct {
+		out string
+		err error
+	}
+	results := make(chan result, 2)
+	start := make(chan struct{})
+	for _, src := range []string{rec, sub} {
+		go func(src string) {
+			<-start
+			cmd := exec.Command(wrapper, src)
+			cmd.Env = append(os.Environ(), "MUTAGO_STABLE_DIR="+stableDir)
+			out, err := cmd.CombinedOutput()
+			results <- result{string(out), err}
+		}(src)
+	}
+	close(start)
+	var got []string
+	for i := 0; i < 2; i++ {
+		res := <-results
+		if res.err != nil {
+			t.Fatalf("concurrent run: %v\n%s", res.err, res.out)
+		}
+		got = append(got, res.out)
+	}
+	joined := strings.Join(got, "")
+	if !strings.Contains(joined, "rec") || !strings.Contains(joined, "sub") {
+		t.Fatalf("concurrent binaries overwrote each other: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(stableDir, "rec.test")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(stableDir, "sub.test")); err != nil {
+		t.Fatal(err)
+	}
+	// Sequential check too, in case the race did not overlap.
+	if !strings.Contains(run(rec), "rec") || !strings.Contains(run(sub), "sub") {
+		t.Fatal("reused files ran the wrong payload")
 	}
 }
