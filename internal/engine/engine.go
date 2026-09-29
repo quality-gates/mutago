@@ -306,7 +306,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 	var jobWg *sync.WaitGroup
 	runMutantIDFound := &atomic.Bool{}
 	if !opts.General.DryRun && !opts.Exec.NoExec {
-		jobs, jobWg = startWorkerPool(opts, numWorkers, report, &reportMu, gitChangedLines)
+		jobs, jobWg = startWorkerPool(opts, numWorkers, report, &reportMu, gitChangedLines, tmpDir)
 	}
 
 	var stopProgress chan struct{}
@@ -981,25 +981,106 @@ func calcNumWorkers(opts *models.Options, execs []string) int {
 	return n
 }
 
-func startWorkerPool(opts *models.Options, numWorkers int, report *models.Report, mu *sync.Mutex, gitChangedLines gitdiff.ChangedLines) (chan execJob, *sync.WaitGroup) {
+func startWorkerPool(opts *models.Options, numWorkers int, report *models.Report, mu *sync.Mutex, gitChangedLines gitdiff.ChangedLines, tmpDir string) (chan execJob, *sync.WaitGroup) {
 	if opts.Exec.NoExec || opts.General.DryRun {
 		return nil, nil
 	}
+	stableExec := prepareStableExec(tmpDir)
 	jobs := make(chan execJob, numWorkers*2)
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go func() {
+		go func(paths stableExecPaths) {
 			defer wg.Done()
 			for job := range jobs {
 				if job.ctx != nil && job.ctx.Err() != nil {
 					continue
 				}
-				runExecJob(job, report, mu, gitChangedLines)
+				runExecJob(withStableExec(job, paths), report, mu, gitChangedLines)
 			}
-		}()
+		}(stableExecPaths{wrapper: stableExec, bin: stableBinForWorker(tmpDir, stableExec, i)})
 	}
 	return jobs, &wg
+}
+
+func stableBinForWorker(tmpDir, wrapper string, id int) string {
+	if wrapper == "" {
+		return ""
+	}
+	return filepath.Join(tmpDir, fmt.Sprintf("stable-bin-%d", id))
+}
+
+func withStableExec(job execJob, paths stableExecPaths) execJob {
+	if paths.wrapper == "" {
+		return job
+	}
+	ctx := job.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	job.ctx = context.WithValue(ctx, stableExecKey{}, paths)
+	return job
+}
+
+// stableExecKey carries the Darwin test-binary reuse paths for one worker.
+// macOS re-checks each new executable path. Reusing one file avoids that wait.
+type stableExecKey struct{}
+
+type stableExecPaths struct {
+	wrapper string
+	bin     string
+}
+
+func stableExecFrom(ctx context.Context) stableExecPaths {
+	if ctx == nil {
+		return stableExecPaths{}
+	}
+	paths, _ := ctx.Value(stableExecKey{}).(stableExecPaths)
+	return paths
+}
+
+// prepareStableExec installs the Darwin inode-reuse wrapper. Other platforms
+// pay little to execute a new test binary, and the extra copy would be pure cost.
+func prepareStableExec(tmpDir string) string {
+	if runtime.GOOS != "darwin" || tmpDir == "" {
+		return ""
+	}
+	path, err := writeStableExecWrapper(tmpDir)
+	if err != nil {
+		return ""
+	}
+	return path
+}
+
+// stableExecScript copies the just-linked test binary onto a reused file in
+// MUTAGO_STABLE_DIR, then execs that file. The file name is the binary's base
+// name, so a recursive `go test` can run rec.test and sub.test at the same time
+// without one overwriting the other. The first run creates the file. Later runs
+// of the same name truncate it in place. A copy failure falls back to the
+// original path so the mutant is still executed.
+const stableExecScript = `#!/bin/sh
+src="$1"
+shift
+dir="${MUTAGO_STABLE_DIR-}"
+unset MUTAGO_STABLE_DIR
+if [ -n "$dir" ] && mkdir -p "$dir"; then
+	stable="$dir/$(basename "$src")"
+	if cat "$src" > "$stable" && chmod +x "$stable"; then
+		exec "$stable" "$@"
+	fi
+fi
+exec "$src" "$@"
+`
+
+func writeStableExecWrapper(dir string) (string, error) {
+	path := filepath.Join(dir, "mutago-stable-exec.sh")
+	if err := os.WriteFile(path, []byte(stableExecScript), 0755); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(path, 0755); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 func progressMonitorEnabled(opts *models.Options) bool {
@@ -1575,8 +1656,13 @@ func runGoTest(job execJob, overlayName string, startLine int) int {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	stable := stableExecFrom(ctx)
+	inv.execProgram = stable.wrapper
 	goTestCmd := exec.CommandContext(ctx, "go", inv.args()...)
 	goTestCmd.Env = os.Environ()
+	if stable.wrapper != "" && stable.bin != "" && !hasTestFlag(job.extraTestFlags, "exec") {
+		goTestCmd.Env = append(goTestCmd.Env, "MUTAGO_STABLE_DIR="+stable.bin)
+	}
 	test, err := goTestCmd.CombinedOutput()
 
 	execExitCode, ok := commandExitCode(err)

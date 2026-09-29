@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- On macOS, each worker reuses one test-binary file so the system does not re-check every mutant executable. On the example package this cut wall time by 34% with 8 workers (8.9 s to 5.9 s) and by 46% with `--coverage` (9.4 s to 5.1 s). Scores were unchanged. Other systems are unchanged.
+
 ## [v2.10.18] — 2026-09-28
 
 ### Fixed

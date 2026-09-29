@@ -69,6 +69,16 @@ func TestGoTestInvocationArgs(t *testing.T) {
 			want: []string{"test", "-overlay=o.json", "-timeout", "5s", "-vet=off", "-failfast", "-run", "^(TestA)$", pkg},
 		},
 		{
+			name: "mutant reuses one executable via -exec",
+			inv:  goTestInvocation{kind: mutantRun, target: pkg, timeoutSeconds: 5, overlay: "o.json", execProgram: "/tmp/mutago-stable-exec.sh"},
+			want: []string{"test", "-overlay=o.json", "-timeout", "5s", "-vet=off", "-exec=/tmp/mutago-stable-exec.sh", "-failfast", pkg},
+		},
+		{
+			name: "user -exec wins over the stable executable wrapper",
+			inv:  goTestInvocation{kind: mutantRun, target: pkg, timeoutSeconds: 5, overlay: "o.json", testFlags: []string{"-exec=/usr/bin/true"}, execProgram: "/tmp/mutago-stable-exec.sh"},
+			want: []string{"test", "-overlay=o.json", "-timeout", "5s", "-exec=/usr/bin/true", "-vet=off", "-failfast", pkg},
+		},
+		{
 			name: "run filter is ignored for coverage runs",
 			inv:  goTestInvocation{kind: coverageRun, target: pkg, timeoutSeconds: 20, profilePath: "/tmp/c.out", runFilter: "^(TestA)$"},
 			want: []string{"test", "-coverprofile=/tmp/c.out", "-timeout", "20s", "-vet=off", pkg},

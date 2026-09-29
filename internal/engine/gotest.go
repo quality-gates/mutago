@@ -36,6 +36,9 @@ type goTestInvocation struct {
 	// runFilter restricts the tests run to those covering the mutant
 	// (mutantRun only, from --per-test).
 	runFilter string
+	// execProgram is the -exec wrapper for a mutant run. Empty means go test
+	// runs the test binary directly. A user -exec in test flags wins.
+	execProgram string
 }
 
 // args returns the argument list for `go`.
@@ -57,33 +60,50 @@ type goTestInvocation struct {
 // -failfast in the user's test flags wins.
 func (g goTestInvocation) args() []string {
 	args := []string{"test"}
-	switch g.kind {
-	case coverageRun:
-		args = append(args, "-coverprofile="+g.profilePath)
-		if g.recursive {
-			args = append(args, "-coverpkg="+g.target)
-		}
-	case mutantRun:
-		args = append(args, "-overlay="+g.overlay)
-	}
+	args = append(args, g.kindArgs()...)
 	args = append(args, "-timeout", fmt.Sprintf("%ds", g.timeoutSeconds))
 	args = append(args, g.testFlags...)
 	if !hasVetFlag(g.testFlags) {
 		args = append(args, "-vet=off")
 	}
-	if g.kind == mutantRun {
-		if !hasTestFlag(g.testFlags, "failfast") {
-			args = append(args, "-failfast")
-		}
-		if g.runFilter != "" {
-			args = append(args, "-run", g.runFilter)
-		}
-	}
+	args = append(args, g.mutantArgs()...)
 	target := g.target
 	if g.recursive {
 		target += "/..."
 	}
 	return append(args, target)
+}
+
+func (g goTestInvocation) kindArgs() []string {
+	switch g.kind {
+	case coverageRun:
+		args := []string{"-coverprofile=" + g.profilePath}
+		if g.recursive {
+			args = append(args, "-coverpkg="+g.target)
+		}
+		return args
+	case mutantRun:
+		return []string{"-overlay=" + g.overlay}
+	default:
+		return nil
+	}
+}
+
+func (g goTestInvocation) mutantArgs() []string {
+	if g.kind != mutantRun {
+		return nil
+	}
+	var args []string
+	if g.execProgram != "" && !hasTestFlag(g.testFlags, "exec") {
+		args = append(args, "-exec="+g.execProgram)
+	}
+	if !hasTestFlag(g.testFlags, "failfast") {
+		args = append(args, "-failfast")
+	}
+	if g.runFilter != "" {
+		args = append(args, "-run", g.runFilter)
+	}
+	return args
 }
 
 func hasVetFlag(testFlags []string) bool {
