@@ -1,4 +1,0 @@
-interface:
-  display_name: "Audit Performance"
-  short_description: "Rank codebase bottlenecks by Big O severity"
-  default_prompt: "Use $seeking-performance to audit this codebase and report its performance bottlenecks ranked by Big O severity."
