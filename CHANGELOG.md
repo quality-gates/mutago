@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.19] — 2026-09-30
+
 ### Changed
 - On macOS, each worker reuses one test-binary file so the system does not re-check every mutant executable. On the example package this cut wall time by 34% with 8 workers (8.9 s to 5.9 s) and by 46% with `--coverage` (9.4 s to 5.1 s). Scores were unchanged. Other systems are unchanged.
 
@@ -645,7 +647,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.18...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.19...HEAD
+[v2.10.19]: https://github.com/quality-gates/mutago/compare/v2.10.18...v2.10.19
 [v2.10.18]: https://github.com/quality-gates/mutago/compare/v2.10.17...v2.10.18
 [v2.10.17]: https://github.com/quality-gates/mutago/compare/v2.10.16...v2.10.17
 [v2.6.7]: https://github.com/quality-gates/mutago/releases/tag/v2.6.7
