@@ -1,6 +1,0 @@
-interface:
-  display_name: "Outpost Blocked"
-  short_description: "Signal this assignment cannot proceed"
-  default_prompt: "Use $outpost-blocked — this assignment is stuck."
-policy:
-  allow_implicit_invocation: true

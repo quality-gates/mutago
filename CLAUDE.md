@@ -123,8 +123,6 @@ Integration tests live in `cmd/mutago/main_test.go`. They invoke `mainCmd` direc
 
 ## Agent skills
 
-21 engineering/productivity skills from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, see `.claude/skills/THIRD-PARTY-NOTICES.md`) are vendored under `.claude/skills/`.
-
 ### Issue tracker
 
 Issues live as GitHub issues on `quality-gates/mutago`; external PRs are not treated as a triage surface. See `docs/agents/issue-tracker.md`.

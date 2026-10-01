@@ -1,6 +1,0 @@
-interface:
-  display_name: "Ship Spec"
-  short_description: "Ship child issues serially to one branch"
-  default_prompt: "Use $ship-spec on this parent spec."
-policy:
-  allow_implicit_invocation: false
