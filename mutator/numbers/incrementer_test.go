@@ -37,7 +37,6 @@ func TestMutatorNumbersIncrementer_ModernLiterals(t *testing.T) {
 	}{
 		{original: "1_000", mutated: "1001"},
 		{original: "0x10", mutated: "0x11"},
-		{original: "0x7fffffffffffffff", mutated: "(-0x8000000000000000)"},
 		{original: "0b1010", mutated: "0b1011"},
 		{original: "0o755", mutated: "0o756"},
 	}
@@ -304,5 +303,28 @@ func testFunc() {
 		_, compileErr := conf.Check("main", mutantFset, []*ast.File{mutantFile}, checkInfo)
 		m.Reset()
 		assert.NoError(t, compileErr, "mutant %d failed to compile: %v\nsource:\n%s", i, compileErr, buf.String())
+	}
+}
+
+func TestMutatorNumbersIncrementer_SkipsUntypedMaxInt64(t *testing.T) {
+	for _, literal := range []string{"9223372036854775807", "0x7fffffffffffffff"} {
+		t.Run(literal, func(t *testing.T) {
+			src := "package main\n\nconst Max = " + literal + "\n\nfunc GetMax() uint64 {\n\tvar u uint64 = Max\n\treturn u\n}\n"
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, "test.go", src, 0)
+			require.NoError(t, err)
+
+			info := &types.Info{Types: make(map[ast.Expr]types.TypeAndValue)}
+			pkg, err := (&types.Config{}).Check("main", fset, []*ast.File{file}, info)
+			require.NoError(t, err)
+
+			var mutations []mutator.Mutation
+			ast.Inspect(file, func(n ast.Node) bool {
+				mutations = append(mutations, MutatorNumbersIncrementer(pkg, info, n)...)
+				return true
+			})
+
+			assert.Empty(t, mutations, "MaxInt64 literal must not be incremented into MinInt64")
+		})
 	}
 }

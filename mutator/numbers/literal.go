@@ -84,6 +84,10 @@ var maxIntBounds = map[types.BasicKind]int64{
 }
 
 func shouldSkipIncrement(info *types.Info, expr ast.Expr, val int64) bool {
+	// val+1 would overflow int64 to MinInt64, whatever the literal's type.
+	if val == math.MaxInt64 {
+		return true
+	}
 	if info == nil {
 		return false
 	}
