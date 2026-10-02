@@ -239,3 +239,68 @@ func testFunc() uint {
 		assert.NoError(t, compileErr, "mutant %d failed to compile: %v\nsource:\n%s", i, compileErr, buf.String())
 	}
 }
+
+func TestMutatorNumbersDecrementer_SkipsZeroInNonNegativeContexts(t *testing.T) {
+	src := `package main
+
+func testFunc(xs []int, s string, x int, arr [3]int, m map[int]int) {
+	_ = xs[0]
+	_ = xs[(0)]
+	_ = s[0]
+	_ = arr[0]
+	_ = xs[0:]
+	_ = xs[:0]
+	_ = xs[0:0:0]
+	var a [0]int
+	_ = a
+	_ = make(chan int, 0)
+	_ = make([]int, 0, 0)
+	_ = make(map[int]int, 0)
+	_ = x << 0
+	_ = x >> 0
+	x <<= 0
+	x >>= 0
+	_ = [...]int{0: 1}
+	_ = []int{0: 1}
+
+	_ = m[0]
+	_ = map[int]int{0: 1}
+	y := 0
+	_ = y
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, 0)
+	require.NoError(t, err)
+
+	conf := types.Config{}
+	info := &types.Info{
+		Types:  make(map[ast.Expr]types.TypeAndValue),
+		Defs:   make(map[*ast.Ident]types.Object),
+		Uses:   make(map[*ast.Ident]types.Object),
+		Scopes: make(map[ast.Node]*types.Scope),
+	}
+	pkg, err := conf.Check("main", fset, []*ast.File{file}, info)
+	require.NoError(t, err)
+
+	var mutated []int
+	ast.Inspect(file, func(n ast.Node) bool {
+		muts := MutatorNumbersDecrementer(pkg, info, n)
+		for _, m := range muts {
+			mutated = append(mutated, fset.Position(m.Position).Line)
+			m.Change()
+			buf := new(bytes.Buffer)
+			require.NoError(t, printer.Fprint(buf, fset, file))
+			m.Reset()
+
+			mutantFset := token.NewFileSet()
+			mutantFile, err := parser.ParseFile(mutantFset, "mutant.go", buf.String(), 0)
+			require.NoError(t, err)
+			_, compileErr := conf.Check("main", mutantFset, []*ast.File{mutantFile}, &types.Info{})
+			assert.NoError(t, compileErr, "mutant at line %d failed to compile", fset.Position(m.Position).Line)
+		}
+		return true
+	})
+
+	assert.Equal(t, []int{3, 20, 21, 23, 24, 24, 25}, mutated, "only positive literals, map keys and plain values should be decremented")
+}
