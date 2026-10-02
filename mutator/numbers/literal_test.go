@@ -102,6 +102,8 @@ func TestShouldSkipIncrement(t *testing.T) {
 
 	// info == nil
 	assert.False(t, shouldSkipIncrement(nil, dummyExpr, 0))
+	// MaxInt64 cannot be incremented without int64 overflow, even untyped
+	assert.True(t, shouldSkipIncrement(nil, dummyExpr, math.MaxInt64))
 
 	info := &types.Info{
 		Types: make(map[ast.Expr]types.TypeAndValue),
@@ -122,7 +124,7 @@ func TestShouldSkipIncrement(t *testing.T) {
 	info.Types[floatExpr] = types.TypeAndValue{
 		Type: types.Typ[types.Float64],
 	}
-	assert.False(t, shouldSkipIncrement(info, floatExpr, math.MaxInt64))
+	assert.False(t, shouldSkipIncrement(info, floatExpr, math.MaxInt64-1))
 
 	// test each bounded type in expectedBounds
 	expectedBounds := map[types.BasicKind]int64{

@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- `numbers/incrementer` no longer mutates integer literals equal to `math.MaxInt64` (such as untyped `const Max = 9223372036854775807`). Before, `+1` wrapped to `-9223372036854775808`, so the mutant failed to compile in unsigned contexts and was skipped (#265).
+
 ## [v2.10.19] — 2026-09-30
 
 ### Changed
