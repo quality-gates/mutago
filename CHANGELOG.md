@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- `numbers/decrementer` no longer turns `0` into `(-1)` where Go forbids negative constants: indexes, slice bounds, array lengths, `make` sizes, shift counts, and array or slice literal keys. These mutants never compiled and were reported as skipped (#264).
+
 ## [v2.10.19] — 2026-09-30
 
 ### Changed

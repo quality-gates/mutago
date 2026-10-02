@@ -7,6 +7,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"golang.org/x/tools/go/ast/astutil"
 )
 
 type intLiteralInfo struct {
@@ -62,11 +64,127 @@ func shouldSkipDecrement(info *types.Info, expr ast.Expr, val int64) bool {
 	if !ok {
 		return false
 	}
-	basic, ok := tv.Type.Underlying().(*types.Basic)
+	if val > 0 {
+		return false
+	}
+	if basic, ok := tv.Type.Underlying().(*types.Basic); ok && basic.Info()&types.IsUnsigned != 0 {
+		return true
+	}
+	return inNonNegativeContext(info, expr)
+}
+
+// inNonNegativeContext reports whether expr is used where Go rejects negative
+// constants: indexes, slice bounds, array lengths, make sizes, shift counts and
+// array or slice literal keys.
+func inNonNegativeContext(info *types.Info, expr ast.Expr) bool {
+	path := enclosingPath(info, expr)
+	child := ast.Node(expr)
+	for i := 1; i < len(path); i++ {
+		if _, ok := path[i].(*ast.ParenExpr); ok {
+			child = path[i]
+			continue
+		}
+		return requiresNonNegative(info, path[i], child, path[i+1:])
+	}
+	return false
+}
+
+func enclosingPath(info *types.Info, expr ast.Expr) []ast.Node {
+	for node := range info.Scopes {
+		file, ok := node.(*ast.File)
+		if !ok || expr.Pos() < file.FileStart || expr.End() > file.FileEnd {
+			continue
+		}
+		path, exact := astutil.PathEnclosingInterval(file, expr.Pos(), expr.End())
+		if exact && len(path) > 0 && path[0] == expr {
+			return path
+		}
+	}
+	return nil
+}
+
+func requiresNonNegative(info *types.Info, parent, child ast.Node, ancestors []ast.Node) bool {
+	return isIndexOrLength(info, parent, child) ||
+		isShiftCount(parent, child) ||
+		isSizeOrLiteralIndex(info, parent, child, ancestors)
+}
+
+// isIndexOrLength reports whether child is an index, a slice bound or an
+// array length.
+func isIndexOrLength(info *types.Info, parent, child ast.Node) bool {
+	switch p := parent.(type) {
+	case *ast.IndexExpr:
+		return p.Index == child && !isMap(info, p.X)
+	case *ast.SliceExpr:
+		return p.Low == child || p.High == child || p.Max == child
+	case *ast.ArrayType:
+		return p.Len == child
+	}
+	return false
+}
+
+func isShiftCount(parent, child ast.Node) bool {
+	switch p := parent.(type) {
+	case *ast.BinaryExpr:
+		return p.Y == child && isShift(p.Op)
+	case *ast.AssignStmt:
+		return isShift(p.Tok)
+	}
+	return false
+}
+
+// isSizeOrLiteralIndex reports whether child is a make size argument or the
+// key of an array or slice literal element.
+func isSizeOrLiteralIndex(info *types.Info, parent, child ast.Node, ancestors []ast.Node) bool {
+	switch p := parent.(type) {
+	case *ast.CallExpr:
+		return isBuiltinMake(info, p.Fun) && len(p.Args) > 0 && p.Args[0] != child
+	case *ast.KeyValueExpr:
+		return p.Key == child && len(ancestors) > 0 && isIndexedLiteral(info, ancestors[0])
+	}
+	return false
+}
+
+func isShift(op token.Token) bool {
+	switch op {
+	case token.SHL, token.SHR, token.SHL_ASSIGN, token.SHR_ASSIGN:
+		return true
+	}
+	return false
+}
+
+func isMap(info *types.Info, expr ast.Expr) bool {
+	tv, ok := info.Types[expr]
 	if !ok {
 		return false
 	}
-	return basic.Info()&types.IsUnsigned != 0 && val <= 0
+	_, ok = tv.Type.Underlying().(*types.Map)
+	return ok
+}
+
+func isBuiltinMake(info *types.Info, fun ast.Expr) bool {
+	ident, ok := unwrapParen(fun).(*ast.Ident)
+	if !ok {
+		return false
+	}
+	builtin, ok := info.Uses[ident].(*types.Builtin)
+	return ok && builtin.Name() == "make"
+}
+
+func isIndexedLiteral(info *types.Info, node ast.Node) bool {
+	lit, ok := node.(*ast.CompositeLit)
+	if !ok {
+		return false
+	}
+	tv, ok := info.Types[lit]
+	if !ok {
+		return false
+	}
+	switch tv.Type.Underlying().(type) {
+	case *types.Array, *types.Slice:
+		return true
+	}
+	return false
 }
 
 var maxIntBounds = map[types.BasicKind]int64{
