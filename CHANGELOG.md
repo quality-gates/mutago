@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.20] — 2026-10-02
+
 ### Fixed
 - `numbers/incrementer` no longer mutates integer literals equal to `math.MaxInt64` (such as untyped `const Max = 9223372036854775807`). Before, `+1` wrapped to `-9223372036854775808`, so the mutant failed to compile in unsigned contexts and was skipped (#265).
 
@@ -650,7 +652,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.19...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.20...HEAD
+[v2.10.20]: https://github.com/quality-gates/mutago/compare/v2.10.19...v2.10.20
 [v2.10.19]: https://github.com/quality-gates/mutago/compare/v2.10.18...v2.10.19
 [v2.10.18]: https://github.com/quality-gates/mutago/compare/v2.10.17...v2.10.18
 [v2.10.17]: https://github.com/quality-gates/mutago/compare/v2.10.16...v2.10.17
