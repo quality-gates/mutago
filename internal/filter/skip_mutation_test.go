@@ -53,6 +53,12 @@ func TestSkipMutationForInitSlicesAndMaps(t *testing.T) {
 			expectedOperators: []string{},
 		},
 		{
+			name:              "skip mutation for channel buffer",
+			code:              `package main; func f() { ch := make(chan int, 0); _ = ch }`,
+			expectedLiterals:  []string{"0"},
+			expectedOperators: []string{},
+		},
+		{
 			name:              "do not skip mutation for slice init with variable",
 			code:              `package main; var x = 10; var a = make([]int, x)`,
 			expectedLiterals:  []string{},

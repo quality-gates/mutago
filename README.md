@@ -284,14 +284,15 @@ By comparing this output to the original output we can state that we now have 7 
 
 ### <a name="skip-make-args"></a>Skipping make() arguments mutation
 
-Before this filter, numeric arguments in make() calls for slices and maps were mutated by incrementer/decrementer mutators, leading to false positives or invalid code:
+Before this filter, numeric arguments in make() calls for slices, maps, and channels were mutated by incrementer/decrementer mutators, leading to false positives or invalid code:
 
 ```go
 // Original code
-slice := make([]int, 0)  // Capacity argument (0) was mutated
+slice := make([]int, 0)   // Capacity argument (0) was mutated
+channel := make(chan int, 0) // Buffer argument (0) was mutated
 
 // Mutated versions
-slice := make([]int, 1)  // Incrementer mutation
+slice := make([]int, 1)    // Incrementer mutation
 slice := make([]int, -1)   // Decrementer mutation
 ```
 
@@ -301,7 +302,7 @@ These mutations are almost always irrelevant because:
 2. Capacity/length arguments are typically intentional
 3. Tests rarely validate exact allocation sizes
 
-The filter prevents mutations in make() arguments.
+The filter prevents mutations in make() arguments for slices, maps, and channels.
 
 ### <a name="quality-gates"></a>Quality gates
 
@@ -670,6 +671,8 @@ Name	           | Original | Mutated  |
 | IncrementFloat   | 10.1     | 11.1     |
 
 #### numbers/decrementer
+Decrements integer and float literals by 1. Zero literals in unsigned integer contexts and non-negative constant contexts (indexes, slice bounds, array lengths, and shift counts) are skipped where decrementing would produce uncompilable code.
+
 Name	           | Original | Mutated  |
 | :--------------- | :------- | :------- |
 | DecrementInteger | 100      | 99       |

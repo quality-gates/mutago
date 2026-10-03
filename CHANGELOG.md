@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- `numbers/decrementer` now skips zero in indexes, slice bounds, array lengths, channel capacities, and shift counts, avoiding mutants that fail to compile (#264).
+
 ## [v2.10.20] — 2026-10-02
 
 ### Fixed

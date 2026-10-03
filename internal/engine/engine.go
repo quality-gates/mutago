@@ -522,10 +522,11 @@ func processFile(r *mutationRun, file string, coverProfile *coverage.Profile, pe
 
 	annotationProcessor := annotation.NewProcessor()
 	skipFilterProcessor := filter.NewSkipMakeArgsFilter()
+	nonNegativeDecrementFilter := filter.NewNonNegativeDecrementFilter()
 	sourceLineFilter := filter.NewSourceLineRegexFilter(r.opts.Config.IgnoreSourceLines)
 
-	collectors := []filter.NodeCollector{annotationProcessor, skipFilterProcessor, sourceLineFilter}
-	nodeFilters := []filter.NodeFilter{annotationProcessor, skipFilterProcessor, sourceLineFilter}
+	collectors := []filter.NodeCollector{annotationProcessor, skipFilterProcessor, nonNegativeDecrementFilter, sourceLineFilter}
+	nodeFilters := []filter.NodeFilter{annotationProcessor, skipFilterProcessor, nonNegativeDecrementFilter, sourceLineFilter}
 
 	checked, err := parser.ParseAndTypeCheckFile(file, collectors)
 	if err != nil {
