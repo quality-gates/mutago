@@ -1,0 +1,174 @@
+Running with 1 parallel worker(s)
+Save mutations into "$TMPDIR/mutago-2296790552"
+Enable mutator "arithmetic/assign_invert"
+Enable mutator "arithmetic/assignment"
+Enable mutator "arithmetic/base"
+Enable mutator "arithmetic/bitwise"
+Enable mutator "arithmetic/negate"
+Enable mutator "branch/case"
+Enable mutator "branch/else"
+Enable mutator "branch/if"
+Enable mutator "composite/field-clear"
+Enable mutator "concurrency/goroutine-remove"
+Enable mutator "conditional/bool-literal"
+Enable mutator "conditional/negated"
+Enable mutator "conditional/not"
+Enable mutator "expression/comparison"
+Enable mutator "expression/context-nil"
+Enable mutator "expression/error-guard"
+Enable mutator "expression/errorf-wrap"
+Enable mutator "expression/logical"
+Enable mutator "expression/recover-clear"
+Enable mutator "expression/remove"
+Enable mutator "expression/string-literal"
+Enable mutator "loop/break"
+Enable mutator "loop/condition"
+Enable mutator "loop/range_break"
+Enable mutator "numbers/decrementer"
+Enable mutator "numbers/float-negate"
+Enable mutator "numbers/incrementer"
+Enable mutator "select/case-remove"
+Enable mutator "select/default-remove"
+Enable mutator "statement/defer-remove"
+Enable mutator "statement/remove"
+Enable mutator "statement/remove-self-assign"
+Enable mutator "statement/return"
+Baseline check passed — all packages green before mutation
+Mutate "emb/emb.go"
+Save original into "$TMPDIR/mutago-2296790552/emb/emb.go.original"
+Mutator arithmetic/assign_invert
+Mutator arithmetic/assignment
+Mutator arithmetic/base
+Mutator arithmetic/bitwise
+Mutator arithmetic/negate
+Mutator branch/case
+Mutator branch/else
+Mutator branch/if
+Mutator composite/field-clear
+Mutator concurrency/goroutine-remove
+Mutator conditional/bool-literal
+Mutator conditional/negated
+Mutator conditional/not
+Mutator expression/comparison
+Mutator expression/context-nil
+Mutator expression/error-guard
+Mutator expression/errorf-wrap
+Mutator expression/logical
+Mutator expression/recover-clear
+Mutator expression/remove
+Mutator expression/string-literal
+Mutator loop/break
+Mutator loop/condition
+Mutator loop/range_break
+Mutator numbers/decrementer
+Mutator numbers/float-negate
+Mutator numbers/incrementer
+Mutator select/case-remove
+Mutator select/default-remove
+Mutator statement/defer-remove
+Mutator statement/remove
+Mutator statement/remove-self-assign
+Mutator statement/return
+Execute built-in exec command for mutation
+ok  	example.com/emb/emb	0.528s
+
+Exited with 1
+ESCAPED emb/emb.go:13 (branch/if) [checksum: e2358832502fbdc87096ea12438fd9d3]
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- Original
++++ New
+@@ -10,7 +10,7 @@
+ // Pick returns the larger of two ints.
+ func Pick(a, b int) int {
+ 	if a > b {
+-		return a
+-	}
++	_ = a
++}
+ 	return b
+ }
+
+Execute built-in exec command for mutation
+ok  	example.com/emb/emb	0.055s
+
+Exited with 1
+ESCAPED emb/emb.go:12 (conditional/negated) [checksum: e14d4db61c40e4004f7d8522e47f3821]
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- Original
++++ New
+@@ -9,7 +9,7 @@
+ 
+ // Pick returns the larger of two ints.
+ func Pick(a, b int) int {
+-	if a > b {
++	if a <= b {
+ 		return a
+ 	}
+ 	return b
+
+Execute built-in exec command for mutation
+ok  	example.com/emb/emb	0.022s
+
+Exited with 1
+ESCAPED emb/emb.go:12 (expression/comparison) [checksum: 3e38d97548b53d58b87b10d66dc79e7f]
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- Original
++++ New
+@@ -9,7 +9,7 @@
+ 
+ // Pick returns the larger of two ints.
+ func Pick(a, b int) int {
+-	if a > b {
++	if a >= b {
+ 		return a
+ 	}
+ 	return b
+
+Execute built-in exec command for mutation
+--- FAIL: TestPick (0.00s)
+    emb_test.go:13: pick
+FAIL
+FAIL	example.com/emb/emb	0.029s
+FAIL
+
+Exited with 0
+KILLED emb/emb.go:15 (statement/return) [checksum: e12d49223cff409438de09a749088ce0]
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- Original
++++ New
+@@ -12,5 +12,5 @@
+ 	if a > b {
+ 		return a
+ 	}
+-	return b
++	return 0
+ }
+
+Execute built-in exec command for mutation
+ok  	example.com/emb/emb	0.067s
+
+Exited with 1
+ESCAPED emb/emb.go:13 (statement/return) [checksum: a894fbd75a6abf2e61e23621208e3f48]
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- Original
++++ New
+@@ -10,7 +10,7 @@
+ // Pick returns the larger of two ints.
+ func Pick(a, b int) int {
+ 	if a > b {
+-		return a
+-	}
++	return 0
++}
+ 	return b
+ }
+
+Remove "$TMPDIR/mutago-2296790552"
+The mutation score is 20.00% (1 killed, 4 escaped, 0 errored, 0 not covered, 0 skipped, 5 total)
+
+Per-mutator breakdown:
+  branch/if                            killed   0 / 1    (0%)
+  conditional/negated                  killed   0 / 1    (0%)
+  expression/comparison                killed   0 / 1    (0%)
+  statement/return                     killed   1 / 2    (50%)
+exit=0

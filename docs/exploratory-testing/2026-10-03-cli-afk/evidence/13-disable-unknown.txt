@@ -1,0 +1,23 @@
+ann/ann.go:
+	arithmetic/assign_invert: 1
+	arithmetic/assignment: 1
+	conditional/negated: 2
+	expression/comparison: 2
+	numbers/decrementer: 5
+	numbers/incrementer: 4
+	statement/remove: 2
+	statement/return: 2
+
+Per-mutator totals across all files:
+  arithmetic/assign_invert                 1
+  arithmetic/assignment                    1
+  conditional/negated                      2
+  expression/comparison                    2
+  numbers/decrementer                      5
+  numbers/incrementer                      4
+  statement/remove                         2
+  statement/return                         2
+
+Total: 19 mutation(s) would be generated. No files written, no tests run.
+Note: this count is an upper bound. Mutations that produce byte-identical edits at the same location are deduplicated during an actual run.
+exit=0

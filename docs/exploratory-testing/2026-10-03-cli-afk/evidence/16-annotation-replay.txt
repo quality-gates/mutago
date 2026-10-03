@@ -1,0 +1,4 @@
+KILLED ann/ann.go:14 (conditional/negated)
+KILLED ann/ann.go:14 (expression/comparison)
+ESCAPED ann/ann.go:14 (numbers/decrementer)
+ESCAPED ann/ann.go:14 (numbers/incrementer)

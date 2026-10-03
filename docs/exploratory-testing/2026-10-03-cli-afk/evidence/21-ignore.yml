@@ -1,0 +1,2 @@
+ignore_source_lines:
+  - 'return 5'
