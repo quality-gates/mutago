@@ -1,0 +1,399 @@
+{
+  "generated_at": "2026-10-03T00:21:20Z",
+  "msi": 0.48484848484848486,
+  "escaped_count": 17,
+  "reminder": "A mutant is an example of how this code could be wrong — it's not a script for the test. Don't assert on the mutant directly. Instead ask: if this code were buggy, what would a caller of the public API observe go wrong? Write a test for that.",
+  "mutants": [
+    {
+      "id": "a18c138f8a76909bd993cdfe16fa44e7",
+      "checksum": "0bf5fe78484d8892a71f08c044fe808b",
+      "file": "shop/price.go",
+      "line": 6,
+      "mutator": "branch/if",
+      "description": "Removes an if-block body so the condition becomes a no-op, keeping a zero-value return when the branch was terminating",
+      "kill_hint": "Write a test that enters this branch and asserts the output or side effect it produces",
+      "diff": "--- Original\n+++ New\n@@ -3,8 +3,8 @@\n // Discount returns the price after applying a percentage discount.\n func Discount(price, pct int) int {\n \tif pct \u003e 100 {\n-\t\tpct = 100\n-\t}\n+\t_ = pct\n+}\n \treturn price - price*pct/100\n }\n \n",
+      "context_start_line": 3,
+      "context_lines": [
+        "// Discount returns the price after applying a percentage discount.",
+        "func Discount(price, pct int) int {",
+        "\tif pct \u003e 100 {",
+        "\t\tpct = 100",
+        "\t}",
+        "\treturn price - price*pct/100",
+        "}"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "1c8cec7076232324b732616db75f38a5",
+      "checksum": "89ea39351fa0c4c091264397d426e3fc",
+      "file": "shop/price.go",
+      "line": 22,
+      "mutator": "branch/if",
+      "description": "Removes an if-block body so the condition becomes a no-op, keeping a zero-value return when the branch was terminating",
+      "kill_hint": "Write a test that enters this branch and asserts the output or side effect it produces",
+      "diff": "--- Original\n+++ New\n@@ -19,8 +19,8 @@\n // Clamp limits v to [lo, hi].\n func Clamp(v, lo, hi int) int {\n \tif v \u003c lo {\n-\t\treturn lo\n-\t}\n+\t_ = lo\n+}\n \tif v \u003e hi {\n \t\treturn hi\n \t}\n",
+      "context_start_line": 19,
+      "context_lines": [
+        "// Clamp limits v to [lo, hi].",
+        "func Clamp(v, lo, hi int) int {",
+        "\tif v \u003c lo {",
+        "\t\treturn lo",
+        "\t}",
+        "\tif v \u003e hi {",
+        "\t\treturn hi"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "72146951783a02853ba482b3b88d0325",
+      "checksum": "4f7b72f089a6f7127352daf87f11299d",
+      "file": "shop/price.go",
+      "line": 25,
+      "mutator": "branch/if",
+      "description": "Removes an if-block body so the condition becomes a no-op, keeping a zero-value return when the branch was terminating",
+      "kill_hint": "Write a test that enters this branch and asserts the output or side effect it produces",
+      "diff": "--- Original\n+++ New\n@@ -22,7 +22,7 @@\n \t\treturn lo\n \t}\n \tif v \u003e hi {\n-\t\treturn hi\n-\t}\n+\t_ = hi\n+}\n \treturn v\n }\n",
+      "context_start_line": 22,
+      "context_lines": [
+        "\t\treturn lo",
+        "\t}",
+        "\tif v \u003e hi {",
+        "\t\treturn hi",
+        "\t}",
+        "\treturn v",
+        "}"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "e50803a73b70637a1ad200d720b4d8f0",
+      "checksum": "188010c37d275ede581cdb307139738c",
+      "file": "shop/price.go",
+      "line": 5,
+      "mutator": "expression/comparison",
+      "description": "Changes: `if pct \u003e 100 {` → `if pct \u003e= 100 {`",
+      "kill_hint": "Write tests at the exact boundary value — one that satisfies the condition and one that doesn't — and assert different outcomes",
+      "diff": "--- Original\n+++ New\n@@ -2,7 +2,7 @@\n \n // Discount returns the price after applying a percentage discount.\n func Discount(price, pct int) int {\n-\tif pct \u003e 100 {\n+\tif pct \u003e= 100 {\n \t\tpct = 100\n \t}\n \treturn price - price*pct/100\n",
+      "context_start_line": 2,
+      "context_lines": [
+        "",
+        "// Discount returns the price after applying a percentage discount.",
+        "func Discount(price, pct int) int {",
+        "\tif pct \u003e 100 {",
+        "\t\tpct = 100",
+        "\t}",
+        "\treturn price - price*pct/100"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "db303f96e3cba42be78095cfb1f7674f",
+      "checksum": "2e1c0abb8b84428c6df0d2f671aef5bd",
+      "file": "shop/price.go",
+      "line": 13,
+      "mutator": "expression/comparison",
+      "description": "Changes: `if total \u003e= 50 {` → `if total \u003e 50 {`",
+      "kill_hint": "Write tests at the exact boundary value — one that satisfies the condition and one that doesn't — and assert different outcomes",
+      "diff": "--- Original\n+++ New\n@@ -10,7 +10,7 @@\n \n // Shipping returns the shipping fee for an order total.\n func Shipping(total int) int {\n-\tif total \u003e= 50 {\n+\tif total \u003e 50 {\n \t\treturn 0\n \t}\n \treturn 5\n",
+      "context_start_line": 10,
+      "context_lines": [
+        "",
+        "// Shipping returns the shipping fee for an order total.",
+        "func Shipping(total int) int {",
+        "\tif total \u003e= 50 {",
+        "\t\treturn 0",
+        "\t}",
+        "\treturn 5"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "e808af27fc270d2c38b81ef60391c19b",
+      "checksum": "c248575885d3159212ad89a38f510404",
+      "file": "shop/price.go",
+      "line": 21,
+      "mutator": "expression/comparison",
+      "description": "Changes: `if v \u003c lo {` → `if v \u003c= lo {`",
+      "kill_hint": "Write tests at the exact boundary value — one that satisfies the condition and one that doesn't — and assert different outcomes",
+      "diff": "--- Original\n+++ New\n@@ -18,7 +18,7 @@\n \n // Clamp limits v to [lo, hi].\n func Clamp(v, lo, hi int) int {\n-\tif v \u003c lo {\n+\tif v \u003c= lo {\n \t\treturn lo\n \t}\n \tif v \u003e hi {\n",
+      "context_start_line": 18,
+      "context_lines": [
+        "",
+        "// Clamp limits v to [lo, hi].",
+        "func Clamp(v, lo, hi int) int {",
+        "\tif v \u003c lo {",
+        "\t\treturn lo",
+        "\t}",
+        "\tif v \u003e hi {"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "5f1dc03b409914b54ff3c816debfd385",
+      "checksum": "d017d523625330b6aa946fa8a3ca77c6",
+      "file": "shop/price.go",
+      "line": 24,
+      "mutator": "expression/comparison",
+      "description": "Changes: `if v \u003e hi {` → `if v \u003e= hi {`",
+      "kill_hint": "Write tests at the exact boundary value — one that satisfies the condition and one that doesn't — and assert different outcomes",
+      "diff": "--- Original\n+++ New\n@@ -21,7 +21,7 @@\n \tif v \u003c lo {\n \t\treturn lo\n \t}\n-\tif v \u003e hi {\n+\tif v \u003e= hi {\n \t\treturn hi\n \t}\n \treturn v\n",
+      "context_start_line": 21,
+      "context_lines": [
+        "\tif v \u003c lo {",
+        "\t\treturn lo",
+        "\t}",
+        "\tif v \u003e hi {",
+        "\t\treturn hi",
+        "\t}",
+        "\treturn v"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "d6282919e455bfa0d5034c6f278584e9",
+      "checksum": "1295be2aa2e87e6fc08ba9a2104cd943",
+      "file": "shop/price.go",
+      "line": 5,
+      "mutator": "numbers/decrementer",
+      "description": "Changes: `if pct \u003e 100 {` → `if pct \u003e 99 {`",
+      "kill_hint": "Write a test that asserts the exact numeric value",
+      "diff": "--- Original\n+++ New\n@@ -2,7 +2,7 @@\n \n // Discount returns the price after applying a percentage discount.\n func Discount(price, pct int) int {\n-\tif pct \u003e 100 {\n+\tif pct \u003e 99 {\n \t\tpct = 100\n \t}\n \treturn price - price*pct/100\n",
+      "context_start_line": 2,
+      "context_lines": [
+        "",
+        "// Discount returns the price after applying a percentage discount.",
+        "func Discount(price, pct int) int {",
+        "\tif pct \u003e 100 {",
+        "\t\tpct = 100",
+        "\t}",
+        "\treturn price - price*pct/100"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "623f1bd68a940a78cdd82220902fdd0c",
+      "checksum": "a3c2b70d4a431feb7c1256f795ec81b1",
+      "file": "shop/price.go",
+      "line": 6,
+      "mutator": "numbers/decrementer",
+      "description": "Changes: `pct = 100` → `pct = 99`",
+      "kill_hint": "Write a test that asserts the exact numeric value",
+      "diff": "--- Original\n+++ New\n@@ -3,7 +3,7 @@\n // Discount returns the price after applying a percentage discount.\n func Discount(price, pct int) int {\n \tif pct \u003e 100 {\n-\t\tpct = 100\n+\t\tpct = 99\n \t}\n \treturn price - price*pct/100\n }\n",
+      "context_start_line": 3,
+      "context_lines": [
+        "// Discount returns the price after applying a percentage discount.",
+        "func Discount(price, pct int) int {",
+        "\tif pct \u003e 100 {",
+        "\t\tpct = 100",
+        "\t}",
+        "\treturn price - price*pct/100",
+        "}"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "c1c1b84727ba8330bff03459c268ec0b",
+      "checksum": "07aa9ac4a6791395949b6e4afd03aa0e",
+      "file": "shop/price.go",
+      "line": 8,
+      "mutator": "numbers/decrementer",
+      "description": "Changes: `return price - price*pct/100` → `return price - price*pct/99`",
+      "kill_hint": "Write a test that asserts the exact numeric value",
+      "diff": "--- Original\n+++ New\n@@ -5,7 +5,7 @@\n \tif pct \u003e 100 {\n \t\tpct = 100\n \t}\n-\treturn price - price*pct/100\n+\treturn price - price*pct/99\n }\n \n // Shipping returns the shipping fee for an order total.\n",
+      "context_start_line": 5,
+      "context_lines": [
+        "\tif pct \u003e 100 {",
+        "\t\tpct = 100",
+        "\t}",
+        "\treturn price - price*pct/100",
+        "}",
+        "",
+        "// Shipping returns the shipping fee for an order total."
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "b5faa115692aa73b94a27360ec23fed6",
+      "checksum": "66c058eba7e247f7854f6e295763f0af",
+      "file": "shop/price.go",
+      "line": 13,
+      "mutator": "numbers/decrementer",
+      "description": "Changes: `if total \u003e= 50 {` → `if total \u003e= 49 {`",
+      "kill_hint": "Write a test that asserts the exact numeric value",
+      "diff": "--- Original\n+++ New\n@@ -10,7 +10,7 @@\n \n // Shipping returns the shipping fee for an order total.\n func Shipping(total int) int {\n-\tif total \u003e= 50 {\n+\tif total \u003e= 49 {\n \t\treturn 0\n \t}\n \treturn 5\n",
+      "context_start_line": 10,
+      "context_lines": [
+        "",
+        "// Shipping returns the shipping fee for an order total.",
+        "func Shipping(total int) int {",
+        "\tif total \u003e= 50 {",
+        "\t\treturn 0",
+        "\t}",
+        "\treturn 5"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "a8555afc839a3e7538d50f219a5ec22d",
+      "checksum": "6a80e779b8533989a1f5aaf620aebd9a",
+      "file": "shop/price.go",
+      "line": 5,
+      "mutator": "numbers/incrementer",
+      "description": "Changes: `if pct \u003e 100 {` → `if pct \u003e 101 {`",
+      "kill_hint": "Write a test that asserts the exact numeric value — off-by-one mutations are killed by precise equality assertions",
+      "diff": "--- Original\n+++ New\n@@ -2,7 +2,7 @@\n \n // Discount returns the price after applying a percentage discount.\n func Discount(price, pct int) int {\n-\tif pct \u003e 100 {\n+\tif pct \u003e 101 {\n \t\tpct = 100\n \t}\n \treturn price - price*pct/100\n",
+      "context_start_line": 2,
+      "context_lines": [
+        "",
+        "// Discount returns the price after applying a percentage discount.",
+        "func Discount(price, pct int) int {",
+        "\tif pct \u003e 100 {",
+        "\t\tpct = 100",
+        "\t}",
+        "\treturn price - price*pct/100"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "ffd552235531789832d02b154f975622",
+      "checksum": "a688ccf5d343fc22d6cad685ed23a383",
+      "file": "shop/price.go",
+      "line": 6,
+      "mutator": "numbers/incrementer",
+      "description": "Changes: `pct = 100` → `pct = 101`",
+      "kill_hint": "Write a test that asserts the exact numeric value — off-by-one mutations are killed by precise equality assertions",
+      "diff": "--- Original\n+++ New\n@@ -3,7 +3,7 @@\n // Discount returns the price after applying a percentage discount.\n func Discount(price, pct int) int {\n \tif pct \u003e 100 {\n-\t\tpct = 100\n+\t\tpct = 101\n \t}\n \treturn price - price*pct/100\n }\n",
+      "context_start_line": 3,
+      "context_lines": [
+        "// Discount returns the price after applying a percentage discount.",
+        "func Discount(price, pct int) int {",
+        "\tif pct \u003e 100 {",
+        "\t\tpct = 100",
+        "\t}",
+        "\treturn price - price*pct/100",
+        "}"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "eed76a000955e04d3fe9ab3dd12d2c7c",
+      "checksum": "dd0182e48de2cf5f88fdbdb3b12eb1fc",
+      "file": "shop/price.go",
+      "line": 13,
+      "mutator": "numbers/incrementer",
+      "description": "Changes: `if total \u003e= 50 {` → `if total \u003e= 51 {`",
+      "kill_hint": "Write a test that asserts the exact numeric value — off-by-one mutations are killed by precise equality assertions",
+      "diff": "--- Original\n+++ New\n@@ -10,7 +10,7 @@\n \n // Shipping returns the shipping fee for an order total.\n func Shipping(total int) int {\n-\tif total \u003e= 50 {\n+\tif total \u003e= 51 {\n \t\treturn 0\n \t}\n \treturn 5\n",
+      "context_start_line": 10,
+      "context_lines": [
+        "",
+        "// Shipping returns the shipping fee for an order total.",
+        "func Shipping(total int) int {",
+        "\tif total \u003e= 50 {",
+        "\t\treturn 0",
+        "\t}",
+        "\treturn 5"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "34a030e90cdd0b73045028209516bc4c",
+      "checksum": "5e50077572bad9dee331a54edb01f6a5",
+      "file": "shop/price.go",
+      "line": 6,
+      "mutator": "statement/remove",
+      "description": "Removes a statement entirely, dropping its side effect or return value",
+      "kill_hint": "Write a test that asserts the side effect or state change this statement produces",
+      "diff": "--- Original\n+++ New\n@@ -3,8 +3,8 @@\n // Discount returns the price after applying a percentage discount.\n func Discount(price, pct int) int {\n \tif pct \u003e 100 {\n-\t\tpct = 100\n-\t}\n+\t_ = pct\n+}\n \treturn price - price*pct/100\n }\n \n",
+      "context_start_line": 3,
+      "context_lines": [
+        "// Discount returns the price after applying a percentage discount.",
+        "func Discount(price, pct int) int {",
+        "\tif pct \u003e 100 {",
+        "\t\tpct = 100",
+        "\t}",
+        "\treturn price - price*pct/100",
+        "}"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "0c6103669a5a1fe6f413058d5b4d2cb8",
+      "checksum": "d6d5b4d7e26b179f47798b23ebdb5c64",
+      "file": "shop/price.go",
+      "line": 22,
+      "mutator": "statement/return",
+      "description": "Replaces a return value with its zero value",
+      "kill_hint": "Write a test that asserts the exact return value — zero-value substitutions are caught by equality assertions",
+      "diff": "--- Original\n+++ New\n@@ -19,8 +19,8 @@\n // Clamp limits v to [lo, hi].\n func Clamp(v, lo, hi int) int {\n \tif v \u003c lo {\n-\t\treturn lo\n-\t}\n+\treturn 0\n+}\n \tif v \u003e hi {\n \t\treturn hi\n \t}\n",
+      "context_start_line": 19,
+      "context_lines": [
+        "// Clamp limits v to [lo, hi].",
+        "func Clamp(v, lo, hi int) int {",
+        "\tif v \u003c lo {",
+        "\t\treturn lo",
+        "\t}",
+        "\tif v \u003e hi {",
+        "\t\treturn hi"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    },
+    {
+      "id": "ea82a23b9e7be507ddf1c55c9fc27f0a",
+      "checksum": "8c4c315ee4c32014cc73b187f583c114",
+      "file": "shop/price.go",
+      "line": 25,
+      "mutator": "statement/return",
+      "description": "Replaces a return value with its zero value",
+      "kill_hint": "Write a test that asserts the exact return value — zero-value substitutions are caught by equality assertions",
+      "diff": "--- Original\n+++ New\n@@ -22,7 +22,7 @@\n \t\treturn lo\n \t}\n \tif v \u003e hi {\n-\t\treturn hi\n-\t}\n+\treturn 0\n+}\n \treturn v\n }\n",
+      "context_start_line": 22,
+      "context_lines": [
+        "\t\treturn lo",
+        "\t}",
+        "\tif v \u003e hi {",
+        "\t\treturn hi",
+        "\t}",
+        "\treturn v",
+        "}"
+      ],
+      "test_files": [
+        "shop/price_test.go"
+      ]
+    }
+  ]
+}

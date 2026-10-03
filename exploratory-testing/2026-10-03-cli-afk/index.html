@@ -1,0 +1,860 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Mutation testing for Go — find gaps in your test suite">
+      
+      
+      
+        <link rel="canonical" href="https://quality-gates.github.io/mutago/exploratory-testing/2026-10-03-cli-afk/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Exploratory testing pass — mutago CLI, 2026-10-03 - mutago</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#exploratory-testing-pass-mutago-cli-2026-10-03" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="mutago" class="md-header__button md-logo" aria-label="mutago" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            mutago
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Exploratory testing pass — mutago CLI, 2026-10-03
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/quality-gates/mutago" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    quality-gates/mutago
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="mutago" class="md-nav__button md-logo" aria-label="mutago" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    mutago
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/quality-gates/mutago" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    quality-gates/mutago
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mutators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mutators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../custom-mutators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing Custom Mutators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../json-outputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Output Schemas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#build-and-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build and setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#confirmed-bugs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confirmed bugs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Confirmed bugs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#269-ignore_source_lines-misses-statement-mutators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        #269 — ignore_source_lines misses statement mutators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#270-misconfiguration-is-silent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        #270 — misconfiguration is silent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#journeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Journeys
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Journeys">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-baseline-for-brownfield-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Baseline for brownfield code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-escaped-mutant-triage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Escaped-mutant triage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-config-file-and-custom-exec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Config file and custom --exec
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rejected-and-unresolved-candidates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rejected and unresolved candidates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usability-observations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usability observations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unexplored-areas-and-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unexplored areas and limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="exploratory-testing-pass-mutago-cli-2026-10-03">Exploratory testing pass — mutago CLI, 2026-10-03<a class="headerlink" href="#exploratory-testing-pass-mutago-cli-2026-10-03" title="Permanent link">&para;</a></h1>
+<p>Scope: three CLI journeys not covered by the <a href="../2026-09-26-cli-afk/">2026-09-26 pass</a>:
+the baseline workflow for brownfield code, triage of escaped mutants (agentic
+JSON, <code>--run-mutant-id</code>, annotations), and running through a config file and a
+custom <code>--exec</code> script.</p>
+<h2 id="build-and-setup">Build and setup<a class="headerlink" href="#build-and-setup" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Built <code>mutago dev</code> from <a href="https://github.com/quality-gates/mutago/commit/59702f7"><code>59702f7</code></a>, the <code>origin/main</code> head used for this pass.</li>
+<li>Go 1.26.6 on macOS arm64. See <a href="evidence/00-setup.txt">setup</a>.</li>
+<li>Used four disposable Go modules under <code>/tmp</code>. Each has its own copy under <a href="evidence/"><code>evidence/</code></a>:</li>
+<li><a href="evidence/fixture-shop/"><code>fixture-shop</code></a>: weakly tested pricing code, used for the baseline and config journeys.</li>
+<li><a href="evidence/fixture-ann/"><code>fixture-ann</code></a>: annotations.</li>
+<li><a href="evidence/fixture-ship/"><code>fixture-ship</code></a>: the minimal <code>ignore_source_lines</code> reproducer.</li>
+<li><a href="evidence/fixture-embed/"><code>fixture-embed</code></a>: <code>//go:embed</code>.</li>
+<li>Every mutation run used <code>GOMAXPROCS=1</code>, <code>--workers=1</code>, <code>--exec-timeout=10</code>, and a disposable <code>GOCACHE</code>.</li>
+</ul>
+<h2 id="confirmed-bugs">Confirmed bugs<a class="headerlink" href="#confirmed-bugs" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Issue</th>
+<th style="text-align: left;">Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><a href="https://github.com/quality-gates/mutago/issues/269">#269</a></td>
+<td style="text-align: left;"><code>ignore_source_lines</code> does not suppress <code>statement/return</code> or <code>statement/remove</code> mutants</td>
+</tr>
+<tr>
+<td style="text-align: left;"><a href="https://github.com/quality-gates/mutago/issues/270">#270</a></td>
+<td style="text-align: left;">Unknown mutator names and invalid <code>ignore_source_lines</code> regexes are ignored with no warning; the README annotation example uses the non-existent name <code>increment</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="269-ignore_source_lines-misses-statement-mutators">#269 — <code>ignore_source_lines</code> misses statement mutators<a class="headerlink" href="#269-ignore_source_lines-misses-statement-mutators" title="Permanent link">&para;</a></h3>
+<p><strong>Impact:</strong> a team uses <code>ignore_source_lines</code> to skip boilerplate, but <code>statement/return</code> and <code>statement/remove</code> still mutate those lines. Those mutants count toward MSI and the gates. <code>docs/config.md</code> says a matching line "is skipped entirely".</p>
+<p><strong>Replay:</strong> in <a href="evidence/fixture-ship/"><code>fixture-ship</code></a>, run <code>mutago --config ignore.yml --workers=1 --exec-timeout=10 --no-diffs ./ship</code>. The config has <code>ignore_source_lines: ['return 5']</code>.</p>
+<p><strong>Expected:</strong> no mutant on <code>ship.go:7</code> (<code>return 5</code>).</p>
+<p><strong>Actual:</strong> the <code>numbers/*</code> mutants on line 7 are skipped, but <code>KILLED ship/ship.go:7 (statement/return)</code> still runs. Two runs gave the same result: <a href="evidence/21-ignore-run-1.txt">run 1</a>, <a href="evidence/21-ignore-run-2.txt">run 2</a>. Compare the <a href="evidence/21-no-config-run.txt">run without config</a>. A <code>// mutator-disable-next-line *</code> on the same line does skip it: <a href="evidence/22-annotation-comparison.txt">annotation comparison</a>. <code>statement/remove</code> behaves the same way: <a href="evidence/23-statement-remove-dry-run.txt">dry-run counts</a>.</p>
+<p>The first sighting was in the config journey (<a href="evidence/20-config-run.txt">config run</a>, <a href="evidence/20-report.json">report</a>: a <code>statement/return</code> mutant on <code>price.go:19</code>).</p>
+<h3 id="270-misconfiguration-is-silent">#270 — misconfiguration is silent<a class="headerlink" href="#270-misconfiguration-is-silent" title="Permanent link">&para;</a></h3>
+<p><strong>Impact:</strong> a user copies the README annotation example, or makes a typo in a mutator name or regex. The mutants they meant to skip still run, and nothing tells them.</p>
+<p><strong>Replay:</strong></p>
+<ol>
+<li><a href="evidence/fixture-ann/ann.go"><code>fixture-ann/ann.go</code></a> uses the README form <code>// mutator-disable-next-line branch/if, increment</code>. The <code>numbers/incrementer</code> mutant on the next line still runs. Seen in the <a href="evidence/12-annotation-run.txt">first run</a> and a <a href="evidence/16-annotation-replay.txt">clean replay</a>. If you use the full name <code>numbers/incrementer</code>, the dry-run count drops from 5 to 4.</li>
+<li><code>--disable bogus</code> exits 0 with no warning: <a href="evidence/13-disable-unknown.txt">output</a>.</li>
+<li><code>enable_mutators: [branch/iff]</code> produces <code>0 total</code> mutants with no hint why: <a href="evidence/14-enable-typo-run.txt">run</a>, <a href="evidence/14-typo-config.yml">config</a>. The <code>min_msi</code> gate in that config still fails safely with exit 4.</li>
+<li>An invalid regex in <code>ignore_source_lines</code> (<code>return (5</code>) exits 0 with no warning: <a href="evidence/24-bad-regex.txt">output</a>.</li>
+</ol>
+<p><strong>Expected:</strong> an error or a warning. <code>docs/config.md</code> already treats unknown config keys as an error.</p>
+<h2 id="journeys">Journeys<a class="headerlink" href="#journeys" title="Permanent link">&para;</a></h2>
+<h3 id="1-baseline-for-brownfield-code">1. Baseline for brownfield code<a class="headerlink" href="#1-baseline-for-brownfield-code" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> accept today's survivors, then fail only on new escapes. Expected: <code>--update-baseline</code> records the survivors and exits 0. Gating against the baseline passes, still passes after lines shift, and fails (exit 4) only when a new survivor appears.</p>
+<ul>
+<li><a href="evidence/01-first-run.txt">First run</a>: 33 mutants, 17 escaped, exit 0.</li>
+<li><a href="evidence/02-update-baseline.txt"><code>--update-baseline</code></a> wrote <a href="evidence/02-mutago-baseline.json">17 unique IDs</a> and exited 0.</li>
+<li><a href="evidence/03-baseline-gate.txt"><code>--fail-on-escaped --baseline</code></a> exited 0.</li>
+<li>Added three comment lines above the package clause. The gate <a href="evidence/04-baseline-shifted.txt">still passed</a>, so IDs survived the line shift.</li>
+<li>Added <code>Tax</code> with a weak test (<a href="evidence/05-new-code.patch">patch</a>). The gate <a href="evidence/05-baseline-new-escape.txt">returned exit 4</a> with "6 new mutant(s) escaped".</li>
+<li>After strengthening the <code>Clamp</code> test, <a href="evidence/08-update-after-kill.txt"><code>--update-baseline</code></a> rewrote the file with 20 survivors (17 − 3 killed + 6 new).</li>
+</ul>
+<p>Variations:</p>
+<ul>
+<li>With <a href="evidence/06-missing-baseline.txt">a missing baseline path</a>, mutago treats the baseline as empty and reports all 23 survivors as new (exit 4). This fails safe.</li>
+<li>With <a href="evidence/07-update-custom-path.txt">an output directory that does not exist</a>, mutago exits 3, but only after running every mutant.</li>
+</ul>
+<h3 id="2-escaped-mutant-triage">2. Escaped-mutant triage<a class="headerlink" href="#2-escaped-mutant-triage" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> pick a survivor from the agentic JSON, replay just that mutant, then suppress the equivalent mutants. Expected: <code>--run-mutant-id</code> replays the same mutant after code edits, and annotations skip the named mutators.</p>
+<ul>
+<li><a href="evidence/01-agentic.json">Agentic JSON</a> entries have <code>id</code>, <code>diff</code>, <code>kill_hint</code>, and test files.</li>
+<li>After three lines were inserted above it, <a href="evidence/09-run-mutant-id.txt"><code>--run-mutant-id</code></a> still found the survivor. It printed only that result and exited 0.</li>
+<li>An <a href="evidence/10-run-mutant-id-unknown.txt">unknown ID</a> gave a clear message and exit 3.</li>
+<li>Annotations: <code>branch/if</code> was skipped on the next line (<a href="evidence/12-annotation-run.txt">run</a>), but <code>increment</code> was not (#270).</li>
+</ul>
+<h3 id="3-config-file-and-custom-exec">3. Config file and custom <code>--exec</code><a class="headerlink" href="#3-config-file-and-custom-exec" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> drive a run from YAML and from the shipped exec script. Expected: the config fields take effect, and the script's totals match the built-in runner's.</p>
+<ul>
+<li><a href="evidence/20-config.yml">Config</a> settings:</li>
+<li><code>exclude_dirs: [gen]</code> excluded <code>gen/</code>.</li>
+<li><code>skip_without_test</code> skipped <code>notest.go</code>.</li>
+<li><code>json_output</code> wrote <a href="evidence/20-report.json"><code>report.json</code></a>.</li>
+<li><code>silent_mode</code> printed only the summary.</li>
+<li><code>min_msi: 40</code> passed at 52.38%.</li>
+<li><code>ignore_source_lines</code> failed for statement mutators (#269).</li>
+<li><a href="evidence/18-exec-script.txt"><code>scripts/exec/test-mutated-package.sh</code></a> gave the same totals as the built-in runner (20 total, 5 killed, 15 escaped, 25%). The fixture's source hash was unchanged afterwards.</li>
+<li><a href="evidence/19-embed-run.txt"><code>//go:embed</code></a> survived mutation. The embed test was never broken by unrelated mutants.</li>
+</ul>
+<h2 id="rejected-and-unresolved-candidates">Rejected and unresolved candidates<a class="headerlink" href="#rejected-and-unresolved-candidates" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Rejected — comment loss breaks directives.</strong> The <code>statement/return</code> mutant in <a href="evidence/18-exec-script.txt">the exec run</a> drops a comment line inside the function. A <code>//go:embed</code> directive at file scope was kept (<a href="evidence/19-embed-run.txt">run</a>), and the dropped comment is in the mutant copy only.</li>
+<li><strong>Unresolved — one KILLED/ESCAPED flip.</strong> In a single run, <code>ann.go:14 (expression/comparison)</code> (<code>x &gt; 0</code> → <code>x &gt;= 0</code>, tested only with <code>-1</code>) reported KILLED. Six repeat runs, and three replays of the edit-then-run sequence, all reported ESCAPED. The likeliest cause is a timeout under host load, but the summary line for that run was not kept.</li>
+</ul>
+<h2 id="usability-observations">Usability observations<a class="headerlink" href="#usability-observations" title="Permanent link">&para;</a></h2>
+<ul>
+<li>With <code>--baseline</code>, the terminal lists every escaped mutant and says only "N new mutant(s) escaped". It does not say which ones are new. <em>Suggestion:</em> mark new escapes, or list them in the gate message.</li>
+<li><code>--update-baseline</code> into a directory that does not exist fails only after the whole run. <em>Suggestion:</em> check the path is writable before running mutants.</li>
+<li><code>--no-diffs</code> does not hide diffs that the shipped exec script prints itself (<a href="evidence/18-exec-script.txt">output</a>).</li>
+<li>The <code>branch/if</code> and <code>statement/remove</code> diffs show the replacement body without its indentation (<code>+\t_ = pct</code> / <code>+}</code>). See <a href="evidence/09-run-mutant-id.txt">run-mutant-id output</a>. This is cosmetic.</li>
+</ul>
+<h2 id="unexplored-areas-and-limits">Unexplored areas and limits<a class="headerlink" href="#unexplored-areas-and-limits" title="Permanent link">&para;</a></h2>
+<p>Not covered:</p>
+<ul>
+<li><code>--logger-github</code> and <code>--logger-gitlab</code></li>
+<li><code>--timeout-coefficient</code></li>
+<li><code>--test-recursive</code> with baselines</li>
+<li>live TTY progress</li>
+<li>signal interruption</li>
+<li><code>mutator-disable-func</code> and <code>mutator-disable-regexp</code></li>
+</ul>
+<p>The fixtures are small, single-package modules. No product source was changed.</p>
+<h2 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Permanent link">&para;</a></h2>
+<p>The disposable modules, binary, and <code>GOCACHE</code> under <code>/tmp/mutago-et</code> were removed after the evidence was copied here.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

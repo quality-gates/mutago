@@ -1,0 +1,12 @@
+The mutation score is 52.38% (22 killed, 20 escaped, 0 errored, 0 not covered, 0 skipped, 42 total)
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   4 / 4    (100%)
+  branch/if                            killed   3 / 5    (60%)
+  conditional/negated                  killed   5 / 5    (100%)
+  expression/comparison                killed   0 / 5    (0%)
+  numbers/decrementer                  killed   2 / 8    (25%)
+  numbers/incrementer                  killed   3 / 8    (38%)
+  statement/remove                     killed   0 / 1    (0%)
+  statement/return                     killed   5 / 6    (83%)
+exit=0

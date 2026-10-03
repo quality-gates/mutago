@@ -1,0 +1,3 @@
+The mutation score is 0.00% (0 killed, 0 escaped, 0 errored, 0 not covered, 0 skipped, 0 total)
+MSI 0.00% is below minimum required 75.00%
+exit=4

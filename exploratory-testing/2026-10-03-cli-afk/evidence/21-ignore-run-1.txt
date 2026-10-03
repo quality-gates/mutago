@@ -1,0 +1,62 @@
+KILLED ship/ship.go:5 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED ship/ship.go:4 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED ship/ship.go:4 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- Original
++++ New
+@@ -1,7 +1,7 @@
+ package ship
+ 
+ func Fee(total int) int {
+-	if total >= 50 {
++	if total > 50 {
+ 		return 0
+ 	}
+ 	return 5
+
+ESCAPED ship/ship.go:4 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- Original
++++ New
+@@ -1,7 +1,7 @@
+ package ship
+ 
+ func Fee(total int) int {
+-	if total >= 50 {
++	if total >= 49 {
+ 		return 0
+ 	}
+ 	return 5
+
+KILLED ship/ship.go:5 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED ship/ship.go:4 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- Original
++++ New
+@@ -1,7 +1,7 @@
+ package ship
+ 
+ func Fee(total int) int {
+-	if total >= 50 {
++	if total >= 51 {
+ 		return 0
+ 	}
+ 	return 5
+
+KILLED ship/ship.go:5 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED ship/ship.go:7 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 62.50% (5 killed, 3 escaped, 0 errored, 0 not covered, 0 skipped, 8 total)
+
+Per-mutator breakdown:
+  branch/if                            killed   1 / 1    (100%)
+  conditional/negated                  killed   1 / 1    (100%)
+  expression/comparison                killed   0 / 1    (0%)
+  numbers/decrementer                  killed   1 / 2    (50%)
+  numbers/incrementer                  killed   1 / 2    (50%)
+  statement/return                     killed   1 / 1    (100%)
+exit=0
