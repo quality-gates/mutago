@@ -1,0 +1,8 @@
+KILLED ship/ship.go:5 (branch/if)
+KILLED ship/ship.go:4 (conditional/negated)
+ESCAPED ship/ship.go:4 (expression/comparison)
+ESCAPED ship/ship.go:4 (numbers/decrementer)
+KILLED ship/ship.go:5 (numbers/decrementer)
+ESCAPED ship/ship.go:4 (numbers/incrementer)
+KILLED ship/ship.go:5 (numbers/incrementer)
+The mutation score is 57.14% (4 killed, 3 escaped, 0 errored, 0 not covered, 0 skipped, 7 total)

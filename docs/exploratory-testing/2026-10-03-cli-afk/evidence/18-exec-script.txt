@@ -1,0 +1,223 @@
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.0	2026-10-03 01:30:54
+@@ -12,7 +12,7 @@
+ 	y := 0
+ 	// mutator-disable-next-line branch/if, increment
+ 	if x > 0 {
+-		y += 1
++		y -= 1
+ 	}
+ 	return y
+ }
+ESCAPED ann/ann.go:15 (arithmetic/assign_invert)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.1	2026-10-03 01:30:55
+@@ -12,7 +12,7 @@
+ 	y := 0
+ 	// mutator-disable-next-line branch/if, increment
+ 	if x > 0 {
+-		y += 1
++		y = 1
+ 	}
+ 	return y
+ }
+ESCAPED ann/ann.go:15 (arithmetic/assignment)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED ann/ann.go:5 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED ann/ann.go:14 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.4	2026-10-03 01:30:56
+@@ -2,7 +2,7 @@
+ 
+ func Cap(pct int) int {
+ 	// mutator-disable-next-line branch/if
+-	if pct > 100 {
++	if pct >= 100 {
+ 		pct = 100
+ 	}
+ 	return pct
+ESCAPED ann/ann.go:5 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.5	2026-10-03 01:30:56
+@@ -11,7 +11,7 @@
+ func Bump(x int) int {
+ 	y := 0
+ 	// mutator-disable-next-line branch/if, increment
+-	if x > 0 {
++	if x >= 0 {
+ 		y += 1
+ 	}
+ 	return y
+ESCAPED ann/ann.go:14 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.6	2026-10-03 01:30:56
+@@ -2,7 +2,7 @@
+ 
+ func Cap(pct int) int {
+ 	// mutator-disable-next-line branch/if
+-	if pct > 100 {
++	if pct > 99 {
+ 		pct = 100
+ 	}
+ 	return pct
+ESCAPED ann/ann.go:5 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.7	2026-10-03 01:30:56
+@@ -3,7 +3,7 @@
+ func Cap(pct int) int {
+ 	// mutator-disable-next-line branch/if
+ 	if pct > 100 {
+-		pct = 100
++		pct = 99
+ 	}
+ 	return pct
+ }
+ESCAPED ann/ann.go:6 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED ann/ann.go:12 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.9	2026-10-03 01:30:57
+@@ -11,7 +11,7 @@
+ func Bump(x int) int {
+ 	y := 0
+ 	// mutator-disable-next-line branch/if, increment
+-	if x > 0 {
++	if x > (-1) {
+ 		y += 1
+ 	}
+ 	return y
+ESCAPED ann/ann.go:14 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.10	2026-10-03 01:30:57
+@@ -12,7 +12,7 @@
+ 	y := 0
+ 	// mutator-disable-next-line branch/if, increment
+ 	if x > 0 {
+-		y += 1
++		y += 0
+ 	}
+ 	return y
+ }
+ESCAPED ann/ann.go:15 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.11	2026-10-03 01:30:58
+@@ -2,7 +2,7 @@
+ 
+ func Cap(pct int) int {
+ 	// mutator-disable-next-line branch/if
+-	if pct > 100 {
++	if pct > 101 {
+ 		pct = 100
+ 	}
+ 	return pct
+ESCAPED ann/ann.go:5 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.12	2026-10-03 01:30:58
+@@ -3,7 +3,7 @@
+ func Cap(pct int) int {
+ 	// mutator-disable-next-line branch/if
+ 	if pct > 100 {
+-		pct = 100
++		pct = 101
+ 	}
+ 	return pct
+ }
+ESCAPED ann/ann.go:6 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED ann/ann.go:12 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.14	2026-10-03 01:30:59
+@@ -11,7 +11,7 @@
+ func Bump(x int) int {
+ 	y := 0
+ 	// mutator-disable-next-line branch/if, increment
+-	if x > 0 {
++	if x > 1 {
+ 		y += 1
+ 	}
+ 	return y
+ESCAPED ann/ann.go:14 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.15	2026-10-03 01:30:59
+@@ -12,7 +12,7 @@
+ 	y := 0
+ 	// mutator-disable-next-line branch/if, increment
+ 	if x > 0 {
+-		y += 1
++		y += 2
+ 	}
+ 	return y
+ }
+ESCAPED ann/ann.go:15 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.16	2026-10-03 01:30:59
+@@ -3,8 +3,8 @@
+ func Cap(pct int) int {
+ 	// mutator-disable-next-line branch/if
+ 	if pct > 100 {
+-		pct = 100
+-	}
++	_ = pct
++}
+ 	return pct
+ }
+ 
+ESCAPED ann/ann.go:6 (statement/remove)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.17	2026-10-03 01:30:59
+@@ -12,7 +12,7 @@
+ 	y := 0
+ 	// mutator-disable-next-line branch/if, increment
+ 	if x > 0 {
+-		y += 1
+-	}
++	_ = y
++}
+ 	return y
+ }
+ESCAPED ann/ann.go:15 (statement/remove)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED ann/ann.go:8 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- ann/ann.go	2026-10-03 01:30:54
++++ $TMPDIR/mutago-2982391592/ann/ann.go.19	2026-10-03 01:31:00
+@@ -10,9 +10,9 @@
+ 
+ func Bump(x int) int {
+ 	y := 0
+-	// mutator-disable-next-line branch/if, increment
++
+ 	if x > 0 {
+ 		y += 1
+ 	}
+-	return y
++	return 0
+ }
+ESCAPED ann/ann.go:17 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 25.00% (5 killed, 15 escaped, 0 errored, 0 not covered, 0 skipped, 20 total)
+
+Per-mutator breakdown:
+  arithmetic/assign_invert             killed   0 / 1    (0%)
+  arithmetic/assignment                killed   0 / 1    (0%)
+  conditional/negated                  killed   2 / 2    (100%)
+  expression/comparison                killed   0 / 2    (0%)
+  numbers/decrementer                  killed   1 / 5    (20%)
+  numbers/incrementer                  killed   1 / 5    (20%)
+  statement/remove                     killed   0 / 2    (0%)
+  statement/return                     killed   1 / 2    (50%)
+exit=0

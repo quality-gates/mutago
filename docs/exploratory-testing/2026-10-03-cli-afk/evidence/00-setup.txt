@@ -1,0 +1,5 @@
+commit: 59702f788969ba392c21f457c337da5ad95fcf0e
+go version go1.26.6 darwin/arm64
+26.6.2
+mutago dev
+env: GOMAXPROCS=1 GOCACHE=<disposable> --workers=1 --exec-timeout=10

@@ -1,0 +1,22 @@
+$ mutago  --dry-run ./ann
+Per-mutator totals across all files:
+  arithmetic/assign_invert                 1
+  arithmetic/assignment                    1
+  conditional/negated                      2
+  expression/comparison                    2
+  numbers/decrementer                      5
+  numbers/incrementer                      5
+  statement/remove                         2
+  statement/return                         2
+
+Total: 20 mutation(s) would be generated. No files written, no tests run.
+$ mutago --config ign.yml --dry-run ./ann
+Per-mutator totals across all files:
+  conditional/negated                      2
+  expression/comparison                    2
+  numbers/decrementer                      4
+  numbers/incrementer                      4
+  statement/remove                         2
+  statement/return                         2
+
+Total: 16 mutation(s) would be generated. No files written, no tests run.

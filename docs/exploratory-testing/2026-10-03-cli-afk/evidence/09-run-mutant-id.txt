@@ -1,0 +1,17 @@
+ESCAPED shop/price.go:9 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- Original
++++ New
+@@ -6,8 +6,8 @@
+ // Discount returns the price after applying a percentage discount.
+ func Discount(price, pct int) int {
+ 	if pct > 100 {
+-		pct = 100
+-	}
++	_ = pct
++}
+ 	return price - price*pct/100
+ }
+ 
+
+exit=0

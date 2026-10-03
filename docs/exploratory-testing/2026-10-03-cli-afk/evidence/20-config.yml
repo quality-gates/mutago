@@ -1,0 +1,8 @@
+skip_without_test: true
+json_output: true
+silent_mode: true
+min_msi: 40
+exclude_dirs:
+  - gen
+ignore_source_lines:
+  - 'return 5$'

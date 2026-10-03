@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "mutants": [
+    {
+      "id": "a18c138f8a76909bd993cdfe16fa44e7",
+      "file": "shop/price.go",
+      "mutator": "branch/if",
+      "line": 6
+    },
+    {
+      "id": "1c8cec7076232324b732616db75f38a5",
+      "file": "shop/price.go",
+      "mutator": "branch/if",
+      "line": 22
+    },
+    {
+      "id": "72146951783a02853ba482b3b88d0325",
+      "file": "shop/price.go",
+      "mutator": "branch/if",
+      "line": 25
+    },
+    {
+      "id": "e50803a73b70637a1ad200d720b4d8f0",
+      "file": "shop/price.go",
+      "mutator": "expression/comparison",
+      "line": 5
+    },
+    {
+      "id": "db303f96e3cba42be78095cfb1f7674f",
+      "file": "shop/price.go",
+      "mutator": "expression/comparison",
+      "line": 13
+    },
+    {
+      "id": "e808af27fc270d2c38b81ef60391c19b",
+      "file": "shop/price.go",
+      "mutator": "expression/comparison",
+      "line": 21
+    },
+    {
+      "id": "5f1dc03b409914b54ff3c816debfd385",
+      "file": "shop/price.go",
+      "mutator": "expression/comparison",
+      "line": 24
+    },
+    {
+      "id": "d6282919e455bfa0d5034c6f278584e9",
+      "file": "shop/price.go",
+      "mutator": "numbers/decrementer",
+      "line": 5
+    },
+    {
+      "id": "623f1bd68a940a78cdd82220902fdd0c",
+      "file": "shop/price.go",
+      "mutator": "numbers/decrementer",
+      "line": 6
+    },
+    {
+      "id": "c1c1b84727ba8330bff03459c268ec0b",
+      "file": "shop/price.go",
+      "mutator": "numbers/decrementer",
+      "line": 8
+    },
+    {
+      "id": "b5faa115692aa73b94a27360ec23fed6",
+      "file": "shop/price.go",
+      "mutator": "numbers/decrementer",
+      "line": 13
+    },
+    {
+      "id": "a8555afc839a3e7538d50f219a5ec22d",
+      "file": "shop/price.go",
+      "mutator": "numbers/incrementer",
+      "line": 5
+    },
+    {
+      "id": "ffd552235531789832d02b154f975622",
+      "file": "shop/price.go",
+      "mutator": "numbers/incrementer",
+      "line": 6
+    },
+    {
+      "id": "eed76a000955e04d3fe9ab3dd12d2c7c",
+      "file": "shop/price.go",
+      "mutator": "numbers/incrementer",
+      "line": 13
+    },
+    {
+      "id": "34a030e90cdd0b73045028209516bc4c",
+      "file": "shop/price.go",
+      "mutator": "statement/remove",
+      "line": 6
+    },
+    {
+      "id": "0c6103669a5a1fe6f413058d5b4d2cb8",
+      "file": "shop/price.go",
+      "mutator": "statement/return",
+      "line": 22
+    },
+    {
+      "id": "ea82a23b9e7be507ddf1c55c9fc27f0a",
+      "file": "shop/price.go",
+      "mutator": "statement/return",
+      "line": 25
+    }
+  ]
+}
