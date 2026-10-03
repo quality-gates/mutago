@@ -1859,7 +1859,7 @@
 <h3 id="numbersincrementer">numbers/incrementer<a class="headerlink" href="#numbersincrementer" title="Permanent link">&para;</a></h3>
 <p>Increments integer and float literals by 1. Maximum boundary literals for bounded integer types, any literal equal to <code>math.MaxInt64</code> (typed or untyped), and minimum signed-integer boundary constants under unary minus (e.g. <code>int8(-128)</code>), are skipped where incrementing would overflow, to avoid uncompilable mutants.</p>
 <h3 id="numbersdecrementer">numbers/decrementer<a class="headerlink" href="#numbersdecrementer" title="Permanent link">&para;</a></h3>
-<p>Decrements integer and float literals by 1. Zero literals in unsigned integer contexts (where decrementing produces integer constant overflow) are skipped to avoid uncompilable mutants.</p>
+<p>Decrements integer and float literals by 1. Zero literals in unsigned integer contexts and non-negative constant contexts (indexes, slice bounds, array lengths, and shift counts) are skipped where decrementing would produce uncompilable mutants.</p>
 <h3 id="numbersfloat-negate">numbers/float-negate<a class="headerlink" href="#numbersfloat-negate" title="Permanent link">&para;</a></h3>
 <p>Replaces a float literal with its negation.</p>
 <table>
