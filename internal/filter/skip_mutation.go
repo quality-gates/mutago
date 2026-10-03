@@ -6,7 +6,7 @@ import (
 )
 
 // SkipMakeArgsFilter is a filter that tracks numeric arguments in 'make' calls
-// for slices and maps to be ignored during mutation.
+// for slices, maps, and channels to be ignored during mutation.
 type SkipMakeArgsFilter struct {
 	// IgnoredNodes maps positions of numeric literals to their parent 'make' call expressions
 	IgnoredNodes map[token.Pos]*ast.CallExpr
@@ -17,16 +17,12 @@ func NewSkipMakeArgsFilter() *SkipMakeArgsFilter {
 	return &SkipMakeArgsFilter{IgnoredNodes: make(map[token.Pos]*ast.CallExpr)}
 }
 
-// Collect collects numeric arguments (children) from 'make' calls (parents) for slices/maps to be ignored during mutation
+// Collect collects numeric arguments (children) from 'make' calls for slices, maps, and channels to be ignored during mutation
 func (s *SkipMakeArgsFilter) Collect(file *ast.File, _ *token.FileSet, _ string) {
 	ast.Inspect(file, func(n ast.Node) bool {
 		if callExpr, ok := n.(*ast.CallExpr); ok {
 			if ident, ok := callExpr.Fun.(*ast.Ident); ok && ident.Name == "make" && len(callExpr.Args) > 1 {
-				arg0 := callExpr.Args[0]
-				_, isArray := arg0.(*ast.ArrayType)
-				_, isMap := arg0.(*ast.MapType)
-				_, isIdent := arg0.(*ast.Ident)
-				if isArray || isMap || isIdent {
+				if isSupportedMakeType(callExpr.Args[0]) {
 					s.collectForIgnoredNodes(callExpr.Args[1], callExpr)
 
 					if len(callExpr.Args) > 2 {
@@ -38,6 +34,15 @@ func (s *SkipMakeArgsFilter) Collect(file *ast.File, _ *token.FileSet, _ string)
 		}
 		return true
 	})
+}
+
+func isSupportedMakeType(expr ast.Expr) bool {
+	switch expr.(type) {
+	case *ast.ArrayType, *ast.MapType, *ast.Ident, *ast.ChanType:
+		return true
+	default:
+		return false
+	}
 }
 
 // ShouldSkip determines whether a given AST node should be skipped during mutation.

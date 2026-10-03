@@ -37,6 +37,42 @@ func TestMainSimple(t *testing.T) {
 	)
 }
 
+func TestMainDecrementerSkipsNonNegativeContexts(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/decrementer\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - numbers/decrementer\n")
+	writeFixtureFile(t, filepath.Join(root, "example.go"), `package example
+
+func GetFirst(xs []int) int { return xs[0] }
+
+func CheckNonNegativeContexts(xs []int, n uint) {
+	_ = xs[0]
+	_ = xs[0:]
+	_ = xs[:0]
+	_ = xs[:0:0]
+	var a [0]int
+	_ = a
+	_ = make(chan int, 0)
+	_ = n << 0
+	n <<= 0
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "example_test.go"), `package example
+
+import "testing"
+
+func TestGetFirst(t *testing.T) {
+	if GetFirst([]int{42}) != 42 {
+		t.Fatal("wrong result")
+	}
+}
+`)
+
+	out := testMain(t, root, []string{"--verbose", "--workers", "1", "--exec-timeout", "30", "--config", "mutago.yml", "."}, returnOk, "mutation score")
+	assert.NotContains(t, out, "SKIP example.go")
+	assert.NotContains(t, out, "Mutation did not compile")
+}
+
 func TestMainUnknownRunMutantID(t *testing.T) {
 	out := testMain(
 		t,
