@@ -24,8 +24,27 @@ type SourceLineRegexFilter struct {
 	fset         *token.FileSet
 }
 
+// InvalidPattern is a configured pattern that failed to compile.
+type InvalidPattern struct {
+	Pattern string
+	Err     error
+}
+
+// InvalidSourceLinePatterns returns, in input order, each pattern that is not a
+// valid regular expression together with its compile error.
+func InvalidSourceLinePatterns(patterns []string) []InvalidPattern {
+	var invalid []InvalidPattern
+	for _, p := range patterns {
+		if _, err := regexp.Compile(p); err != nil {
+			invalid = append(invalid, InvalidPattern{Pattern: p, Err: err})
+		}
+	}
+	return invalid
+}
+
 // NewSourceLineRegexFilter compiles each pattern string and returns a filter.
-// Patterns that fail to compile are silently skipped.
+// Patterns that fail to compile are skipped; callers report them once per run
+// via InvalidSourceLinePatterns.
 func NewSourceLineRegexFilter(patterns []string) *SourceLineRegexFilter {
 	compiled := make([]*regexp.Regexp, 0, len(patterns))
 	for _, p := range patterns {

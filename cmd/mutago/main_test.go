@@ -197,6 +197,83 @@ func TestMainUnknownConfigField(t *testing.T) {
 	)
 }
 
+func selectorWarningFixture(t *testing.T, config string) string {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/selectors\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), config)
+	writeFixtureFile(t, filepath.Join(root, "value.go"), `package selectors
+
+func Value(x int) int {
+	if x > 0 {
+		return 5
+	}
+	return 0
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "value_test.go"), `package selectors
+
+import "testing"
+
+func TestValue(t *testing.T) {
+	if got := Value(1); got != 5 {
+		t.Fatalf("Value(1) = %d, want 5", got)
+	}
+}
+`)
+	return root
+}
+
+func TestMainWarnsOnUnknownDisableFlag(t *testing.T) {
+	root := selectorWarningFixture(t, "")
+	out := testMain(t, root, []string{"--dry-run", "--disable", "bogus", "--disable", "numbers/*", "--disable", "branch/if", "--config", "mutago.yml"}, returnOk, `warning: mutator selector "bogus" matches no registered mutator`)
+	assert.NotContains(t, out, `"numbers/*" matches no`)
+	assert.NotContains(t, out, `"branch/if" matches no`)
+}
+
+func TestMainWarnsOnUnknownConfigMutatorSelectors(t *testing.T) {
+	root := selectorWarningFixture(t, "enable_mutators:\n  - branch/iff\ndisable_mutators:\n  - nope/*\n")
+	out := testMain(t, root, []string{"--dry-run", "--config", "mutago.yml"}, returnOk, `warning: mutator selector "branch/iff" matches no registered mutator`)
+	assert.Contains(t, out, `warning: mutator selector "nope/*" matches no registered mutator`)
+}
+
+func TestMainReadmeDisableNextLineExampleSuppressesIncrementer(t *testing.T) {
+	source := func(directive string) string {
+		return `package selectors
+
+func Bump(x, step int) int {
+	y := x
+` + directive + `
+	if x > 0 {
+		y += step
+	}
+	return y
+}
+`
+	}
+	for _, tc := range []struct {
+		directive string
+		want      string
+	}{
+		{"", "numbers/incrementer: 1"},
+		{"\t// mutator-disable-next-line branch/if, numbers/incrementer", "Total: 0 mutation(s)"},
+	} {
+		root := t.TempDir()
+		writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/selectors\n\ngo 1.26.6\n")
+		writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - numbers/incrementer\n")
+		writeFixtureFile(t, filepath.Join(root, "bump.go"), source(tc.directive))
+		writeFixtureFile(t, filepath.Join(root, "bump_test.go"), "package selectors\n\nimport \"testing\"\n\nfunc TestBump(t *testing.T) { _ = Bump(1, 1) }\n")
+		testMain(t, root, []string{"--dry-run", "--config", "mutago.yml"}, returnOk, tc.want)
+	}
+}
+
+func TestMainWarnsOnInvalidIgnoreSourceLinesRegex(t *testing.T) {
+	root := selectorWarningFixture(t, "ignore_source_lines:\n  - 'return (5'\n  - 'return 0'\n")
+	out := testMain(t, root, []string{"--dry-run", "--config", "mutago.yml"}, returnOk, `warning: invalid ignore_source_lines regex "return (5"`)
+	assert.NotContains(t, out, `regex "return 0"`)
+	assert.Equal(t, 1, strings.Count(out, "invalid ignore_source_lines regex"))
+	assert.Contains(t, out, "statement/return: 1", "valid pattern must still skip the return 0 line")
+}
+
 func TestMainSkipWithoutTest(t *testing.T) {
 	testMain(
 		t,

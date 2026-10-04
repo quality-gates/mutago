@@ -289,6 +289,8 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 		return nil, fmt.Errorf("Cannot load target packages: %w", err)
 	}
 
+	warnIgnoredSelectors(e.Stderr, opts)
+
 	report := &models.Report{}
 	var reportMu sync.Mutex
 
@@ -375,6 +377,32 @@ func buildActiveMutators(opts *models.Options) []mutatorItem {
 		mutators = append(mutators, mutatorItem{Name: name, Mutator: m})
 	}
 	return mutators
+}
+
+// warnIgnoredSelectors writes a warning for each enable or disable selector
+// that matches no registered mutator and each ignore_source_lines pattern that
+// does not compile, so typos are not silently ignored.
+func warnIgnoredSelectors(w io.Writer, opts *models.Options) {
+	selectors := append(append([]string{}, opts.Mutator.DisableMutators...), opts.Config.DisableMutators...)
+	selectors = append(selectors, opts.Config.EnableMutators...)
+	names := mutator.List()
+	for _, selector := range selectors {
+		if !matchesAnyName(selector, names) {
+			fmt.Fprintf(w, "warning: mutator selector %q matches no registered mutator\n", selector)
+		}
+	}
+	for _, invalid := range filter.InvalidSourceLinePatterns(opts.Config.IgnoreSourceLines) {
+		fmt.Fprintf(w, "warning: invalid ignore_source_lines regex %q ignored: %v\n", invalid.Pattern, invalid.Err)
+	}
+}
+
+func matchesAnyName(pattern string, names []string) bool {
+	for _, name := range names {
+		if matchesMutator(pattern, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchesAnyMutator(patterns []string, name string) bool {

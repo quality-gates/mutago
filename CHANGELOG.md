@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Warn on stderr when a `--disable`, `disable_mutators`, or `enable_mutators` name matches no mutator, and when an `ignore_source_lines` regex does not compile. Before, these were ignored silently. The README annotation example now uses `numbers/incrementer` instead of the non-existent `increment` (#270).
 - Apply `ignore_source_lines` to statement mutations at each mutation's source position, without suppressing other statements in the same block (#269).
 - `numbers/decrementer` now skips zero in indexes, slice bounds, array lengths, channel capacities, and shift counts, avoiding mutants that fail to compile (#264).
 

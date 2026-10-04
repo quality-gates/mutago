@@ -23,6 +23,19 @@ func TestNewSourceLineRegexFilter_InvalidRegex(t *testing.T) {
 	assert.Empty(t, f.patterns)
 }
 
+func TestInvalidSourceLinePatterns_ReportsOnlyInvalidInOrder(t *testing.T) {
+	invalid := InvalidSourceLinePatterns([]string{"ok", "return (5", "fine", "[bad"})
+	require.Len(t, invalid, 2)
+	assert.Equal(t, "return (5", invalid[0].Pattern)
+	assert.Contains(t, invalid[0].Err.Error(), "missing closing )")
+	assert.Equal(t, "[bad", invalid[1].Pattern)
+	assert.Error(t, invalid[1].Err)
+}
+
+func TestInvalidSourceLinePatterns_AllValid(t *testing.T) {
+	assert.Empty(t, InvalidSourceLinePatterns([]string{"assert\\.", "todo"}))
+}
+
 func TestNewSourceLineRegexFilter_ValidPatterns(t *testing.T) {
 	f := NewSourceLineRegexFilter([]string{"assert\\.", "todo"})
 	assert.Len(t, f.patterns, 2)
