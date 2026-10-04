@@ -33,17 +33,14 @@ func NewSourceLineRegexFilter(patterns []string) *SourceLineRegexFilter {
 			compiled = append(compiled, re)
 		}
 	}
-	return &SourceLineRegexFilter{
-		patterns:     compiled,
-		skippedLines: make(map[int]struct{}),
-	}
+	return &SourceLineRegexFilter{patterns: compiled}
 }
 
 // Collect reads the source file and records physical line numbers that match
 // any configured pattern.
 func (f *SourceLineRegexFilter) Collect(_ *ast.File, fset *token.FileSet, fileAbs string) {
 	f.fset = fset
-	f.skippedLines = make(map[int]struct{})
+	f.skippedLines = nil
 	if len(f.patterns) == 0 {
 		return
 	}
@@ -80,7 +77,7 @@ func (f *SourceLineRegexFilter) ShouldSkip(node ast.Node, mutatorName string) bo
 // ShouldSkipPosition returns true when pos is on a physical source line that
 // matched a configured regex.
 func (f *SourceLineRegexFilter) ShouldSkipPosition(pos token.Pos, _ string) bool {
-	if !pos.IsValid() || f.fset == nil {
+	if f.fset == nil {
 		return false
 	}
 	_, skip := f.skippedLines[f.fset.PositionFor(pos, false).Line]
