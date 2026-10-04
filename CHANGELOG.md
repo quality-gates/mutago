@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.21] — 2026-10-04
+
 ### Fixed
 - `--per-test` now applies build flags from `--test-flags` (such as `-tags`, `-race` and `-ldflags`) when it lists packages and tests. Before, a test behind a build tag was left out of the per-test map, so the `-run` filter skipped it and mutants it would catch escaped. `--count` is now treated the same as `-count` (#275).
 - Warn on stderr when a `--disable`, `disable_mutators`, or `enable_mutators` name matches no mutator, and when an `ignore_source_lines` regex does not compile. Before, these were ignored silently. The README annotation example now uses `numbers/incrementer` instead of the non-existent `increment` (#270).
@@ -658,7 +660,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.20...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.21...HEAD
+[v2.10.21]: https://github.com/quality-gates/mutago/compare/v2.10.20...v2.10.21
 [v2.10.20]: https://github.com/quality-gates/mutago/compare/v2.10.19...v2.10.20
 [v2.10.19]: https://github.com/quality-gates/mutago/compare/v2.10.18...v2.10.19
 [v2.10.18]: https://github.com/quality-gates/mutago/compare/v2.10.17...v2.10.18
