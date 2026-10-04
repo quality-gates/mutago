@@ -77,17 +77,67 @@ func (p *Processor) ShouldSkip(node ast.Node, mutatorName string) bool {
 		p.LineAnnotation.filterNodesOnNextLine(node, mutatorName)
 }
 
-// DecoratorFilter creates a mutator that applies one or more filters before executing the provided mutator.
+// DecoratorFilter creates a mutator that applies filters to visited nodes and
+// to each mutation's original source position.
 func DecoratorFilter(m mutator.Mutator, name string, filters ...filter.NodeFilter) mutator.Mutator {
+	nodeFilters, positionFilters := separateFilters(filters)
 	return func(pkg *types.Package, info *types.Info, node ast.Node) []mutator.Mutation {
-		for _, f := range filters {
-			if f.ShouldSkip(node, name) {
-				return nil
-			}
+		if shouldSkipNode(node, name, nodeFilters) {
+			return nil
 		}
-
-		return m(pkg, info, node)
+		mutations := m(pkg, info, node)
+		return filterMutationsByPosition(mutations, node, name, positionFilters)
 	}
+}
+
+func separateFilters(filters []filter.NodeFilter) ([]filter.NodeFilter, []filter.MutationPositionFilter) {
+	nodeFilters := make([]filter.NodeFilter, 0, len(filters))
+	positionFilters := make([]filter.MutationPositionFilter, 0, len(filters))
+	for _, f := range filters {
+		if positionFilter, ok := f.(filter.MutationPositionFilter); ok {
+			positionFilters = append(positionFilters, positionFilter)
+		} else {
+			nodeFilters = append(nodeFilters, f)
+		}
+	}
+	return nodeFilters, positionFilters
+}
+
+func shouldSkipNode(node ast.Node, name string, filters []filter.NodeFilter) bool {
+	for _, f := range filters {
+		if f.ShouldSkip(node, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func filterMutationsByPosition(mutations []mutator.Mutation, node ast.Node, name string, filters []filter.MutationPositionFilter) []mutator.Mutation {
+	if len(filters) == 0 {
+		return mutations
+	}
+
+	filtered := mutations[:0]
+	for _, mutation := range mutations {
+		position := mutation.Position
+		if !position.IsValid() && node != nil {
+			position = node.Pos()
+		}
+		if shouldSkipPosition(position, name, filters) {
+			continue
+		}
+		filtered = append(filtered, mutation)
+	}
+	return filtered
+}
+
+func shouldSkipPosition(position token.Pos, name string, filters []filter.MutationPositionFilter) bool {
+	for _, f := range filters {
+		if f.ShouldSkipPosition(position, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // getAnnotationName identifies the type of annotation

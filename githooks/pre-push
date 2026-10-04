@@ -58,6 +58,7 @@ echo "pre-push: running mutation testing scoped to the diff against origin/main.
 # packages at all.
 STATUS=0
 "$MUTAGO_BIN" \
+	--workers=1 \
 	--exec-timeout 30 \
 	--coverage \
 	--git-diff-lines \

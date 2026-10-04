@@ -1150,6 +1150,100 @@ func TestMainPerTestRecursiveKeepsSubpackageTests(t *testing.T) {
 	assert.NotContains(t, out, "ESCAPED")
 }
 
+func TestMainIgnoreSourceLinesFilterStatementMutationsByPosition(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/sourcefilter\n\ngo 1.22\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), `json_output: true
+ignore_source_lines:
+  - 'return 5'
+  - 'y \+= 1'
+enable_mutators:
+  - statement/return
+  - statement/remove
+`)
+	writeFixtureFile(t, filepath.Join(root, "example.go"), `package sourcefilter
+
+func Fee(standard bool) int {
+	if standard {
+		return 3
+	}
+	return 5
+}
+
+func Bump(x int) int {
+	y := 0
+	if x > 0 {
+		y += 1
+		y += 2
+	}
+	return y
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "example_test.go"), `package sourcefilter
+
+import "testing"
+
+func TestFee(t *testing.T) {
+	if Fee(true) != 3 || Fee(false) != 5 {
+		t.Fatal("wrong fee")
+	}
+}
+
+func TestBump(t *testing.T) {
+	if Bump(1) != 3 {
+		t.Fatal("wrong bump")
+	}
+}
+`)
+
+	reportPath := filepath.Join(root, "report.json")
+	previousReportFileName := models.ReportFileName
+	models.ReportFileName = reportPath
+	t.Cleanup(func() { models.ReportFileName = previousReportFileName })
+
+	testMain(t, root, []string{"--workers", "1", "--exec-timeout", "30", "--config", "mutago.yml", "."}, returnOk, "mutation score")
+
+	reportData, err := os.ReadFile(reportPath)
+	require.NoError(t, err)
+	var report models.Report
+	require.NoError(t, json.Unmarshal(reportData, &report))
+
+	mutants := append([]models.Mutant{}, report.Killed...)
+	mutants = append(mutants, report.Escaped...)
+	mutants = append(mutants, report.Skipped...)
+	mutants = append(mutants, report.Errored...)
+	mutants = append(mutants, report.NotCovered...)
+	require.NotEmpty(t, mutants)
+
+	sourceData, err := os.ReadFile(filepath.Join(root, "example.go"))
+	require.NoError(t, err)
+	sourceLines := strings.Split(string(sourceData), "\n")
+	var keptReturn, keptAssignment bool
+	for _, mutant := range mutants {
+		line := mutant.Mutator.OriginalStartLine
+		require.Greater(t, line, int64(0))
+		require.LessOrEqual(t, line, int64(len(sourceLines)))
+		sourceLine := strings.TrimSpace(sourceLines[line-1])
+
+		switch mutant.Mutator.MutatorName {
+		case "statement/return":
+			assert.NotEqual(t, "return 5", sourceLine, "matching return line must not be mutated")
+			if sourceLine == "return 3" {
+				keptReturn = true
+			}
+		case "statement/remove":
+			assert.NotEqual(t, "y += 1", sourceLine, "matching assignment line must not be mutated")
+			if sourceLine == "y += 2" {
+				keptAssignment = true
+			}
+		default:
+			t.Errorf("unexpected mutator %q", mutant.Mutator.MutatorName)
+		}
+	}
+	assert.True(t, keptReturn, "an unignored return in another block must still be mutated")
+	assert.True(t, keptAssignment, "an unignored sibling assignment must still be mutated")
+}
+
 func TestMainDryRun(t *testing.T) {
 	// --dry-run must exit 0 and report how many mutations would be generated
 	// without writing any files or running any tests.
