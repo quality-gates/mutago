@@ -42,7 +42,7 @@ func main() { _ = 1 + 2 }
 	file, err := parser.ParseFile(fset, "test.go", src, 0)
 	require.NoError(t, err)
 	f.Collect(file, fset, "nonexistent.go")
-	assert.Empty(t, f.skippedPositions)
+	assert.Empty(t, f.skippedLines)
 }
 
 func TestSourceLineRegexFilter_CollectBadFile(t *testing.T) {
@@ -54,7 +54,7 @@ func main() { _ = 1 + 2 }
 	file, err := parser.ParseFile(fset, "test.go", src, 0)
 	require.NoError(t, err)
 	f.Collect(file, fset, "/nonexistent/path/that/does/not/exist.go")
-	assert.Empty(t, f.skippedPositions)
+	assert.Empty(t, f.skippedLines)
 }
 
 func TestSourceLineRegexFilter_CollectAndShouldSkip(t *testing.T) {
@@ -78,7 +78,7 @@ func main() {
 	f.Collect(file, fset, tmp)
 
 	// At least one node on line 4 must be recorded.
-	assert.NotEmpty(t, f.skippedPositions)
+	assert.NotEmpty(t, f.skippedLines)
 
 	// Verify: nodes on the skipped line return true; nodes on safe lines return false.
 	var seenSkipped, seenSafe bool
@@ -121,7 +121,7 @@ func main() {
 	f := NewSourceLineRegexFilter([]string{"nolint"})
 	f.Collect(file, fset, tmp)
 
-	assert.Empty(t, f.skippedPositions)
+	assert.Empty(t, f.skippedLines)
 }
 
 func TestSourceLineRegexFilter_CollectUsesPhysicalLinesWithLineDirective(t *testing.T) {
@@ -133,7 +133,7 @@ func TestSourceLineRegexFilter_CollectUsesPhysicalLinesWithLineDirective(t *test
 		{name: "filename-less", directive: "//line :100"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			src := "package p\n" + tt.directive + "\nfunc f() { return }\n"
+			src := "package p\n" + tt.directive + "\nfunc f() int { return 5 }\n"
 			tmp := filepath.Join(t.TempDir(), "sample.go")
 			require.NoError(t, os.WriteFile(tmp, []byte(src), 0644))
 
@@ -146,12 +146,14 @@ func TestSourceLineRegexFilter_CollectUsesPhysicalLinesWithLineDirective(t *test
 
 			statement := file.Decls[0].(*ast.FuncDecl).Body.List[0]
 			assert.True(t, f.ShouldSkip(statement, "statement/remove"), "physical line containing return should be skipped")
+			ret := statement.(*ast.ReturnStmt)
+			assert.True(t, f.ShouldSkipPosition(ret.Results[0].Pos(), "statement/return"), "mutation position on the physical return line should be skipped")
 		})
 	}
 }
 
 func TestSourceLineRegexFilter_DoesNotSkipAdjustedLineCollision(t *testing.T) {
-	src := "package p\n//line fake.go:2\nfunc f() { return }\n"
+	src := "package p\n//line fake.go:2\nfunc f() int { return 5 }\n"
 	tmp := filepath.Join(t.TempDir(), "sample.go")
 	require.NoError(t, os.WriteFile(tmp, []byte(src), 0644))
 
@@ -164,4 +166,6 @@ func TestSourceLineRegexFilter_DoesNotSkipAdjustedLineCollision(t *testing.T) {
 
 	statement := file.Decls[0].(*ast.FuncDecl).Body.List[0]
 	assert.False(t, f.ShouldSkip(statement, "statement/remove"), "directive's physical line must not skip the return on another physical line")
+	ret := statement.(*ast.ReturnStmt)
+	assert.False(t, f.ShouldSkipPosition(ret.Results[0].Pos(), "statement/return"), "an adjusted-line collision must not skip a return on another physical line")
 }

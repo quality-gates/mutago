@@ -14,3 +14,9 @@ type NodeCollector interface {
 type NodeFilter interface {
 	ShouldSkip(node ast.Node, mutatorName string) bool
 }
+
+// MutationPositionFilter checks whether a mutation should be excluded by its
+// original source position.
+type MutationPositionFilter interface {
+	ShouldSkipPosition(pos token.Pos, mutatorName string) bool
+}

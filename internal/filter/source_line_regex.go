@@ -19,8 +19,9 @@ import (
 //	  - "assert\\."      # skip lines that call assertion helpers
 //	  - "//\\s*nolint"   # skip lines with nolint directives
 type SourceLineRegexFilter struct {
-	patterns         []*regexp.Regexp
-	skippedPositions map[token.Pos]struct{}
+	patterns     []*regexp.Regexp
+	skippedLines map[int]struct{}
+	fset         *token.FileSet
 }
 
 // NewSourceLineRegexFilter compiles each pattern string and returns a filter.
@@ -33,14 +34,16 @@ func NewSourceLineRegexFilter(patterns []string) *SourceLineRegexFilter {
 		}
 	}
 	return &SourceLineRegexFilter{
-		patterns:         compiled,
-		skippedPositions: make(map[token.Pos]struct{}),
+		patterns:     compiled,
+		skippedLines: make(map[int]struct{}),
 	}
 }
 
-// Collect reads the source file and records the positions of all AST nodes
-// that sit on lines matching any configured pattern.
-func (f *SourceLineRegexFilter) Collect(file *ast.File, fset *token.FileSet, fileAbs string) {
+// Collect reads the source file and records physical line numbers that match
+// any configured pattern.
+func (f *SourceLineRegexFilter) Collect(_ *ast.File, fset *token.FileSet, fileAbs string) {
+	f.fset = fset
+	f.skippedLines = make(map[int]struct{})
 	if len(f.patterns) == 0 {
 		return
 	}
@@ -65,29 +68,21 @@ func (f *SourceLineRegexFilter) Collect(file *ast.File, fset *token.FileSet, fil
 		lineNum++
 	}
 
-	if len(skippedLines) == 0 {
-		return
-	}
-
-	// Walk the AST and record positions of nodes on skipped lines.
-	ast.Inspect(file, func(n ast.Node) bool {
-		if n == nil {
-			return true
-		}
-		pos := fset.PositionFor(n.Pos(), false)
-		if _, skip := skippedLines[pos.Line]; skip {
-			f.skippedPositions[n.Pos()] = struct{}{}
-		}
-		return true
-	})
+	f.skippedLines = skippedLines
 }
 
-// ShouldSkip implements NodeFilter. Returns true when the node's start
-// position falls on a line that matched a configured regex.
-func (f *SourceLineRegexFilter) ShouldSkip(node ast.Node, _ string) bool {
-	if node == nil {
+// ShouldSkip implements NodeFilter. Returns true when the node starts on a
+// physical source line that matched a configured regex.
+func (f *SourceLineRegexFilter) ShouldSkip(node ast.Node, mutatorName string) bool {
+	return node != nil && f.ShouldSkipPosition(node.Pos(), mutatorName)
+}
+
+// ShouldSkipPosition returns true when pos is on a physical source line that
+// matched a configured regex.
+func (f *SourceLineRegexFilter) ShouldSkipPosition(pos token.Pos, _ string) bool {
+	if !pos.IsValid() || f.fset == nil {
 		return false
 	}
-	_, skip := f.skippedPositions[node.Pos()]
+	_, skip := f.skippedLines[f.fset.PositionFor(pos, false).Line]
 	return skip
 }
