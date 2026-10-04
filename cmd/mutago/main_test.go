@@ -1227,6 +1227,28 @@ func TestMainPerTestRecursiveKeepsSubpackageTests(t *testing.T) {
 	assert.NotContains(t, out, "ESCAPED")
 }
 
+func TestMainPerTestHonoursBuildTags(t *testing.T) {
+	// Only a test behind a build tag checks Double; the untagged test merely
+	// calls it. --test-flags=-tags=integration must reach the per-test test
+	// listing too, or the -run filter drops the tagged test and every mutant
+	// escapes (#275).
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/seamtags\n\ngo 1.22\n")
+	writeFixtureFile(t, filepath.Join(root, "calc.go"), "package seamtags\n\nfunc Double(a int) int {\n\treturn a * 2\n}\n")
+	writeFixtureFile(t, filepath.Join(root, "calc_test.go"), "package seamtags\n\nimport \"testing\"\n\nfunc TestUnit(t *testing.T) { _ = Double(3) }\n")
+	writeFixtureFile(t, filepath.Join(root, "integ_test.go"), "//go:build integration\n\npackage seamtags\n\nimport \"testing\"\n\nfunc TestIntegration(t *testing.T) {\n\tif Double(3) != 6 {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n")
+
+	out := testMain(
+		t,
+		root,
+		[]string{"--workers", "1", "--exec-timeout", "30", "--coverage", "--per-test", "--test-flags=-tags=integration", "--min-msi", "100", "."},
+		returnOk,
+		"mutation score",
+	)
+	assert.Contains(t, out, "(2 tests)")
+	assert.NotContains(t, out, "ESCAPED")
+}
+
 func TestMainIgnoreSourceLinesFilterStatementMutationsByPosition(t *testing.T) {
 	root := t.TempDir()
 	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/sourcefilter\n\ngo 1.22\n")

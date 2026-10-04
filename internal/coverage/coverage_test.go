@@ -4,34 +4,56 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildPerTestProfileCompilesOnce(t *testing.T) {
-	realGo, err := exec.LookPath("go")
-	require.NoError(t, err)
-	dir := t.TempDir()
-	logPath := filepath.Join(dir, "go-calls.log")
-	wrapper := filepath.Join(dir, "go")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + logPath + "\nexec " + realGo + " \"$@\"\n"
-	require.NoError(t, os.WriteFile(wrapper, []byte(script), 0o700))
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+// goToolchain runs plain go commands with no user test flags; the engine's
+// toolchain owns flag handling and is tested there.
+type goToolchain struct {
+	calls *[]string
+}
 
-	_, err = BuildPerTestProfile(
+func (g goToolchain) record(kind string) {
+	if g.calls != nil {
+		*g.calls = append(*g.calls, kind)
+	}
+}
+
+func (g goToolchain) ListTests(pkgPath string) *exec.Cmd {
+	g.record("list tests")
+	return exec.Command("go", "test", "-list", ".*", pkgPath)
+}
+
+func (g goToolchain) ListPackages(pattern string) *exec.Cmd {
+	g.record("list packages")
+	return exec.Command("go", "list", pattern)
+}
+
+func (g goToolchain) CompileTestBinary(pkgPath, coverPkg, binaryPath string) *exec.Cmd {
+	g.record("compile")
+	return exec.Command("go", "test", "-c", "-cover", "-covermode=set", "-coverpkg="+coverPkg, "-o", binaryPath, pkgPath)
+}
+
+func (g goToolchain) RunTest(binaryPath, testName, profilePath string) *exec.Cmd {
+	g.record("run " + testName)
+	return exec.Command(binaryPath, "-test.run=^"+testName+"$", "-test.coverprofile="+profilePath, "-test.timeout=30s")
+}
+
+func TestBuildPerTestProfileCompilesOnce(t *testing.T) {
+	var calls []string
+	prof, err := BuildPerTestProfile(
+		goToolchain{calls: &calls},
 		"github.com/quality-gates/mutago/v2/internal/coverage/testdata/entrypoints",
-		"github.com/quality-gates/mutago/v2", dir, 30, 1, []string{"-trimpath"},
+		"github.com/quality-gates/mutago/v2", t.TempDir(), 1,
 	)
 	require.NoError(t, err)
-	calls, err := os.ReadFile(logPath)
-	require.NoError(t, err)
-	callLines := strings.Split(strings.TrimSpace(string(calls)), "\n")
-	require.Len(t, callLines, 2, "list once and compile once")
-	assert.NotContains(t, callLines[0], "-trimpath", "listing tests must not receive build flags")
-	assert.Contains(t, callLines[1], "-trimpath", "compilation must receive build flags")
+	require.NotNil(t, prof)
+	require.Len(t, calls, 4, "list once, compile once, run each test")
+	assert.Equal(t, []string{"list tests", "compile"}, calls[:2])
+	assert.ElementsMatch(t, []string{"run FuzzValue", "run TestValue"}, calls[2:])
 }
 
 // modulePath is the module root — shorter than the package path so that stripping
@@ -367,17 +389,17 @@ func TestParseProfile_SingleLine(t *testing.T) {
 
 func TestCountTests_RealPackage(t *testing.T) {
 	// arithmetic has multiple test functions; expect a positive count.
-	count := CountTests("github.com/quality-gates/mutago/v2/mutator/arithmetic")
+	count := CountTests(goToolchain{}, "github.com/quality-gates/mutago/v2/mutator/arithmetic")
 	assert.Positive(t, count, "arithmetic package should have tests")
 }
 
 func TestCountTests_ExcludesBenchmarks(t *testing.T) {
-	count := CountTests("github.com/quality-gates/mutago/v2/internal/coverage/testdata/entrypoints")
+	count := CountTests(goToolchain{}, "github.com/quality-gates/mutago/v2/internal/coverage/testdata/entrypoints")
 	assert.Equal(t, 2, count, "only Test and Fuzz entrypoints run via -run")
 }
 
 func TestCountTests_NonexistentPackage(t *testing.T) {
-	count := CountTests("github.com/quality-gates/mutago/v2/nonexistent_pkg_xyzzy")
+	count := CountTests(goToolchain{}, "github.com/quality-gates/mutago/v2/nonexistent_pkg_xyzzy")
 	assert.Zero(t, count, "nonexistent package should return 0")
 }
 
@@ -389,9 +411,10 @@ func TestBuildPerTestProfile_RealPackage(t *testing.T) {
 	}
 	tmp := t.TempDir()
 	prof, err := BuildPerTestProfile(
+		goToolchain{},
 		"github.com/quality-gates/mutago/v2/mutator/arithmetic",
 		"github.com/quality-gates/mutago/v2",
-		tmp, 30, 1, nil,
+		tmp, 1,
 	)
 	require.NoError(t, err)
 	require.NotNil(t, prof, "arithmetic package should produce a per-test profile")
@@ -424,36 +447,14 @@ func TestBuildPerTestProfile_RealPackage(t *testing.T) {
 	}
 }
 
-func TestBuildPerTestProfile_CountFlagSupported(t *testing.T) {
-	if testing.Short() {
-		t.Skip("slow: runs per-test coverage profiling")
-	}
-	tmp := t.TempDir()
-	prof, err := BuildPerTestProfile(
-		"github.com/quality-gates/mutago/v2/mutator/arithmetic",
-		"github.com/quality-gates/mutago/v2",
-		tmp, 30, 1, []string{"-count=1"},
-	)
-	require.NoError(t, err)
-	require.NotNil(t, prof)
-
-	var found bool
-	for l := 1; l <= 100; l++ {
-		if len(prof.CoveringTests("/abs/mutator/arithmetic/assignment.go", l)) > 0 {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "profile should contain covering tests even when -count=1 is passed in extraTestFlags")
-}
-
 func TestBuildPerTestProfile_EmptyPackage(t *testing.T) {
 	// A package with no tests returns nil, nil.
 	tmp := t.TempDir()
 	prof, err := BuildPerTestProfile(
+		goToolchain{},
 		"github.com/quality-gates/mutago/v2/nonexistent_pkg_xyzzy",
 		"github.com/quality-gates/mutago/v2",
-		tmp, 30, 1, nil,
+		tmp, 1,
 	)
 	assert.Error(t, err)
 	assert.Nil(t, prof)
@@ -464,9 +465,10 @@ func TestBuildPerTestProfile_WorkersZero(t *testing.T) {
 	// deadlocking and contains actual coverage data. Uses gitdiff (small test suite).
 	tmp := t.TempDir()
 	prof, err := BuildPerTestProfile(
+		goToolchain{},
 		"github.com/quality-gates/mutago/v2/internal/gitdiff",
 		"github.com/quality-gates/mutago/v2",
-		tmp, 30, 0, nil,
+		tmp, 0,
 	)
 	require.NoError(t, err)
 	require.NotNil(t, prof)
@@ -485,8 +487,9 @@ func TestBuildPerTestProfileForTests_InvalidTempDir(t *testing.T) {
 	require.NoError(t, os.WriteFile(tmpFile, []byte("occupied"), 0o600))
 
 	prof, err := BuildPerTestProfileForTests(
+		goToolchain{},
 		"github.com/quality-gates/mutago/v2/internal/coverage/testdata/entrypoints",
-		"github.com/quality-gates/mutago/v2", tmpFile, 30, 1, nil, []string{"TestAlpha"},
+		"github.com/quality-gates/mutago/v2", tmpFile, 1, []string{"TestAlpha"},
 	)
 	assert.Error(t, err)
 	assert.Nil(t, prof)
@@ -494,118 +497,12 @@ func TestBuildPerTestProfileForTests_InvalidTempDir(t *testing.T) {
 
 func TestBuildPerTestProfileForTests_CompileFailure(t *testing.T) {
 	prof, err := BuildPerTestProfileForTests(
+		goToolchain{},
 		"github.com/quality-gates/mutago/v2/nonexistent_pkg_xyzzy",
-		"github.com/quality-gates/mutago/v2", t.TempDir(), 30, 1, nil, []string{"TestMissing"},
+		"github.com/quality-gates/mutago/v2", t.TempDir(), 1, []string{"TestMissing"},
 	)
 	assert.ErrorContains(t, err, "compile coverage test binary")
 	assert.Nil(t, prof)
-}
-
-func TestTestBinaryFlags(t *testing.T) {
-	assert.Equal(t, []string{
-		"-test.short=true",
-		"-test.short=true",
-		"-test.count=2",
-		"-test.v=true",
-		"-test.v=true",
-		"-test.count=3",
-		"-test.count=4",
-		"-test.count=5",
-		"-test.failfast=true",
-		"-test.failfast=true",
-		"-test.parallel=4",
-		"-test.parallel=8",
-		"-test.shuffle=on",
-		"-test.shuffle=123",
-		"-test.cpu=1,2",
-		"-test.cpu=4",
-		"-test.timeout=10s",
-		"-test.timeout=20s",
-		"-custom-flag",
-		"-custom=value",
-	}, testBinaryFlags([]string{
-		"-short",
-		"--short",
-		"-test.count=2",
-		"-v",
-		"--verbose",
-		"-race",
-		"--race",
-		"-tags=integration",
-		"-tags", "unit",
-		"-vet=off",
-		"-vet", "all",
-		"-gcflags=all=-N",
-		"-gcflags", "all=-l",
-		"-asmflags=all=-trimpath=/tmp",
-		"-asmflags", "all=-trimpath=/var",
-		"-trimpath",
-		"--trimpath",
-		"-count=3",
-		"-count", "4",
-		"--count=5",
-		"-failfast",
-		"--failfast",
-		"-parallel=4",
-		"-parallel", "8",
-		"-shuffle=on",
-		"-shuffle", "123",
-		"-cpu=1,2",
-		"-cpu", "4",
-		"-timeout=10s",
-		"-timeout", "20s",
-		"-custom-flag",
-		"-custom=value",
-	}))
-
-	// Boolean flags with explicit values.
-	assert.Equal(t, []string{
-		"-test.short=false",
-		"-test.v=false",
-		"-test.failfast=false",
-	}, testBinaryFlags([]string{
-		"-short=false",
-		"--verbose=false",
-		"-failfast=false",
-	}))
-
-	// Value flags without following value or followed by another flag.
-	assert.Equal(t, []string{
-		"-test.count",
-	}, testBinaryFlags([]string{
-		"-count",
-	}))
-	assert.Equal(t, []string{
-		"-test.count",
-		"-test.failfast=true",
-	}, testBinaryFlags([]string{
-		"-count",
-		"-failfast",
-	}))
-
-	// Build flag at end of args without value.
-	assert.Equal(t, []string{}, testBinaryFlags([]string{
-		"-tags",
-	}))
-
-	// Preserving --test. flags and non-flag tokens (including tokens matching flag names).
-	assert.Equal(t, []string{
-		"--test.count=2",
-		"--test.v",
-		"positional",
-		"race",
-		"-test.run=TestFoo",
-		"-test.bench=BenchmarkBar",
-		"-test.skip=TestBaz",
-	}, testBinaryFlags([]string{
-		"--test.count=2",
-		"--test.v",
-		"positional",
-		"race",
-		"-run", "TestFoo",
-		"-bench=BenchmarkBar",
-		"-skip", "TestBaz",
-	}))
 }
 
 // --- PerTestProfile tests ---
@@ -696,9 +593,10 @@ func TestBuildPerTestProfile_SingleTestPackage(t *testing.T) {
 	}
 	tmp := t.TempDir()
 	prof, err := BuildPerTestProfile(
+		goToolchain{},
 		"github.com/quality-gates/mutago/v2/mutator",
 		"github.com/quality-gates/mutago/v2",
-		tmp, 30, 1, nil,
+		tmp, 1,
 	)
 	require.NoError(t, err)
 	require.NotNil(t, prof, "single-test package must produce a non-nil profile")
@@ -741,20 +639,20 @@ func writeRecursiveModule(t *testing.T) {
 func TestListTestPackages(t *testing.T) {
 	writeRecursiveModule(t)
 
-	flat, err := ListTestPackages("example.com/m/rec", false)
+	flat, err := ListTestPackages(goToolchain{}, "example.com/m/rec", false)
 	require.NoError(t, err)
 	assert.Equal(t, []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}}}, flat)
 
-	tree, err := ListTestPackages("example.com/m/rec", true)
+	tree, err := ListTestPackages(goToolchain{}, "example.com/m/rec", true)
 	require.NoError(t, err)
 	assert.Equal(t, []TestPackage{
 		{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}},
 		{ImportPath: "example.com/m/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
 	}, tree, "packages without tests are left out")
 
-	_, err = ListTestPackages("example.com/m/broken", true)
+	_, err = ListTestPackages(goToolchain{}, "example.com/m/broken", true)
 	assert.Error(t, err, "a package tree that go list rejects")
-	_, err = ListTestPackages("example.com/m/nope", false)
+	_, err = ListTestPackages(goToolchain{}, "example.com/m/nope", false)
 	assert.Error(t, err, "a package whose tests cannot be listed")
 }
 
@@ -765,7 +663,7 @@ func TestBuildPerTestProfileForPackages_AttributesSubpackageTests(t *testing.T) 
 		{ImportPath: "example.com/m/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
 	}
 
-	prof, err := BuildPerTestProfileForPackages("example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 30, 1, nil)
+	prof, err := BuildPerTestProfileForPackages(goToolchain{}, "example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 1)
 	require.NoError(t, err)
 	require.NotNil(t, prof)
 	assert.Equal(t, []string{"TestDouble", "TestTouch"}, prof.CoveringTestsRelative("rec/rec.go", 4),
@@ -774,10 +672,10 @@ func TestBuildPerTestProfileForPackages_AttributesSubpackageTests(t *testing.T) 
 
 func TestBuildPerTestProfile_NoTests(t *testing.T) {
 	tmp := filepath.Join(t.TempDir(), "never-created")
-	prof, err := BuildPerTestProfileForPackages("example.com/m/rec", nil, "example.com/m", tmp, 30, 1, nil)
+	prof, err := BuildPerTestProfileForPackages(goToolchain{}, "example.com/m/rec", nil, "example.com/m", tmp, 1)
 	assert.NoError(t, err)
 	assert.Nil(t, prof)
-	prof, err = BuildPerTestProfileForTests("example.com/m/rec", "example.com/m", tmp, 30, 1, nil, nil)
+	prof, err = BuildPerTestProfileForTests(goToolchain{}, "example.com/m/rec", "example.com/m", tmp, 1, nil)
 	assert.NoError(t, err)
 	assert.Nil(t, prof)
 	assert.NoDirExists(t, tmp, "nothing is compiled when there are no tests")

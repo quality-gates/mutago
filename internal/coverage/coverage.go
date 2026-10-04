@@ -240,10 +240,25 @@ func (p *PerTestProfile) CoveringTestsRelative(relFile string, lineNum int) []st
 	return p.data[filepath.ToSlash(relFile)][lineNum]
 }
 
+// Toolchain builds the commands that per-test profiling runs. The caller
+// owns how the user's test flags reach each command.
+type Toolchain interface {
+	// ListTests lists the top-level tests of pkgPath, one per line.
+	ListTests(pkgPath string) *exec.Cmd
+	// ListPackages lists the import paths matching pattern.
+	ListPackages(pattern string) *exec.Cmd
+	// CompileTestBinary writes pkgPath's test binary to binaryPath,
+	// instrumented for -coverpkg=coverPkg.
+	CompileTestBinary(pkgPath, coverPkg, binaryPath string) *exec.Cmd
+	// RunTest runs testName from binaryPath, writing its coverage profile
+	// to profilePath.
+	RunTest(binaryPath, testName, profilePath string) *exec.Cmd
+}
+
 // CountTests returns the number of test functions (Test*, Fuzz*)
 // in pkgPath. Returns 0 on any error or when the package has no tests.
-func CountTests(pkgPath string) int {
-	names, err := ListTests(pkgPath)
+func CountTests(tc Toolchain, pkgPath string) int {
+	names, err := ListTests(tc, pkgPath)
 	if err != nil {
 		return 0
 	}
@@ -251,21 +266,8 @@ func CountTests(pkgPath string) int {
 }
 
 // ListTests returns runnable top-level Test and Fuzz entrypoint names.
-func ListTests(pkgPath string) ([]string, error) {
-	return listTestNames(pkgPath)
-}
-
-// isTestFuncName reports whether name is a top-level test entry point that can
-// be selected with go test's -run flag (Test* or Fuzz*).
-func isTestFuncName(name string) bool {
-	return strings.HasPrefix(name, "Test") ||
-		strings.HasPrefix(name, "Fuzz")
-}
-
-// listTestNames returns the top-level test function names declared in pkgPath,
-// as reported by `go test -list`.
-func listTestNames(pkgPath string) ([]string, error) {
-	out, err := exec.Command("go", "test", "-list", ".*", pkgPath).Output()
+func ListTests(tc Toolchain, pkgPath string) ([]string, error) {
+	out, err := tc.ListTests(pkgPath).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -279,6 +281,13 @@ func listTestNames(pkgPath string) ([]string, error) {
 	return names, nil
 }
 
+// isTestFuncName reports whether name is a top-level test entry point that can
+// be selected with go test's -run flag (Test* or Fuzz*).
+func isTestFuncName(name string) bool {
+	return strings.HasPrefix(name, "Test") ||
+		strings.HasPrefix(name, "Fuzz")
+}
+
 // TestPackage names one package and the runnable top-level tests it declares.
 type TestPackage struct {
 	ImportPath string
@@ -289,17 +298,17 @@ type TestPackage struct {
 // also returns those of every package beneath pkgPath, matching the pkgPath/...
 // target that --test-recursive gives mutant runs. Packages without tests are
 // left out.
-func ListTestPackages(pkgPath string, recursive bool) ([]TestPackage, error) {
+func ListTestPackages(tc Toolchain, pkgPath string, recursive bool) ([]TestPackage, error) {
 	paths := []string{pkgPath}
 	if recursive {
 		var err error
-		if paths, err = listPackages(pkgPath + "/..."); err != nil {
+		if paths, err = listPackages(tc, pkgPath+"/..."); err != nil {
 			return nil, err
 		}
 	}
 	var pkgs []TestPackage
 	for _, path := range paths {
-		names, err := ListTests(path)
+		names, err := ListTests(tc, path)
 		if err != nil {
 			return nil, err
 		}
@@ -310,8 +319,8 @@ func ListTestPackages(pkgPath string, recursive bool) ([]TestPackage, error) {
 	return pkgs, nil
 }
 
-func listPackages(pattern string) ([]string, error) {
-	out, err := exec.Command("go", "list", pattern).Output()
+func listPackages(tc Toolchain, pattern string) ([]string, error) {
+	out, err := tc.ListPackages(pattern).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -323,39 +332,38 @@ func listPackages(pattern string) ([]string, error) {
 // to workers goroutines in parallel.  Returns nil on any hard failure (the
 // caller falls back to the full test suite).
 //
-// timeout is the per-test run timeout in seconds (same value as --exec-timeout).
-// extraTestFlags are appended before the explicit -run flag so that -short, -race,
-// etc. are consistent between profile-building and actual mutation test runs.
-func BuildPerTestProfile(pkgPath, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags []string) (*PerTestProfile, error) {
+// tc builds the list, compile and run commands, so flags such as -tags, -short
+// and -race are consistent between profile-building and mutation test runs.
+func BuildPerTestProfile(tc Toolchain, pkgPath, modulePath, tmpDir string, workers int) (*PerTestProfile, error) {
 	// List test functions (not subtests).
-	testNames, err := ListTests(pkgPath)
+	testNames, err := ListTests(tc, pkgPath)
 	if err != nil {
 		return nil, fmt.Errorf("go test -list: %w", err)
 	}
-	return BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir, timeout, workers, extraTestFlags, testNames)
+	return BuildPerTestProfileForTests(tc, pkgPath, modulePath, tmpDir, workers, testNames)
 }
 
 // BuildPerTestProfileForTests builds a profile from an already-discovered test
 // list, avoiding a second go test -list invocation in callers that show counts.
-func BuildPerTestProfileForTests(pkgPath, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags, testNames []string) (*PerTestProfile, error) {
+func BuildPerTestProfileForTests(tc Toolchain, pkgPath, modulePath, tmpDir string, workers int, testNames []string) (*PerTestProfile, error) {
 	if len(testNames) == 0 {
 		return nil, nil
 	}
 	pkgs := []TestPackage{{ImportPath: pkgPath, Tests: testNames}}
-	return BuildPerTestProfileForPackages(pkgPath, pkgs, modulePath, tmpDir, timeout, workers, extraTestFlags)
+	return BuildPerTestProfileForPackages(tc, pkgPath, pkgs, modulePath, tmpDir, workers)
 }
 
 // BuildPerTestProfileForPackages builds one profile from the tests of every
 // package in pkgs, as listed by ListTestPackages. Each test binary is built
 // with -coverpkg=pkgPath, so tests in subpackages are credited with the
 // pkgPath lines they cover.
-func BuildPerTestProfileForPackages(pkgPath string, pkgs []TestPackage, modulePath, tmpDir string, timeout uint, workers int, extraTestFlags []string) (*PerTestProfile, error) {
+func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPackage, modulePath, tmpDir string, workers int) (*PerTestProfile, error) {
 	if len(pkgs) == 0 {
 		return nil, nil
 	}
 	var jobs []perTestJob
 	for _, pkg := range pkgs {
-		binaryPath, err := compileCoverageTestBinary(pkg.ImportPath, pkgPath, tmpDir, extraTestFlags)
+		binaryPath, err := compileCoverageTestBinary(tc, pkg.ImportPath, pkgPath, tmpDir)
 		if err != nil {
 			return nil, err
 		}
@@ -366,7 +374,7 @@ func BuildPerTestProfileForPackages(pkgPath string, pkgs []TestPackage, modulePa
 	if workers <= 0 {
 		workers = 1
 	}
-	results := profileTests(jobs, workers, modulePath, timeout, testBinaryFlags(extraTestFlags))
+	results := profileTests(tc, jobs, workers, modulePath)
 	return mergePerTestProfiles(results, len(jobs)), nil
 }
 
@@ -382,28 +390,23 @@ type perTestResult struct {
 	prof *Profile
 }
 
-func compileCoverageTestBinary(pkgPath, coverPkg, tmpDir string, extraTestFlags []string) (string, error) {
+func compileCoverageTestBinary(tc Toolchain, pkgPath, coverPkg, tmpDir string) (string, error) {
 	binaryDir := filepath.Join(tmpDir, "per-test", strings.NewReplacer("/", "_", "\\", "_").Replace(pkgPath))
 	if err := os.MkdirAll(binaryDir, 0755); err != nil {
 		return "", err
 	}
 	binaryPath := filepath.Join(binaryDir, "tests")
-	compileArgs := []string{"test", "-c", "-cover", "-covermode=set", "-coverpkg=" + coverPkg, "-o", binaryPath}
-	compileArgs = append(compileArgs, extraTestFlags...)
-	compileArgs = append(compileArgs, pkgPath)
-	compile := exec.Command("go", compileArgs...)
-	compile.Env = os.Environ()
-	if output, err := compile.CombinedOutput(); err != nil {
+	if output, err := tc.CompileTestBinary(pkgPath, coverPkg, binaryPath).CombinedOutput(); err != nil {
 		return "", fmt.Errorf("compile coverage test binary: %w: %s", err, output)
 	}
 	return binaryPath, nil
 }
 
-func profileTests(jobList []perTestJob, workers int, modulePath string, timeout uint, binaryTestFlags []string) <-chan perTestResult {
+func profileTests(tc Toolchain, jobList []perTestJob, workers int, modulePath string) <-chan perTestResult {
 	jobs := make(chan perTestJob, len(jobList))
 	results := make(chan perTestResult, len(jobList))
 	for i := 0; i < workers; i++ {
-		go runPerTestWorker(jobs, results, modulePath, timeout, binaryTestFlags)
+		go runPerTestWorker(tc, jobs, results, modulePath)
 	}
 	for _, job := range jobList {
 		jobs <- job
@@ -428,20 +431,13 @@ func mergePerTestProfiles(results <-chan perTestResult, count int) *PerTestProfi
 
 // runPerTestWorker writes each test's profile beside its binary, so tests that
 // share a name across packages do not overwrite each other's profiles.
-func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, modulePath string, timeout uint, binaryTestFlags []string) {
+func runPerTestWorker(tc Toolchain, jobs <-chan perTestJob, results chan<- perTestResult, modulePath string) {
 	for job := range jobs {
 		profDir := filepath.Join(filepath.Dir(job.binaryPath), job.name)
 		_ = os.MkdirAll(profDir, 0755)
 		profPath := filepath.Join(profDir, "coverage.out")
 
-		args := append([]string{}, binaryTestFlags...)
-		args = append(args,
-			"-test.run=^"+job.name+"$",
-			"-test.coverprofile="+profPath,
-			"-test.timeout="+fmt.Sprintf("%ds", timeout))
-		cmd := exec.Command(job.binaryPath, args...)
-		cmd.Env = os.Environ()
-		_ = cmd.Run() // test failures are expected; we only care about coverage
+		_ = tc.RunTest(job.binaryPath, job.name, profPath).Run() // test failures are expected; we only care about coverage
 
 		prof, err := ParseProfile(profPath, modulePath)
 		if err != nil {
@@ -450,118 +446,6 @@ func runPerTestWorker(jobs <-chan perTestJob, results chan<- perTestResult, modu
 		}
 		results <- perTestResult{name: job.name, prof: prof}
 	}
-}
-
-func isBuildFlag(name string) bool {
-	switch name {
-	case "race", "trimpath", "tags", "vet", "gcflags", "asmflags":
-		return true
-	default:
-		return false
-	}
-}
-
-func isBuildValue(name string) bool {
-	switch name {
-	case "tags", "vet", "gcflags", "asmflags":
-		return true
-	default:
-		return false
-	}
-}
-
-func isRunnerBool(name string) bool {
-	switch name {
-	case "v", "verbose", "short", "failfast":
-		return true
-	default:
-		return false
-	}
-}
-
-func isRunnerValue(name string) bool {
-	switch name {
-	case "count", "parallel", "shuffle", "cpu", "timeout", "run", "bench", "skip":
-		return true
-	default:
-		return false
-	}
-}
-
-func hasNextValue(args []string, i int) bool {
-	if i+1 >= len(args) {
-		return false
-	}
-	if strings.HasPrefix(args[i+1], "-") {
-		return false
-	}
-	return true
-}
-
-func formatRunnerBool(name, val string, hasEqual bool) string {
-	if name == "verbose" {
-		name = "v"
-	}
-	if hasEqual {
-		return fmt.Sprintf("-test.%s=%s", name, val)
-	}
-	return fmt.Sprintf("-test.%s=true", name)
-}
-
-func formatRunnerValue(args []string, i int, name, val string, hasEqual bool) (int, string, bool) {
-	if hasEqual {
-		return 0, fmt.Sprintf("-test.%s=%s", name, val), true
-	}
-	if hasNextValue(args, i) {
-		return 1, fmt.Sprintf("-test.%s=%s", name, args[i+1]), true
-	}
-	return 0, fmt.Sprintf("-test.%s", name), true
-}
-
-func skipBuildFlag(args []string, i int, name string, hasEqual bool) int {
-	if hasEqual {
-		return 0
-	}
-	if !isBuildValue(name) {
-		return 0
-	}
-	if hasNextValue(args, i) {
-		return 1
-	}
-	return 0
-}
-
-func translateFlag(args []string, i int) (int, string, bool) {
-	arg := args[i]
-	if !strings.HasPrefix(arg, "-") {
-		return 0, arg, true
-	}
-
-	raw := strings.TrimPrefix(strings.TrimPrefix(arg, "--"), "-")
-	name, val, hasEqual := strings.Cut(raw, "=")
-
-	if isBuildFlag(name) {
-		return skipBuildFlag(args, i, name, hasEqual), "", false
-	}
-	if isRunnerBool(name) {
-		return 0, formatRunnerBool(name, val, hasEqual), true
-	}
-	if isRunnerValue(name) {
-		return formatRunnerValue(args, i, name, val, hasEqual)
-	}
-	return 0, arg, true
-}
-
-func testBinaryFlags(extraTestFlags []string) []string {
-	flags := make([]string, 0, len(extraTestFlags))
-	for i := 0; i < len(extraTestFlags); i++ {
-		advance, flag, keep := translateFlag(extraTestFlags, i)
-		i += advance
-		if keep {
-			flags = append(flags, flag)
-		}
-	}
-	return flags
 }
 
 func applyPerTestResult(p *PerTestProfile, r perTestResult) {
