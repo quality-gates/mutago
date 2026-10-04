@@ -782,19 +782,19 @@
 <td style="text-align: left;"><code>disable_mutators</code></td>
 <td style="text-align: left;">[]string</td>
 <td style="text-align: left;"><code>[]</code></td>
-<td style="text-align: left;">Mutator names to disable. Merged with <code>--disable</code> CLI flags (union). Supports trailing-<code>*</code> wildcard, e.g. <code>arithmetic/*</code>. Run <code>mutago --list-mutators</code> for all names.</td>
+<td style="text-align: left;">Mutator names to disable. Merged with <code>--disable</code> CLI flags (union). Supports trailing-<code>*</code> wildcard, e.g. <code>arithmetic/*</code>. Run <code>mutago --list-mutators</code> for all names. Names that match no mutator print a warning on stderr.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>enable_mutators</code></td>
 <td style="text-align: left;">[]string</td>
 <td style="text-align: left;"><code>[]</code></td>
-<td style="text-align: left;">Allowlist: if non-empty, only matching mutators run. Supports trailing-<code>*</code> wildcard. <code>--disable</code> can still exclude entries from this list.</td>
+<td style="text-align: left;">Allowlist: if non-empty, only matching mutators run. Supports trailing-<code>*</code> wildcard. <code>--disable</code> can still exclude entries from this list. Names that match no mutator print a warning on stderr.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>ignore_source_lines</code></td>
 <td style="text-align: left;">[]string</td>
 <td style="text-align: left;"><code>[]</code></td>
-<td style="text-align: left;">List of regexes. Any physical source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate.</td>
+<td style="text-align: left;">List of regexes. Any physical source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate. Invalid regexes are ignored with a warning on stderr.</td>
 </tr>
 </tbody>
 </table>

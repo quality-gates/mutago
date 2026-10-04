@@ -990,7 +990,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>--disable &lt;mutator&gt;</code></td>
-<td style="text-align: left;">Disable a mutator by name (repeatable). Supports trailing-<code>*</code> wildcard (e.g. <code>'arithmetic/*'</code>). <strong>Quote wildcard patterns</strong> to prevent shell glob expansion. Config file equivalents: <code>disable_mutators</code> (denylist) and <code>enable_mutators</code> (allowlist) — see <a href="../config/">config reference</a>.</td>
+<td style="text-align: left;">Disable a mutator by name (repeatable). Supports trailing-<code>*</code> wildcard (e.g. <code>'arithmetic/*'</code>). <strong>Quote wildcard patterns</strong> to prevent shell glob expansion. A name that matches no mutator prints a warning on stderr. Config file equivalents: <code>disable_mutators</code> (denylist) and <code>enable_mutators</code> (allowlist) — see <a href="../config/">config reference</a>.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>--git-diff-lines</code></td>
