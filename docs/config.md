@@ -38,9 +38,9 @@ ignore_source_lines: []
 | `min_msi` | float | `0` | Minimum overall MSI (0–100); `0` disables the gate |
 | `min_covered_msi` | float | `0` | Minimum covered-code MSI (0–100); `0` disables the gate |
 | `exclude_dirs` | []string | `[]` | Directory path prefixes to exclude from mutation |
-| `disable_mutators` | []string | `[]` | Mutator names to disable. Merged with `--disable` CLI flags (union). Supports trailing-`*` wildcard, e.g. `arithmetic/*`. Run `mutago --list-mutators` for all names. |
-| `enable_mutators` | []string | `[]` | Allowlist: if non-empty, only matching mutators run. Supports trailing-`*` wildcard. `--disable` can still exclude entries from this list. |
-| `ignore_source_lines` | []string | `[]` | List of regexes. Any physical source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate. |
+| `disable_mutators` | []string | `[]` | Mutator names to disable. Merged with `--disable` CLI flags (union). Supports trailing-`*` wildcard, e.g. `arithmetic/*`. Run `mutago --list-mutators` for all names. Names that match no mutator print a warning on stderr. |
+| `enable_mutators` | []string | `[]` | Allowlist: if non-empty, only matching mutators run. Supports trailing-`*` wildcard. `--disable` can still exclude entries from this list. Names that match no mutator print a warning on stderr. |
+| `ignore_source_lines` | []string | `[]` | List of regexes. Any physical source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate. Invalid regexes are ignored with a warning on stderr. |
 
 ## Notes
 

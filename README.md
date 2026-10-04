@@ -522,7 +522,7 @@ x = 42
 // mutator-disable-next-line *
 x = 42
 
-// mutator-disable-next-line branch/if, increment
+// mutator-disable-next-line branch/if, numbers/incrementer
 if x > 0 {
     y += 1
 }
@@ -838,9 +838,9 @@ The config contains the following parameters:
 | min_msi              | 0             | Minimum required MSI (0–100). 0 means no gate.                                                                                                                    |
 | min_covered_msi      | 0             | Minimum required covered-code MSI (0–100). 0 means no gate.                                                                                                       |
 | exclude_dirs         | []string(nil) | File path prefixes to skip. Any file whose path starts with one of these strings is excluded. `vendor/` skips all files under vendor; `internal/generated` skips any path starting with that string. |
-| disable_mutators     | []string(nil) | Mutator names to disable via config. Merged with `--disable` CLI flags. Supports trailing-`*` wildcard (e.g. `arithmetic/*`). |
-| enable_mutators      | []string(nil) | Allowlist: if non-empty, only matching mutators run. `--disable` can still exclude entries. Supports trailing-`*` wildcard. |
-| ignore_source_lines  | []string(nil) | List of regexes. Any physical source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate. |
+| disable_mutators     | []string(nil) | Mutator names to disable via config. Merged with `--disable` CLI flags. Supports trailing-`*` wildcard (e.g. `arithmetic/*`). Names that match no mutator print a warning on stderr. |
+| enable_mutators      | []string(nil) | Allowlist: if non-empty, only matching mutators run. `--disable` can still exclude entries. Supports trailing-`*` wildcard. Names that match no mutator print a warning on stderr. |
+| ignore_source_lines  | []string(nil) | List of regexes. Any physical source line matching one of these patterns is skipped entirely. Useful for suppressing mutations on generated code or boilerplate. Invalid regexes are ignored with a warning on stderr. |
 
 Example config file:
 
