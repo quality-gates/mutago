@@ -88,6 +88,16 @@ func TestGoTestInvocationArgs(t *testing.T) {
 			inv:  goTestInvocation{kind: baselineRun, target: pkg, timeoutSeconds: 10, runFilter: "^(TestA)$"},
 			want: []string{"test", "-timeout", "10s", "-vet=off", pkg},
 		},
+		{
+			name: "list tests keeps only build flags",
+			inv:  goTestInvocation{kind: listTestsRun, target: pkg, timeoutSeconds: 30, testFlags: []string{"-tags", "integration", "--count", "2", "-race", "-run", "TestX", "-vet=all"}},
+			want: []string{"test", "-list", ".*", "-timeout", "30s", "-tags", "integration", "-race", "-vet=off", pkg},
+		},
+		{
+			name: "compile test binary keeps every user flag",
+			inv:  goTestInvocation{kind: compileTestBinary, target: pkg + "/sub", timeoutSeconds: 30, coverPkg: pkg, binaryPath: "/tmp/b/tests", testFlags: []string{"-tags=integration", "--count=2"}},
+			want: []string{"test", "-c", "-cover", "-covermode=set", "-coverpkg=" + pkg, "-o", "/tmp/b/tests", "-timeout", "30s", "-tags=integration", "--count=2", "-vet=off", pkg + "/sub"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -131,5 +141,76 @@ func TestImportPathsNoFiles(t *testing.T) {
 	paths := &importPaths{lookup: func(string) string { t.Fatal("unexpected lookup"); return "" }}
 	if got := paths.forFiles(nil); got != "" {
 		t.Fatalf("forFiles(nil) = %q, want empty", got)
+	}
+}
+
+func TestPerTestToolchainCommands(t *testing.T) {
+	const pkg = "example.com/m/pkg"
+	tests := []struct {
+		name      string
+		testFlags []string
+		list      []string
+		packages  []string
+		compile   []string
+		run       []string
+	}{
+		{
+			name:     "no user flags",
+			list:     []string{"go", "test", "-list", ".*", "-timeout", "30s", "-vet=off", pkg},
+			packages: []string{"go", "list", pkg + "/..."},
+			compile:  []string{"go", "test", "-c", "-cover", "-covermode=set", "-coverpkg=" + pkg, "-o", "/b/tests", "-timeout", "30s", "-vet=off", pkg},
+			run:      []string{"/b/tests", "-test.run=^TestA$", "-test.coverprofile=/b/TestA/c.out", "-test.timeout=30s"},
+		},
+		{
+			name:      "tags",
+			testFlags: []string{"-tags=integration"},
+			list:      []string{"go", "test", "-list", ".*", "-timeout", "30s", "-tags=integration", "-vet=off", pkg},
+			packages:  []string{"go", "list", "-tags=integration", pkg + "/..."},
+			compile:   []string{"go", "test", "-c", "-cover", "-covermode=set", "-coverpkg=" + pkg, "-o", "/b/tests", "-timeout", "30s", "-tags=integration", "-vet=off", pkg},
+			run:       []string{"/b/tests", "-test.run=^TestA$", "-test.coverprofile=/b/TestA/c.out", "-test.timeout=30s"},
+		},
+		{
+			name:      "count with double dash",
+			testFlags: []string{"--count", "2"},
+			list:      []string{"go", "test", "-list", ".*", "-timeout", "30s", "-vet=off", pkg},
+			packages:  []string{"go", "list", pkg + "/..."},
+			compile:   []string{"go", "test", "-c", "-cover", "-covermode=set", "-coverpkg=" + pkg, "-o", "/b/tests", "-timeout", "30s", "--count", "2", "-vet=off", pkg},
+			run:       []string{"/b/tests", "-test.count=2", "-test.run=^TestA$", "-test.coverprofile=/b/TestA/c.out", "-test.timeout=30s"},
+		},
+		{
+			name:      "race",
+			testFlags: []string{"-race"},
+			list:      []string{"go", "test", "-list", ".*", "-timeout", "30s", "-race", "-vet=off", pkg},
+			packages:  []string{"go", "list", "-race", pkg + "/..."},
+			compile:   []string{"go", "test", "-c", "-cover", "-covermode=set", "-coverpkg=" + pkg, "-o", "/b/tests", "-timeout", "30s", "-race", "-vet=off", pkg},
+			run:       []string{"/b/tests", "-test.run=^TestA$", "-test.coverprofile=/b/TestA/c.out", "-test.timeout=30s"},
+		},
+		{
+			name:      "run",
+			testFlags: []string{"-run", "TestB"},
+			list:      []string{"go", "test", "-list", ".*", "-timeout", "30s", "-vet=off", pkg},
+			packages:  []string{"go", "list", pkg + "/..."},
+			compile:   []string{"go", "test", "-c", "-cover", "-covermode=set", "-coverpkg=" + pkg, "-o", "/b/tests", "-timeout", "30s", "-run", "TestB", "-vet=off", pkg},
+			run:       []string{"/b/tests", "-test.run=TestB", "-test.run=^TestA$", "-test.coverprofile=/b/TestA/c.out", "-test.timeout=30s"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tc := perTestToolchain{testFlags: tt.testFlags, timeoutSeconds: 30}
+			for _, c := range []struct {
+				kind string
+				got  []string
+				want []string
+			}{
+				{"list tests", tc.ListTests(pkg).Args, tt.list},
+				{"list packages", tc.ListPackages(pkg + "/...").Args, tt.packages},
+				{"compile", tc.CompileTestBinary(pkg, pkg, "/b/tests").Args, tt.compile},
+				{"run", tc.RunTest("/b/tests", "TestA", "/b/TestA/c.out").Args, tt.run},
+			} {
+				if !slices.Equal(c.got, c.want) {
+					t.Errorf("%s\n got %q\nwant %q", c.kind, c.got, c.want)
+				}
+			}
+		})
 	}
 }

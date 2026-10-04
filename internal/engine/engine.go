@@ -911,22 +911,6 @@ func buildCoverageProfile(opts *models.Options, pkgPath string, tmpDir string, m
 	return prof, elapsed, nil
 }
 
-func hasTestCountFlag(testFlags []string) bool {
-	for _, flag := range testFlags {
-		if flag == "-count" || strings.HasPrefix(flag, "-count=") {
-			return true
-		}
-	}
-	return false
-}
-
-func uncachedTestFlags(testFlags []string) []string {
-	if hasTestCountFlag(testFlags) {
-		return testFlags
-	}
-	return append(append([]string{}, testFlags...), "-count=1")
-}
-
 func validateAdaptiveTimeoutTestCount(opts *models.Options) error {
 	if opts.Exec.TimeoutCoefficient <= 0 || opts.Exec.NoExec || opts.General.DryRun || strings.TrimSpace(opts.Exec.Exec) != "" {
 		return nil
@@ -944,16 +928,6 @@ func validateAdaptiveTimeoutTestCount(opts *models.Options) error {
 		return fmt.Errorf("adaptive timeout requires a positive test count, got %d", count)
 	}
 	return nil
-}
-
-func testCountValue(testFlags []string, index int) (string, bool) {
-	if value, found := strings.CutPrefix(testFlags[index], "-count="); found {
-		return value, true
-	}
-	if testFlags[index] != "-count" || index+1 >= len(testFlags) {
-		return "", false
-	}
-	return testFlags[index+1], true
 }
 
 func runCoverageProfile(inv goTestInvocation) error {
@@ -976,7 +950,8 @@ func buildPerTestCoverageProfile(stdout io.Writer, opts *models.Options, pkgPath
 	if pkgPath == "" {
 		return nil
 	}
-	pkgs, err := coverage.ListTestPackages(pkgPath, opts.Test.Recursive)
+	tc := perTestToolchain{testFlags: extraTestFlags, timeoutSeconds: opts.Exec.Timeout}
+	pkgs, err := coverage.ListTestPackages(tc, pkgPath, opts.Test.Recursive)
 	if err != nil {
 		console.Verbose(opts, "Per-test coverage unavailable for %q: %v", pkgPath, err)
 		return nil
@@ -988,7 +963,7 @@ func buildPerTestCoverageProfile(stdout io.Writer, opts *models.Options, pkgPath
 	if testCount > 0 {
 		fmt.Fprintf(stdout, "Building per-test coverage map for %q (%d tests)...\n", pkgPath, testCount)
 	}
-	prof, err := coverage.BuildPerTestProfileForPackages(pkgPath, pkgs, modulePath, tmpDir, opts.Exec.Timeout, numWorkers, extraTestFlags)
+	prof, err := coverage.BuildPerTestProfileForPackages(tc, pkgPath, pkgs, modulePath, tmpDir, numWorkers)
 	if err != nil {
 		console.Verbose(opts, "Per-test coverage unavailable for %q: %v", pkgPath, err)
 		return nil

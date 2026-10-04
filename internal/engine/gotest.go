@@ -18,11 +18,17 @@ const (
 	coverageRun
 	// mutantRun executes the tests against one mutant via an overlay.
 	mutantRun
+	// listTestsRun lists the top-level tests of one package (--per-test).
+	listTestsRun
+	// compileTestBinary builds one package's coverage-instrumented test
+	// binary, which per-test profiling runs once per test (--per-test).
+	compileTestBinary
 )
 
-// goTestInvocation describes one `go test` command. Baseline, coverage and
-// mutant runs are all built here so the package target, recursion, vet and
-// timeout rules stay identical across them; only the per-kind extras differ.
+// goTestInvocation describes one `go test` command. Baseline, coverage,
+// mutant and per-test runs are all built here so the package target,
+// recursion, vet, timeout and user flag rules stay identical across them;
+// only the per-kind extras differ.
 type goTestInvocation struct {
 	kind           goTestKind
 	target         string
@@ -39,6 +45,10 @@ type goTestInvocation struct {
 	// execProgram is the -exec wrapper for a mutant run. Empty means go test
 	// runs the test binary directly. A user -exec in test flags wins.
 	execProgram string
+	// coverPkg is the -coverpkg target (compileTestBinary only).
+	coverPkg string
+	// binaryPath is the -o destination (compileTestBinary only).
+	binaryPath string
 }
 
 // args returns the argument list for `go`.
@@ -55,6 +65,9 @@ type goTestInvocation struct {
 // passes -coverpkg=pkg so tests in subpackages count towards the target's
 // coverage.
 //
+// Listing tests takes only the user's build flags: they decide which test
+// files exist, while runner flags such as -run or -v would change the list.
+//
 // -failfast is on by default for mutant runs only: one failing test is enough
 // to kill a mutant, so the rest of the suite need not run. An explicit
 // -failfast in the user's test flags wins.
@@ -62,8 +75,12 @@ func (g goTestInvocation) args() []string {
 	args := []string{"test"}
 	args = append(args, g.kindArgs()...)
 	args = append(args, "-timeout", fmt.Sprintf("%ds", g.timeoutSeconds))
-	args = append(args, g.testFlags...)
-	if !hasVetFlag(g.testFlags) {
+	testFlags := g.testFlags
+	if g.kind == listTestsRun {
+		testFlags = buildTestFlags(testFlags)
+	}
+	args = append(args, testFlags...)
+	if !hasTestFlag(testFlags, "vet") {
 		args = append(args, "-vet=off")
 	}
 	args = append(args, g.mutantArgs()...)
@@ -84,6 +101,10 @@ func (g goTestInvocation) kindArgs() []string {
 		return args
 	case mutantRun:
 		return []string{"-overlay=" + g.overlay}
+	case listTestsRun:
+		return []string{"-list", ".*"}
+	case compileTestBinary:
+		return []string{"-c", "-cover", "-covermode=set", "-coverpkg=" + g.coverPkg, "-o", g.binaryPath}
 	default:
 		return nil
 	}
@@ -106,23 +127,51 @@ func (g goTestInvocation) mutantArgs() []string {
 	return args
 }
 
-func hasVetFlag(testFlags []string) bool {
-	for _, flag := range testFlags {
-		if flag == "-vet" || flag == "--vet" || strings.HasPrefix(flag, "-vet=") || strings.HasPrefix(flag, "--vet=") {
-			return true
-		}
-	}
-	return false
+// perTestToolchain builds the commands --per-test profiling runs, so the
+// user's test flags reach them by the same rules as every other go test run.
+type perTestToolchain struct {
+	testFlags      []string
+	timeoutSeconds uint
 }
 
-func hasTestFlag(testFlags []string, name string) bool {
-	for _, flag := range testFlags {
-		trimmed := strings.TrimPrefix(strings.TrimPrefix(flag, "-"), "-")
-		if trimmed == name || strings.HasPrefix(trimmed, name+"=") {
-			return true
-		}
-	}
-	return false
+func (t perTestToolchain) ListTests(pkgPath string) *exec.Cmd {
+	return goCommand(goTestInvocation{kind: listTestsRun, target: pkgPath, timeoutSeconds: t.timeoutSeconds, testFlags: t.testFlags}.args()...)
+}
+
+// ListPackages runs `go list` with the user's build flags, so a package whose
+// files all sit behind a build tag is still found.
+func (t perTestToolchain) ListPackages(pattern string) *exec.Cmd {
+	args := append([]string{"list"}, buildTestFlags(t.testFlags)...)
+	return goCommand(append(args, pattern)...)
+}
+
+func (t perTestToolchain) CompileTestBinary(pkgPath, coverPkg, binaryPath string) *exec.Cmd {
+	return goCommand(goTestInvocation{
+		kind:           compileTestBinary,
+		target:         pkgPath,
+		timeoutSeconds: t.timeoutSeconds,
+		testFlags:      t.testFlags,
+		coverPkg:       coverPkg,
+		binaryPath:     binaryPath,
+	}.args()...)
+}
+
+// RunTest runs one test of a binary from CompileTestBinary. The user's runner
+// flags come first so the explicit -test.run, profile and timeout win.
+func (t perTestToolchain) RunTest(binaryPath, testName, profilePath string) *exec.Cmd {
+	args := append(testBinaryFlags(t.testFlags),
+		"-test.run=^"+testName+"$",
+		"-test.coverprofile="+profilePath,
+		fmt.Sprintf("-test.timeout=%ds", t.timeoutSeconds))
+	cmd := exec.Command(binaryPath, args...)
+	cmd.Env = os.Environ()
+	return cmd
+}
+
+func goCommand(args ...string) *exec.Cmd {
+	cmd := exec.Command("go", args...)
+	cmd.Env = os.Environ()
+	return cmd
 }
 
 // importPaths resolves a package's import path from its files and remembers

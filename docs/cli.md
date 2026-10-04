@@ -63,6 +63,8 @@ With `--test-recursive`, every run targets `<package>/...`, so the baseline and 
 
 Mutant test runs also pass `-failfast`. One failing test is enough to kill a mutant, so `go test` starts no new tests after the first failure. Pass `--test-flags=-failfast=false` to run the whole suite for every mutant; your flag wins and no duplicate is added.
 
+`--per-test` builds its map the same way. Listing packages and tests gets only your build flags (`-tags`, `-race`, `-gcflags`, `-ldflags`, `-mod`, and so on), so tests behind a build tag are mapped. The coverage test binary is compiled with all of your flags, and each test runs with your runner flags (`-short`, `-count`, `-v`, ...) in `-test.*` form. Flags may be written `-name`, `--name`, or `-name=value`.
+
 If a generated mutant does not compile, it is skipped rather than counted as killed by a test.
 
 ## Filtering
