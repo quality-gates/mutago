@@ -9,13 +9,7 @@ import (
 // parseLineAnnotation parses a comment line containing a next-line annotation.
 func (l *LineAnnotation) parseLineAnnotation(comment string) mutatorInfo {
 	content := strings.TrimSpace(strings.TrimPrefix(comment, l.Name))
-	if content == "" {
-		return allMutators()
-	}
-
-	return mutatorInfo{
-		Names: namesOrAll(parseMutators(content)),
-	}
+	return newMutatorInfo(parseMutators(content))
 }
 
 // collectNodesOnNextLine processes a "mutator-disable-next-line" annotation.

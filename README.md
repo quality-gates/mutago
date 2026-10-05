@@ -526,6 +526,9 @@ x = 42
 if x > 0 {
     y += 1
 }
+
+// mutator-disable-next-line numbers/*
+y += 1
 ```
 
 3. `// mutator-disable-regexp <pattern> <mutator1>, <mutator2>` — disables mutations on any line in the file matching the regex. Omit the mutator list, or use `*`, to disable every mutator. A pattern-only annotation is `// mutator-disable-regexp <pattern>`.
@@ -536,7 +539,10 @@ s.Method()
 
 // mutator-disable-regexp s\.Method\(\)
 // mutator-disable-regexp s\.Method\(\) *
+// mutator-disable-regexp s\.Method\(\) statement/*
 ```
+
+Mutator names in annotations use the same patterns as `--disable`: an exact name, `*` for every mutator, or a trailing-`*` prefix such as `numbers/*`.
 
 All mutation annotations only apply to the file where they are declared. There is no global/cross-file propagation.
 Line-based annotations and `ignore_source_lines` match physical source lines; `//line` directives do not change their targets.

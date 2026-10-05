@@ -44,7 +44,14 @@ func NewProcessor() *Processor {
 }
 
 type mutatorInfo struct {
-	Names []string
+	selector mutator.Selector
+}
+
+// newMutatorInfo records the mutator names from one annotation. An empty list
+// means every mutator. Unknown names are not reported for annotations.
+func newMutatorInfo(names []string) mutatorInfo {
+	selector, _ := mutator.ParseSelector(namesOrAll(names))
+	return mutatorInfo{selector: selector}
 }
 
 // Collect processes an AST file to gather all mutation exclusions based on annotations.
@@ -200,10 +207,6 @@ func (p *Processor) collectNodesForBlockStmt() {
 	p.LineAnnotation.copyToStatNodesInBlock()
 }
 
-func allMutators() mutatorInfo {
-	return mutatorInfo{Names: []string{"*"}}
-}
-
 func namesOrAll(names []string) []string {
 	if len(names) == 0 {
 		return []string{"*"}
@@ -227,17 +230,8 @@ func parseMutators(mutatorList string) []string {
 }
 
 // shouldSkipMutator determines whether a specific mutator should be skipped
-func shouldSkipMutator(mutatorInfo mutatorInfo, mutatorName string) bool {
-	if len(mutatorInfo.Names) == 0 {
-		return true
-	}
-	for _, name := range mutatorInfo.Names {
-		if name == mutatorName || name == "*" {
-			return true
-		}
-	}
-
-	return false
+func shouldSkipMutator(info mutatorInfo, mutatorName string) bool {
+	return info.selector.Matches(mutatorName)
 }
 
 // getNodeLineRange calculates the line number range (start to end) that a given AST node occupies in the source file.
