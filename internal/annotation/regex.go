@@ -29,9 +29,7 @@ func (r *RegexAnnotation) parseRegexAnnotation(comment string) (*regexp.Regexp, 
 		return nil, mutatorInfo{}
 	}
 
-	return re, mutatorInfo{
-		Names: namesOrAll(parseMutators(mutatorList)),
-	}
+	return re, newMutatorInfo(parseMutators(mutatorList))
 }
 
 func unquotePattern(pattern string) string {

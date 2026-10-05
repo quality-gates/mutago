@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- `mutator-disable-next-line` and `mutator-disable-regexp` annotations now accept the trailing-`*` wildcard (such as `numbers/*`) that `--disable` and config already accept. Before, the wildcard silently did nothing in annotations. All of these names now go through one matcher, `mutator.Selector` (#277).
+
 ## [v2.10.21] — 2026-10-04
 
 ### Fixed

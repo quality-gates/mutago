@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -363,13 +364,14 @@ func createTmpDir(opts *models.Options) (string, error) {
 }
 
 func buildActiveMutators(opts *models.Options) []mutatorItem {
-	effectiveDisable := append(opts.Mutator.DisableMutators, opts.Config.DisableMutators...)
+	enable, _ := mutator.ParseSelector(opts.Config.EnableMutators)
+	disable, _ := mutator.ParseSelector(append(opts.Mutator.DisableMutators, opts.Config.DisableMutators...))
 	var mutators []mutatorItem
 	for _, name := range mutator.List() {
-		if len(opts.Config.EnableMutators) > 0 && !matchesAnyMutator(opts.Config.EnableMutators, name) {
+		if len(opts.Config.EnableMutators) > 0 && !enable.Matches(name) {
 			continue
 		}
-		if matchesAnyMutator(effectiveDisable, name) {
+		if disable.Matches(name) {
 			continue
 		}
 		console.Verbose(opts, "Enable mutator %q", name)
@@ -385,40 +387,15 @@ func buildActiveMutators(opts *models.Options) []mutatorItem {
 func warnIgnoredSelectors(w io.Writer, opts *models.Options) {
 	selectors := append(append([]string{}, opts.Mutator.DisableMutators...), opts.Config.DisableMutators...)
 	selectors = append(selectors, opts.Config.EnableMutators...)
-	names := mutator.List()
-	for _, selector := range selectors {
-		if !matchesAnyName(selector, names) {
+	var unknown *mutator.UnknownPatternsError
+	if _, err := mutator.ParseSelector(selectors); errors.As(err, &unknown) {
+		for _, selector := range unknown.Patterns {
 			fmt.Fprintf(w, "warning: mutator selector %q matches no registered mutator\n", selector)
 		}
 	}
 	for _, invalid := range filter.InvalidSourceLinePatterns(opts.Config.IgnoreSourceLines) {
 		fmt.Fprintf(w, "warning: invalid ignore_source_lines regex %q ignored: %v\n", invalid.Pattern, invalid.Err)
 	}
-}
-
-func matchesAnyName(pattern string, names []string) bool {
-	for _, name := range names {
-		if matchesMutator(pattern, name) {
-			return true
-		}
-	}
-	return false
-}
-
-func matchesAnyMutator(patterns []string, name string) bool {
-	for _, pattern := range patterns {
-		if matchesMutator(pattern, name) {
-			return true
-		}
-	}
-	return false
-}
-
-func matchesMutator(pattern, name string) bool {
-	if strings.HasSuffix(pattern, "*") {
-		return strings.HasPrefix(name, strings.TrimSuffix(pattern, "*"))
-	}
-	return name == pattern
 }
 
 func loadGitDiffLines(opts *models.Options) (gitdiff.ChangedLines, error) {
