@@ -230,8 +230,8 @@ func parseMutators(mutatorList string) []string {
 }
 
 // shouldSkipMutator determines whether a specific mutator should be skipped
-func shouldSkipMutator(mutatorInfo mutatorInfo, mutatorName string) bool {
-	return mutatorInfo.selector.Matches(mutatorName)
+func shouldSkipMutator(info mutatorInfo, mutatorName string) bool {
+	return info.selector.Matches(mutatorName)
 }
 
 // getNodeLineRange calculates the line number range (start to end) that a given AST node occupies in the source file.

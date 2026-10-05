@@ -619,3 +619,12 @@ func TestRegexPrefixWildcardSuppressesEveryMutatorWithThatPrefix(t *testing.T) {
 	assert.True(t, processor.ShouldSkip(one, "numbers/decrementer"))
 	assert.False(t, processor.ShouldSkip(one, "arithmetic/base"))
 }
+
+func TestRegexPrefixWildcardSuppressesStatementMutatorsViaBlockFilter(t *testing.T) {
+	const src = "package pkg\n\n// mutator-disable-regexp Mutated statement/*\nfunc Add(a, b int) int {\n\tc := a + 1 // Mutated\n\treturn c + b\n}\n"
+	_, file := collectAnnotationFixture(t, src)
+	assign := file.Decls[0].(*ast.FuncDecl).Body.List[0]
+
+	assert.True(t, HandleBlockStmt(assign, "statement/remove"))
+	assert.False(t, HandleBlockStmt(assign, "arithmetic/base"))
+}

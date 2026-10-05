@@ -365,7 +365,7 @@ func createTmpDir(opts *models.Options) (string, error) {
 
 func buildActiveMutators(opts *models.Options) []mutatorItem {
 	enable, _ := mutator.ParseSelector(opts.Config.EnableMutators)
-	disable, _ := mutator.ParseSelector(append(opts.Mutator.DisableMutators, opts.Config.DisableMutators...))
+	disable, _ := mutator.ParseSelector(disablePatterns(opts))
 	var mutators []mutatorItem
 	for _, name := range mutator.List() {
 		if len(opts.Config.EnableMutators) > 0 && !enable.Matches(name) {
@@ -381,12 +381,17 @@ func buildActiveMutators(opts *models.Options) []mutatorItem {
 	return mutators
 }
 
+// disablePatterns returns the --disable patterns followed by the
+// disable_mutators patterns, in a new slice.
+func disablePatterns(opts *models.Options) []string {
+	return append(append([]string{}, opts.Mutator.DisableMutators...), opts.Config.DisableMutators...)
+}
+
 // warnIgnoredSelectors writes a warning for each enable or disable selector
 // that matches no registered mutator and each ignore_source_lines pattern that
 // does not compile, so typos are not silently ignored.
 func warnIgnoredSelectors(w io.Writer, opts *models.Options) {
-	selectors := append(append([]string{}, opts.Mutator.DisableMutators...), opts.Config.DisableMutators...)
-	selectors = append(selectors, opts.Config.EnableMutators...)
+	selectors := append(disablePatterns(opts), opts.Config.EnableMutators...)
 	var unknown *mutator.UnknownPatternsError
 	if _, err := mutator.ParseSelector(selectors); errors.As(err, &unknown) {
 		for _, selector := range unknown.Patterns {

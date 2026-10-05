@@ -2,12 +2,14 @@ package mutator
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
 // Selector matches registered mutator names against user-supplied patterns.
 // A pattern is an exact mutator name, "*" for every mutator, or a prefix
-// followed by a trailing "*" (for example "numbers/*").
+// followed by a trailing "*" (for example "numbers/*"). A Selector with no
+// patterns matches no name.
 type Selector struct {
 	patterns []string
 }
@@ -30,7 +32,7 @@ func (e *UnknownPatternsError) Error() string {
 // a non-nil error is an *UnknownPatternsError listing the patterns that match
 // no registered mutator.
 func ParseSelector(patterns []string) (Selector, error) {
-	s := Selector{patterns: patterns}
+	s := Selector{patterns: slices.Clone(patterns)}
 	var unknown []string
 	for _, pattern := range patterns {
 		if !matchesAnyRegistered(pattern) {
