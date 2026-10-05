@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.22] — 2026-10-05
+
 ### Changed
 - `mutator-disable-next-line` and `mutator-disable-regexp` annotations now accept the trailing-`*` wildcard (such as `numbers/*`) that `--disable` and config already accept. Before, the wildcard silently did nothing in annotations. All of these names now go through one matcher, `mutator.Selector` (#277).
 
@@ -663,7 +665,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.21...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.22...HEAD
+[v2.10.22]: https://github.com/quality-gates/mutago/compare/v2.10.21...v2.10.22
 [v2.10.21]: https://github.com/quality-gates/mutago/compare/v2.10.20...v2.10.21
 [v2.10.20]: https://github.com/quality-gates/mutago/compare/v2.10.19...v2.10.20
 [v2.10.19]: https://github.com/quality-gates/mutago/compare/v2.10.18...v2.10.19
