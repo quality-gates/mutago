@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.23] — 2026-10-07
+
 ### Fixed
 - `--run-mutant-id` now chooses scope once, at discovery, with `--git-diff-lines`, `--blacklist`, and duplicate edits. Mutants outside that scope are not written, classified, printed, or counted. `--coverage` no longer reports them as NOT COVERED, and `--dry-run` counts the same set a real run admits (#276).
 - Skip numeric length and capacity arguments in `make` calls with qualified (`pkg.T`) and generic (`T[...]`) types, avoiding uncompilable `numbers/decrementer` mutants (#283).
@@ -670,7 +672,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.22...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.23...HEAD
+[v2.10.23]: https://github.com/quality-gates/mutago/compare/v2.10.22...v2.10.23
 [v2.10.22]: https://github.com/quality-gates/mutago/compare/v2.10.21...v2.10.22
 [v2.10.21]: https://github.com/quality-gates/mutago/compare/v2.10.20...v2.10.21
 [v2.10.20]: https://github.com/quality-gates/mutago/compare/v2.10.19...v2.10.20
