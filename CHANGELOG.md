@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ### Fixed
 - `--run-mutant-id` now chooses scope once, at discovery, with `--git-diff-lines`, `--blacklist`, and duplicate edits. Mutants outside that scope are not written, classified, printed, or counted. `--coverage` no longer reports them as NOT COVERED, and `--dry-run` counts the same set a real run admits (#276).
 - Skip numeric length and capacity arguments in `make` calls with qualified (`pkg.T`) and generic (`T[...]`) types, avoiding uncompilable `numbers/decrementer` mutants (#283).
+- `mutator-disable-next-line` and `mutator-disable-regexp` now suppress `statement/defer-remove`, `concurrency/goroutine-remove`, `statement/remove-self-assign`, `select/case-remove`, `select/default-remove`, and `composite/field-clear` on the annotated line. Before, these mutants were still run and scored (#284).
 
 ## [v2.10.22] — 2026-10-05
 

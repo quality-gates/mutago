@@ -2,6 +2,7 @@ package annotation
 
 import (
 	"go/ast"
+	"go/token"
 	"strings"
 )
 
@@ -20,8 +21,8 @@ func (f *FunctionAnnotation) collectFunctions(fun *ast.FuncDecl) {
 }
 
 // filterFunctions checks whether a given node should be excluded from mutation
-func (f *FunctionAnnotation) filterFunctions(node ast.Node) bool {
-	_, exists := f.Exclusions[node.Pos()]
+func (f *FunctionAnnotation) filterFunctions(pos token.Pos) bool {
+	_, exists := f.Exclusions[pos]
 	return exists
 }
 
