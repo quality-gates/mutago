@@ -96,7 +96,7 @@ type mutationRun struct {
 	ctx              context.Context
 	opts             *models.Options
 	mutators         []mutatorItem
-	blacklist        map[string]struct{}
+	scope            *mutantScope
 	tmpDir           string
 	exec             execConfig
 	report           *models.Report
@@ -107,7 +107,6 @@ type mutationRun struct {
 	stdout           io.Writer
 	stderr           io.Writer
 	runMutantIDFound *atomic.Bool
-	gitChangedLines  gitdiff.ChangedLines
 }
 
 // jobOutput is where a worker writes console output for one mutation.
@@ -143,8 +142,7 @@ type execJob struct {
 	// adjRelFile is the directive-adjusted filename relative to the module
 	// root (the filename Go's coverage profile uses for this position). It is
 	// only meaningful when directiveShifted is true.
-	adjRelFile       string
-	runMutantIDFound *atomic.Bool
+	adjRelFile string
 }
 
 type mutationSource struct {
@@ -309,7 +307,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 	var jobWg *sync.WaitGroup
 	runMutantIDFound := &atomic.Bool{}
 	if !opts.General.DryRun && !opts.Exec.NoExec {
-		jobs, jobWg = startWorkerPool(opts, numWorkers, report, &reportMu, gitChangedLines, tmpDir)
+		jobs, jobWg = startWorkerPool(opts, numWorkers, report, &reportMu, tmpDir)
 	}
 
 	var stopProgress chan struct{}
@@ -319,11 +317,11 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 	}
 
 	run := &mutationRun{
-		ctx:       ctx,
-		opts:      opts,
-		mutators:  buildActiveMutators(opts),
-		blacklist: mutationBlackList,
-		tmpDir:    tmpDir,
+		ctx:      ctx,
+		opts:     opts,
+		mutators: buildActiveMutators(opts),
+		scope:    newMutantScope(gitChangedLines, opts.Exec.RunMutantID, mutationBlackList),
+		tmpDir:   tmpDir,
 		exec: execConfig{
 			numWorkers:     numWorkers,
 			execs:          execs,
@@ -338,7 +336,6 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 		stdout:           e.Stdout,
 		stderr:           e.Stderr,
 		runMutantIDFound: runMutantIDFound,
-		gitChangedLines:  gitChangedLines,
 	}
 
 	return &runSetup{
@@ -652,59 +649,113 @@ func applyMutator(r *mutationRun, m mutatorItem, fc *fileContext, node ast.Node,
 	return mutationID
 }
 
+type preparedMutation struct {
+	candidate scopeCandidate
+	mutant    models.Mutant
+	edit      mutationEdit
+	relFile   string
+}
+
 func recordOneMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) {
+	prepared, ok := prepareScopedMutation(r, m, fc, mutation, originalStartLine, originalSourceCode)
+	if !ok {
+		return
+	}
+	admit, reason := r.scope.Admit(prepared.candidate)
+	if !admit {
+		noteRejectedMutation(r, prepared.candidate, reason)
+		return
+	}
+	if r.opts.Exec.RunMutantID != "" && r.runMutantIDFound != nil {
+		r.runMutantIDFound.Store(true)
+	}
 	if r.opts.General.DryRun {
-		relFile := baseline.RelPath(fc.absFile, r.moduleRoot)
-		if isGitDiffSkipped(r.gitChangedLines, relFile, fc.absFile, int(originalStartLine)) {
-			return
-		}
 		countDryRunMutation(m.Name, dryRunCounts, dryRunGlobalTotals)
 		return
 	}
-	processMutation(r, m, fc, mutation, mutationID, originalStartLine, originalSourceCode)
+	if r.jobs == nil {
+		return
+	}
+	queueMutation(r, fc, mutation, mutationID, originalSourceCode, prepared)
 }
 
-func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalStartLine int64, originalSourceCode []byte) {
+func prepareScopedMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mutago.PositionedMutation, originalStartLine int64, originalSourceCode []byte) (preparedMutation, bool) {
 	mutant := models.Mutant{}
 	mutant.Mutator.MutatorName = m.Name
 	mutant.Mutator.OriginalFilePath = fc.sourceFile
 	mutant.Mutator.OriginalStartLine = originalStartLine
 
-	mutationFile := fmt.Sprintf("%s.%d", fc.mutatedFile, mutationID)
 	edit, err := captureMutationEdit(fc.fset, mutation.Node, mutation.Start, mutation.End, originalSourceCode)
 	if err != nil {
-		out := fmt.Sprintf("INTERNAL ERROR %s\n", err.Error())
-		fmt.Fprintf(r.stdout, "%s", out)
-		mutant.ProcessOutput = out
-		r.mu.Lock()
-		r.report.Errored = append(r.report.Errored, mutant)
-		r.report.Stats.ErrorCount++
-		r.mu.Unlock()
+		recordCaptureFailure(r, mutant, err)
+		return preparedMutation{}, false
+	}
+	relFile := baseline.RelPath(fc.absFile, r.moduleRoot)
+	checksum := stableMutationEditKey(relFile, originalSourceCode, edit)
+	mutant.Checksum = checksum
+	id, err := scopeMutantID(r, relFile, m.Name, originalSourceCode, edit)
+	if err != nil {
+		recordCaptureFailure(r, mutant, err)
+		return preparedMutation{}, false
+	}
+	return preparedMutation{
+		candidate: scopeCandidate{
+			relFile:  relFile,
+			absFile:  fc.absFile,
+			line:     int(originalStartLine),
+			checksum: checksum,
+			id:       id,
+		},
+		mutant:  mutant,
+		edit:    edit,
+		relFile: relFile,
+	}, true
+}
+
+func scopeMutantID(r *mutationRun, relFile, mutatorName string, original []byte, edit mutationEdit) (string, error) {
+	if r.opts.Exec.RunMutantID == "" {
+		return "", nil
+	}
+	return mutantIDForEdit(relFile, mutatorName, original, edit)
+}
+
+func recordCaptureFailure(r *mutationRun, mutant models.Mutant, err error) {
+	if r.opts.General.DryRun {
 		return
 	}
-	checksum := stableMutationEditKey(baseline.RelPath(fc.absFile, r.moduleRoot), originalSourceCode, edit)
-	mutant.Checksum = checksum
-	if _, duplicate := r.blacklist[checksum]; duplicate {
+	out := fmt.Sprintf("INTERNAL ERROR %s\n", err.Error())
+	fmt.Fprintf(r.stdout, "%s", out)
+	mutant.ProcessOutput = out
+	r.mu.Lock()
+	r.report.Errored = append(r.report.Errored, mutant)
+	r.report.Stats.ErrorCount++
+	r.mu.Unlock()
+}
+
+func noteRejectedMutation(r *mutationRun, c scopeCandidate, reason skipReason) {
+	switch reason {
+	case skipGitDiff:
+		console.Debug(r.opts, "Skip %s:%d (not in git diff)", c.relFile, c.line)
+	case skipMutantID:
+		console.Debug(r.opts, "Skip %s:%d (mutant id not selected)", c.relFile, c.line)
+	case skipDuplicate, skipBlacklist:
+		if r.opts.General.DryRun {
+			return
+		}
 		r.mu.Lock()
 		r.report.Stats.DuplicatedCount++
 		r.mu.Unlock()
-		return
 	}
-	r.blacklist[checksum] = struct{}{}
+}
 
-	if r.jobs == nil {
-		return
-	}
-
+func queueMutation(r *mutationRun, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalSourceCode []byte, prepared preparedMutation) {
 	adjPos := fc.fset.PositionFor(mutation.Position, true)
 	rawPos := fc.fset.PositionFor(mutation.Position, false)
-	directiveShifted := adjPos.Filename != rawPos.Filename || adjPos.Line != rawPos.Line
-
 	job := execJob{
 		ctx:            r.ctx,
 		opts:           r.opts,
 		pkg:            fc.pkg,
-		mutant:         mutant,
+		mutant:         prepared.mutant,
 		coverProfile:   fc.coverProfile,
 		execs:          r.exec.execs,
 		perTestProf:    fc.perTestProf,
@@ -713,17 +764,16 @@ func processMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation mu
 		out:            jobOutput{stdout: r.stdout, stderr: r.stderr},
 		source: mutationSource{
 			originalFile: fc.sourceFile,
-			mutationFile: mutationFile,
+			mutationFile: fmt.Sprintf("%s.%d", fc.mutatedFile, mutationID),
 			absFile:      fc.absFile,
-			relFile:      baseline.RelPath(fc.absFile, r.moduleRoot),
+			relFile:      prepared.relFile,
 			moduleRoot:   r.moduleRoot,
 			original:     originalSourceCode,
-			edit:         edit,
+			edit:         prepared.edit,
 		},
 		packageLevelDecl: isPackageLevelDecl(fc.src, mutation.Position),
-		directiveShifted: directiveShifted,
+		directiveShifted: adjPos.Filename != rawPos.Filename || adjPos.Line != rawPos.Line,
 		adjRelFile:       baseline.RelPath(filepath.Join(r.moduleRoot, adjPos.Filename), r.moduleRoot),
-		runMutantIDFound: r.runMutantIDFound,
 	}
 	select {
 	case <-r.ctx.Done():
@@ -767,7 +817,7 @@ func printDryRunReport(stdout io.Writer, total int, totals map[string]int) {
 		}
 	}
 	fmt.Fprintf(stdout, "\nTotal: %d mutation(s) would be generated. No files written, no tests run.\n", total)
-	fmt.Fprintln(stdout, "Note: this count is an upper bound. Mutations that produce byte-identical edits at the same location are deduplicated during an actual run.")
+	fmt.Fprintln(stdout, "Note: this count uses the same scope as a real run (changed lines, blacklist, duplicate edits, and --run-mutant-id). It does not apply coverage.")
 }
 
 func parseExecFlags(opts *models.Options) (execs []string, extraTestFlags []string) {
@@ -967,7 +1017,7 @@ func calcNumWorkers(opts *models.Options, execs []string) int {
 	return n
 }
 
-func startWorkerPool(opts *models.Options, numWorkers int, report *models.Report, mu *sync.Mutex, gitChangedLines gitdiff.ChangedLines, tmpDir string) (chan execJob, *sync.WaitGroup) {
+func startWorkerPool(opts *models.Options, numWorkers int, report *models.Report, mu *sync.Mutex, tmpDir string) (chan execJob, *sync.WaitGroup) {
 	if opts.Exec.NoExec || opts.General.DryRun {
 		return nil, nil
 	}
@@ -982,7 +1032,7 @@ func startWorkerPool(opts *models.Options, numWorkers int, report *models.Report
 				if job.ctx != nil && job.ctx.Err() != nil {
 					continue
 				}
-				runExecJob(withStableExec(job, paths), report, mu, gitChangedLines)
+				runExecJob(withStableExec(job, paths), report, mu)
 			}
 		}(stableExecPaths{wrapper: stableExec, bin: stableBinForWorker(tmpDir, stableExec, i)})
 	}
@@ -1476,13 +1526,9 @@ func isPackageLevelDecl(file ast.Node, pos token.Pos) bool {
 	return false
 }
 
-func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, gitChangedLines gitdiff.ChangedLines) {
+func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex) {
 	opts := job.opts
 	mutant := job.mutant
-
-	if skipForGitDiff(job, gitChangedLines) {
-		return
-	}
 
 	startLine := mutant.Mutator.OriginalStartLine
 	notCovered := !job.packageLevelDecl && job.coverProfile != nil && startLine > 0 && !mutationCovered(job, int(startLine))
@@ -1507,10 +1553,6 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex, gitChangedLin
 		mu.Unlock()
 		return
 	}
-	if skipForMutantID(job) {
-		return
-	}
-	job.runMutantIDFound.Store(job.opts.Exec.RunMutantID != "")
 
 	execExitCode := mutateExec(job, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)
@@ -1535,36 +1577,6 @@ func mutantLocation(opts *models.Options, mutant models.Mutant) string {
 		return fmt.Sprintf("%s (%s) [checksum: %s]", loc, mutant.Mutator.MutatorName, mutant.Checksum)
 	}
 	return fmt.Sprintf("%s (%s)", loc, mutant.Mutator.MutatorName)
-}
-
-func isGitDiffSkipped(gitChangedLines gitdiff.ChangedLines, relFile, absFile string, lineNum int) bool {
-	if gitChangedLines == nil {
-		return false
-	}
-	changed := gitdiff.IsRelativeLineChanged(gitChangedLines, relFile, lineNum)
-	if relFile == "" {
-		changed = gitdiff.IsLineChanged(gitChangedLines, absFile, lineNum)
-	}
-	return !changed
-}
-
-func skipForGitDiff(job execJob, gitChangedLines gitdiff.ChangedLines) bool {
-	lineNum := int(job.mutant.Mutator.OriginalStartLine)
-	if isGitDiffSkipped(gitChangedLines, job.source.relFile, job.source.absFile, lineNum) {
-		console.Debug(job.opts, "Skip %q at line %d (not in git diff)", job.source.mutationFile, lineNum)
-		return true
-	}
-	return false
-}
-
-func skipForMutantID(job execJob) bool {
-	if job.opts.Exec.RunMutantID == "" {
-		return false
-	}
-	relFile := baseline.RelPath(job.mutant.Mutator.OriginalFilePath, job.source.moduleRoot)
-	diffOut, _ := exec.Command("diff", "--label=Original", "--label=New", "-u", job.source.originalFile, job.source.mutationFile).CombinedOutput()
-	id := baseline.MutantID(relFile, job.mutant.Mutator.MutatorName, string(diffOut))
-	return id != job.opts.Exec.RunMutantID
 }
 
 func mutateExec(job execJob, mutant *models.Mutant) int {
