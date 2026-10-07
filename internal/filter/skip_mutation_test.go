@@ -120,6 +120,30 @@ func TestSkipMutationForInitSlicesAndMaps(t *testing.T) {
 			expectedLiterals:  []string{},
 			expectedOperators: []string{},
 		},
+		{
+			name:              "skip mutation for qualified type make",
+			code:              `package main; var a = make(pkg.Slice, 0)`,
+			expectedLiterals:  []string{"0"},
+			expectedOperators: []string{},
+		},
+		{
+			name:              "skip mutation for generic type with single type arg",
+			code:              `package main; var a = make(GenericSlice[int], 0)`,
+			expectedLiterals:  []string{"0"},
+			expectedOperators: []string{},
+		},
+		{
+			name:              "skip mutation for qualified generic type with single type arg",
+			code:              `package main; var a = make(pkg.Slice[int], 0)`,
+			expectedLiterals:  []string{"0"},
+			expectedOperators: []string{},
+		},
+		{
+			name:              "skip mutation for generic type with multiple type args",
+			code:              `package main; var a = make(GenericMap[string, int], 0)`,
+			expectedLiterals:  []string{"0"},
+			expectedOperators: []string{},
+		},
 	}
 
 	for _, tt := range tests {

@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Skip numeric length and capacity arguments in `make` calls with qualified (`pkg.T`) and generic (`T[...]`) types, avoiding uncompilable `numbers/decrementer` mutants (#283).
+
 ## [v2.10.22] — 2026-10-05
 
 ### Changed
