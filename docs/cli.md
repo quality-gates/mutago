@@ -24,7 +24,7 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 
 | Flag | Description |
 | :--- | :---------- |
-| `--dry-run` | Count mutations per file and mutator without generating files or running tests; prints a summary table and exits 0 |
+| `--dry-run` | Count mutations per file and mutator without generating files or running tests; prints a summary table and exits 0. The count uses the same scope as a real run (`--git-diff-lines`, `--blacklist`, duplicate edits, and `--run-mutant-id`) and does not apply coverage |
 | `--noop` | No-op (backward compatibility). The baseline pre-flight check — run the suite once unmutated, exit with a tool error if it fails — is now always on by default. Skipped under `--coverage`, `--no-exec`, `--dry-run`, or a custom `--exec` |
 | `--no-diffs` | Suppress diff output for all mutation results (useful in CI where diffs are noisy and the JSON report is consumed instead) |
 | `--output-statuses` | Show only listed result statuses in the terminal: `k`=killed `e`=escaped `s`=skipped `n`=not-covered `x`=errored (e.g. `--output-statuses=ke`). Does not affect JSON reports. Overrides `--quiet` when set. |
@@ -35,7 +35,7 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | `--logger-gitlab` | Write `mutago-gitlab.json` in GitLab Code Quality format |
 | `--logger-summary-json` | Write compact stats to `mutago-summary.json` |
 | `--logger-agentic-json` | Write LLM-ready report to `mutago-agentic.json` |
-| `--run-mutant-id` | Run only the mutant with this stable ID (copy the `id` field from `mutago-agentic.json`); exits 3 if no matching mutant is found. Valid-ID runs suppress the summary and quality gates. |
+| `--run-mutant-id` | Run only the mutant with this stable ID (copy the `id` field from `mutago-agentic.json`). Other mutants are not classified or counted. `--dry-run` counts only this mutant. Exits 3 if no matching mutant is found. Valid-ID runs suppress the summary and quality gates. |
 | `--version`, `-v` | Print version and exit 0 |
 
 ## Quality gates

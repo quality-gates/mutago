@@ -84,6 +84,129 @@ func TestMainUnknownRunMutantID(t *testing.T) {
 	assert.NotContains(t, out, "mutation score")
 }
 
+// TestMainRunMutantIDScopesOtherMutants covers #276: --run-mutant-id decides
+// scope at discovery, so other mutants are not classified, printed, or counted,
+// and --dry-run reports the same count a real run admits.
+func TestMainRunMutantIDScopesOtherMutants(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/scopebug\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - arithmetic/base\n")
+	writeFixtureFile(t, filepath.Join(root, "calc.go"), "package scopebug\n\nfunc Add(a, b int) int { return a + b }\n\nfunc Sum(a, b int) int { return a - b }\n")
+	writeFixtureFile(t, filepath.Join(root, "calc_test.go"), "package scopebug\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n\tAdd(1, 2)\n}\n")
+
+	agenticPath := filepath.Join(root, "mutago-agentic.json")
+	summaryPath := filepath.Join(root, "mutago-summary.json")
+	prevAgentic := models.ReportAgenticJSONFileName
+	prevSummary := models.ReportSummaryJSONFileName
+	models.ReportAgenticJSONFileName = agenticPath
+	models.ReportSummaryJSONFileName = summaryPath
+	t.Cleanup(func() {
+		models.ReportAgenticJSONFileName = prevAgentic
+		models.ReportSummaryJSONFileName = prevSummary
+	})
+
+	common := []string{"--workers", "1", "--exec-timeout", "30", "--config", "mutago.yml", "."}
+	testMain(t, root, append([]string{"--logger-agentic-json"}, common...), returnOk, "mutation score")
+
+	addID, sumID := scopeBugIDs(t, agenticPath)
+	require.NotEqual(t, addID, sumID)
+
+	covered := testMain(t, root, append([]string{"--coverage", "--run-mutant-id", addID, "--logger-summary-json"}, common...), returnOk, "ESCAPED")
+	assert.NotContains(t, covered, "NOT COVERED")
+	assert.NotContains(t, covered, "mutation score")
+	assert.NotContains(t, covered, "calc.go:5")
+	assertSummaryCounts(t, summaryPath, 1, 0)
+
+	dry := testMain(t, root, append([]string{"--dry-run", "--run-mutant-id", addID}, common...), returnOk, "1 mutation(s) would be generated")
+	assert.NotContains(t, dry, "2 mutation(s) would be generated")
+
+	uncovered := testMain(t, root, append([]string{"--coverage", "--run-mutant-id", sumID, "--logger-summary-json"}, common...), returnOk, "NOT COVERED")
+	assert.NotContains(t, uncovered, "No mutant with ID")
+	assert.NotContains(t, uncovered, "KILLED")
+	assert.NotContains(t, uncovered, "ESCAPED")
+	assert.NotContains(t, uncovered, "calc.go:3")
+	assert.NotContains(t, uncovered, "mutation score")
+	assertSummaryCounts(t, summaryPath, 1, 1)
+}
+
+func scopeBugIDs(t *testing.T, agenticPath string) (addID, sumID string) {
+	t.Helper()
+	data, err := os.ReadFile(agenticPath)
+	require.NoError(t, err)
+	var report struct {
+		Mutants []struct {
+			ID   string `json:"id"`
+			Line int64  `json:"line"`
+		} `json:"mutants"`
+	}
+	require.NoError(t, json.Unmarshal(data, &report))
+	for _, m := range report.Mutants {
+		switch m.Line {
+		case 3:
+			addID = m.ID
+		case 5:
+			sumID = m.ID
+		}
+	}
+	require.NotEmpty(t, addID)
+	require.NotEmpty(t, sumID)
+	return addID, sumID
+}
+
+func assertSummaryCounts(t *testing.T, path string, total, notCovered int64) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var summary struct {
+		TotalMutantsCount int64 `json:"totalMutantsCount"`
+		NotCoveredCount   int64 `json:"notCoveredCount"`
+		KilledCount       int64 `json:"killedCount"`
+		EscapedCount      int64 `json:"escapedCount"`
+		ErrorCount        int64 `json:"errorCount"`
+		SkippedCount      int64 `json:"skippedCount"`
+	}
+	require.NoError(t, json.Unmarshal(data, &summary))
+	assert.Equal(t, total, summary.TotalMutantsCount)
+	assert.Equal(t, notCovered, summary.NotCoveredCount)
+	assert.Equal(t, total, summary.KilledCount+summary.EscapedCount+summary.ErrorCount+summary.SkippedCount+summary.NotCoveredCount)
+}
+
+func TestMainDryRunGitDiffCountMatchesRealRun(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/scopediff\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - arithmetic/base\n")
+	writeFixtureFile(t, filepath.Join(root, "calc.go"), "package scopediff\n\nfunc Add(a, b int) int { return a + b }\n\nfunc Sum(a, b int) int { return a - b }\n")
+	writeFixtureFile(t, filepath.Join(root, "calc_test.go"), "package scopediff\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) { Add(1, 2) }\n")
+	runGit(t, root, "init", "-q")
+	runGit(t, root, "config", "user.email", "mutago@example.com")
+	runGit(t, root, "config", "user.name", "mutago test")
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-q", "-m", "base")
+	writeFixtureFile(t, filepath.Join(root, "calc.go"), "package scopediff\n\nfunc Add(a, b int) int { return a + b } // v2\n\nfunc Sum(a, b int) int { return a - b }\n")
+
+	summaryPath := filepath.Join(root, "mutago-summary.json")
+	prevSummary := models.ReportSummaryJSONFileName
+	models.ReportSummaryJSONFileName = summaryPath
+	t.Cleanup(func() { models.ReportSummaryJSONFileName = prevSummary })
+
+	common := []string{"--workers", "1", "--exec-timeout", "30", "--git-diff-lines", "--git-diff-base", "HEAD", "--config", "mutago.yml", "."}
+	dry := testMain(t, root, append([]string{"--dry-run"}, common...), returnOk, "mutation(s) would be generated")
+	real := testMain(t, root, append([]string{"--logger-summary-json"}, common...), returnOk, "mutation score")
+	assert.NotContains(t, real, "calc.go:5")
+
+	var n int
+	_, err := fmt.Sscanf(dry[strings.Index(dry, "Total: "):], "Total: %d", &n)
+	require.NoError(t, err)
+	data, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	var summary struct {
+		TotalMutantsCount int64 `json:"totalMutantsCount"`
+	}
+	require.NoError(t, json.Unmarshal(data, &summary))
+	assert.Equal(t, int64(n), summary.TotalMutantsCount)
+	assert.Equal(t, 1, n)
+}
+
 func TestMainRecursive(t *testing.T) {
 	testMain(
 		t,
