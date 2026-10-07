@@ -79,9 +79,16 @@ func (p *Processor) Collect(file *ast.File, fset *token.FileSet, fileAbs string)
 
 // ShouldSkip determines if a given node should be excluded from mutation.
 func (p *Processor) ShouldSkip(node ast.Node, mutatorName string) bool {
-	return p.FunctionAnnotation.filterFunctions(node) ||
-		p.RegexAnnotation.filterRegexNodes(node, mutatorName) ||
-		p.LineAnnotation.filterNodesOnNextLine(node, mutatorName)
+	return p.ShouldSkipPosition(node.Pos(), mutatorName)
+}
+
+// ShouldSkipPosition determines if a mutation whose original syntax starts at
+// pos should be excluded. Container mutators such as statement/defer-remove
+// visit a block but report the position of the child they remove.
+func (p *Processor) ShouldSkipPosition(pos token.Pos, mutatorName string) bool {
+	return p.FunctionAnnotation.filterFunctions(pos) ||
+		p.RegexAnnotation.filterRegexNodes(pos, mutatorName) ||
+		p.LineAnnotation.filterNodesOnNextLine(pos, mutatorName)
 }
 
 // DecoratorFilter creates a mutator that applies filters to visited nodes and
@@ -101,9 +108,13 @@ func separateFilters(filters []filter.NodeFilter) ([]filter.NodeFilter, []filter
 	nodeFilters := make([]filter.NodeFilter, 0, len(filters))
 	positionFilters := make([]filter.MutationPositionFilter, 0, len(filters))
 	for _, f := range filters {
-		if positionFilter, ok := f.(filter.MutationPositionFilter); ok {
+		positionFilter, ok := f.(filter.MutationPositionFilter)
+		if ok {
 			positionFilters = append(positionFilters, positionFilter)
-		} else {
+		}
+		// Annotations also filter visited nodes, because many mutators report
+		// an operator position (e.g. OpPos) rather than a node start.
+		if _, isProcessor := f.(*Processor); !ok || isProcessor {
 			nodeFilters = append(nodeFilters, f)
 		}
 	}

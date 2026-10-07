@@ -223,7 +223,7 @@ func (r *RegexAnnotation) findLinesMatchingRegex(filePath string, regex *regexp.
 // filterRegexNodes checks if a given node should be excluded from mutation based on:
 // 1. Whether the node appears in the Exclusions map
 // 2. Whether the current mutator is in the node's exclusion list
-func (r *RegexAnnotation) filterRegexNodes(node ast.Node, mutatorName string) bool {
-	mutators, exists := r.PositionIndex[node.Pos()]
+func (r *RegexAnnotation) filterRegexNodes(pos token.Pos, mutatorName string) bool {
+	mutators, exists := r.PositionIndex[pos]
 	return exists && shouldSkipMutator(mutators, mutatorName)
 }

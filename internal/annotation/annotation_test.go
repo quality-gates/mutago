@@ -342,7 +342,7 @@ func TestCollectFunctionsAndFilterFunctions(t *testing.T) {
 
 			f.collectFunctions(funcDecl)
 
-			filtered := f.filterFunctions(funcDecl)
+			filtered := f.filterFunctions(funcDecl.Pos())
 			assert.Equal(t, tt.expected, filtered)
 
 		})
