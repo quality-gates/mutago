@@ -38,7 +38,7 @@ func (s *SkipMakeArgsFilter) Collect(file *ast.File, _ *token.FileSet, _ string)
 
 func isSupportedMakeType(expr ast.Expr) bool {
 	switch expr.(type) {
-	case *ast.ArrayType, *ast.MapType, *ast.Ident, *ast.ChanType:
+	case *ast.ArrayType, *ast.MapType, *ast.Ident, *ast.ChanType, *ast.SelectorExpr, *ast.IndexExpr, *ast.IndexListExpr:
 		return true
 	default:
 		return false
