@@ -1951,3 +1951,59 @@ func TestMainMutantIDsIgnoreTargetSpelling(t *testing.T) {
 		})
 	}
 }
+
+// writeOutsideModuleFixture lays out a module under parent/mod with two
+// arithmetic/base mutants: Add's is killed by its test and Sub's escapes.
+func writeOutsideModuleFixture(t *testing.T) (parent, mod, config string) {
+	t.Helper()
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	mod = filepath.Join(parent, "mod")
+	require.NoError(t, os.MkdirAll(mod, 0o755))
+	writeFixtureFile(t, filepath.Join(mod, "go.mod"), "module example.com/outside\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(mod, "add.go"), "package outside\n\nfunc Add(a, b int) int { return a + b }\n\nfunc Sub(a, b int) int { return a - b }\n")
+	writeFixtureFile(t, filepath.Join(mod, "add_test.go"), "package outside\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n\tif Add(1, 2) != 3 {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n")
+	config = filepath.Join(parent, "mutago.yml")
+	writeFixtureFile(t, config, "enable_mutators:\n  - arithmetic/base\n")
+	return parent, mod, config
+}
+
+// TestMainOutsideTargetModule covers #287: mutants are tested with their own
+// package's tests whichever directory mutago runs from. Testing the wrong
+// package kills or skips both mutants, or lets both escape.
+func TestMainOutsideTargetModule(t *testing.T) {
+	parent, mod, config := writeOutsideModuleFixture(t)
+	other := filepath.Join(parent, "other")
+	require.NoError(t, os.MkdirAll(other, 0o755))
+	writeFixtureFile(t, filepath.Join(other, "go.mod"), "module example.com/other\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(other, "other.go"), "package other\n")
+
+	runs := []struct{ name, dir, target string }{
+		{"inside module", mod, "."},
+		{"from non-module parent", parent, "./mod"},
+		{"from unrelated module", other, mod},
+		{"file target from unrelated module", other, filepath.Join(mod, "add.go")},
+	}
+	for _, r := range runs {
+		t.Run(r.name, func(t *testing.T) {
+			testMain(t, r.dir, []string{"--workers", "1", "--exec-timeout", "30", "--config", config, r.target}, returnOk, "(1 killed, 1 escaped, 0 errored, 0 not covered, 0 skipped, 2 total)")
+		})
+	}
+
+	t.Run("from non-module parent through a symlink", func(t *testing.T) {
+		link := filepath.Join(t.TempDir(), "link")
+		require.NoError(t, os.Symlink(parent, link))
+		t.Setenv("PWD", link)
+		testMain(t, link, []string{"--workers", "1", "--exec-timeout", "30", "--config", config, "./mod"}, returnOk, "(1 killed, 1 escaped, 0 errored, 0 not covered, 0 skipped, 2 total)")
+	})
+}
+
+// TestMainTargetOutsideAnyModuleIsToolError covers #287: when no module holds
+// the target, mutago cannot test its package and must not report a score.
+func TestMainTargetOutsideAnyModuleIsToolError(t *testing.T) {
+	parent, mod, config := writeOutsideModuleFixture(t)
+	require.NoError(t, os.Remove(filepath.Join(mod, "go.mod")))
+
+	out := testMain(t, parent, []string{"--workers", "1", "--exec-timeout", "30", "--config", config, "--min-msi", "80", "./mod"}, returnError, "not inside a Go module")
+	assert.NotContains(t, out, "mutation score")
+}
