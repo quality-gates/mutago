@@ -61,23 +61,10 @@ jobs:
       - name: Build mutago
         run: go build -o /tmp/mutago ./cmd/mutago
       - name: Run mutation quality gates
-        run: |
-          /tmp/mutago \
-            --exec-timeout 30 --coverage --min-msi 75 --min-covered-msi 80 \
-            github.com/quality-gates/mutago/v2/mutator/arithmetic \
-            github.com/quality-gates/mutago/v2/mutator/branch \
-            github.com/quality-gates/mutago/v2/mutator/composite \
-            github.com/quality-gates/mutago/v2/mutator/concurrency \
-            github.com/quality-gates/mutago/v2/mutator/conditional \
-            github.com/quality-gates/mutago/v2/mutator/expression \
-            github.com/quality-gates/mutago/v2/mutator/loop \
-            github.com/quality-gates/mutago/v2/mutator/numbers \
-            github.com/quality-gates/mutago/v2/mutator/select \
-            github.com/quality-gates/mutago/v2/mutator/statement \
-            github.com/quality-gates/mutago/v2/internal/filter \
-            github.com/quality-gates/mutago/v2/internal/coverage \
-            github.com/quality-gates/mutago/v2/internal/gitdiff \
-            github.com/quality-gates/mutago/v2/internal/models
+        env:
+          MUTAGO_BIN: /tmp/mutago
+          MUTAGO_WORKERS: "0"
+        run: ./scripts/check-change.sh --full
 
   build:
     name: Build darwin/${{ matrix.arch }}
