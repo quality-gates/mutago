@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.25] — 2026-10-08
+
 ### Changed
 - Local repair checks, pre-push, and PR CI use one changed-line self-mutation gate in `scripts/check-change.sh`. Main CI keeps full-tree mutation testing. MSI thresholds and mutant timeouts are unchanged.
 
@@ -683,7 +685,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.24...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.25...HEAD
+[v2.10.25]: https://github.com/quality-gates/mutago/compare/v2.10.24...v2.10.25
 [v2.10.24]: https://github.com/quality-gates/mutago/compare/v2.10.23...v2.10.24
 [v2.10.23]: https://github.com/quality-gates/mutago/compare/v2.10.22...v2.10.23
 [v2.10.22]: https://github.com/quality-gates/mutago/compare/v2.10.21...v2.10.22
