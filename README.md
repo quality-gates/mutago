@@ -324,6 +324,8 @@ By default mutago runs the test suite once without any mutations first (the base
 
 If a generated mutant does not compile, it is skipped rather than counted as killed by a test.
 
+You can run mutago from outside the targets' module, such as from a parent directory or from another module. It runs `go` in the targets' module, so the result matches a run from inside it. Targets that span more than one module, or are not in a module, are a tool error (exit 3); run mutago once per module. This check is skipped when a `go.work` workspace is in use, and when a custom `--exec` runs the tests.
+
 Use `--timeout-coefficient` to scale the per-mutation timeout relative to an uncached baseline test-suite run (e.g. `--timeout-coefficient 3` allows each mutation up to 3× the clean run). The clean pre-flight run uses a generous cap so a suite slower than `--exec-timeout` can still be measured; the derived timeout then applies to mutant runs. Mutago adds `-count=1` unless `--test-flags` already contains a positive `-count=N`. More reliable than a fixed `--exec-timeout` on machines with variable load.
 
 When `--coverage` is enabled, a failed clean coverage run stops Mutago with exit code 3. A partial coverage profile from failed tests is never used to classify mutants.

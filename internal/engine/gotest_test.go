@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -212,5 +214,54 @@ func TestPerTestToolchainCommands(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestGoWorkDir covers #287: go commands run in the targets' module unless the
+// current directory's module or workspace already holds them.
+func TestGoWorkDir(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"a/pkg", "b", "loose"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	aMod, bMod := filepath.Join(root, "a", "go.mod"), filepath.Join(root, "b", "go.mod")
+	for _, goMod := range []string{aMod, bMod} {
+		if err := os.WriteFile(goMod, []byte("module example.com/m\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	aFile, bFile := filepath.Join(root, "a", "pkg", "x.go"), filepath.Join(root, "b", "y.go")
+	looseFile := filepath.Join(root, "loose", "z.go")
+
+	tests := []struct {
+		name    string
+		cwd     goEnv
+		files   []string
+		want    string
+		wantErr bool
+	}{
+		{name: "current module holds targets", cwd: goEnv{goMod: aMod}, files: []string{aFile}, want: ""},
+		{name: "outside any module", cwd: goEnv{goMod: os.DevNull}, files: []string{aFile}, want: filepath.Join(root, "a")},
+		{name: "unrelated module", cwd: goEnv{goMod: bMod}, files: []string{aFile}, want: filepath.Join(root, "a")},
+		{name: "workspace", cwd: goEnv{goMod: bMod, goWork: filepath.Join(root, "go.work")}, files: []string{aFile, bFile}, want: ""},
+		{name: "GOPATH mode", cwd: goEnv{}, files: []string{looseFile}, want: ""},
+		{name: "targets span modules", cwd: goEnv{goMod: aMod}, files: []string{aFile, bFile}, wantErr: true},
+		{name: "target in no module", cwd: goEnv{goMod: os.DevNull}, files: []string{looseFile}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := goWorkDir(tt.cwd, tt.files)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("goWorkDir() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Fatalf("goWorkDir() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+	if _, err := goWorkDir(goEnv{goMod: aMod}, []string{aFile, bFile}); !errors.Is(err, errTargetsSpanModules) {
+		t.Fatalf("goWorkDir() error = %v, want errTargetsSpanModules", err)
 	}
 }

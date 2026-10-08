@@ -44,9 +44,10 @@ func ClearPackageCache() {
 	pkgCacheMu.Unlock()
 }
 
-// PreparePackages loads all target packages in one packages.Load call and
-// indexes their syntax by absolute filename for subsequent parsing requests.
-func PreparePackages(files []string) error {
+// PreparePackages loads all target packages in one packages.Load call run in
+// dir ("" for the current directory) and indexes their syntax by absolute
+// filename for subsequent parsing requests.
+func PreparePackages(files []string, dir string) error {
 	patterns, seenDirs, err := packagePatterns(files)
 	if err != nil {
 		return err
@@ -63,6 +64,7 @@ func PreparePackages(files []string) error {
 			packages.NeedTypes |
 			packages.NeedTypesInfo |
 			packages.NeedImports,
+		Dir:  dir,
 		Fset: fset,
 		ParseFile: func(fset *token.FileSet, filename string, src []byte) (*ast.File, error) {
 			return parser.ParseFile(fset, filename, src, parser.AllErrors|parser.ParseComments)

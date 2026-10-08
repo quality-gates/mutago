@@ -90,6 +90,8 @@ type execConfig struct {
 	execs          []string
 	extraTestFlags []string
 	importPaths    *importPaths
+	// goDir is the directory go commands run in (see goWorkDir).
+	goDir string
 }
 
 type mutationRun struct {
@@ -119,6 +121,7 @@ type execJob struct {
 	ctx            context.Context
 	opts           *models.Options
 	pkg            *types.Package
+	test           goTestTarget
 	mutant         models.Mutant
 	coverProfile   *coverage.Profile
 	execs          []string
@@ -157,6 +160,7 @@ type mutationSource struct {
 
 type fileContext struct {
 	pkg            *types.Package
+	testPkg        string
 	info           *types.Info
 	fset           *token.FileSet
 	src            ast.Node
@@ -193,7 +197,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	defer cleanup()
 
 	report := run.report
-	if exitCode := runBaselineChecks(runEngine.Stderr, opts, pkgs, run.exec.importPaths, run.exec.execs, run.exec.extraTestFlags); exitCode != 0 {
+	if exitCode := runBaselineChecks(runEngine.Stderr, opts, pkgs, run.exec); exitCode != 0 {
 		return Result{Report: report, ExitCode: exitCode}, nil
 	}
 
@@ -281,19 +285,18 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 		return nil, fmt.Errorf("Cannot load git diff: %w", err)
 	}
 
-	pkgs := targets.Packages
-	astutil.ClearIdentifierCache()
-	parser.ClearPackageCache()
-	if err := parser.PreparePackages(files); err != nil {
-		return nil, fmt.Errorf("Cannot load target packages: %w", err)
+	execs, extraTestFlags := parseExecFlags(opts)
+	goDir, err := loadTargetPackages(opts, execs, files)
+	if err != nil {
+		return nil, err
 	}
+
+	pkgs := targets.Packages
 
 	warnIgnoredSelectors(e.Stderr, opts)
 
 	report := &models.Report{}
 	var reportMu sync.Mutex
-
-	execs, extraTestFlags := parseExecFlags(opts)
 
 	numWorkers := calcNumWorkers(opts, execs)
 	console.Verbose(opts, "Running with %d parallel worker(s)", numWorkers)
@@ -326,12 +329,13 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, targets impo
 			numWorkers:     numWorkers,
 			execs:          execs,
 			extraTestFlags: extraTestFlags,
-			importPaths:    newImportPaths(),
+			importPaths:    newImportPaths(goDir, extraTestFlags),
+			goDir:          goDir,
 		},
 		report:           report,
 		mu:               &reportMu,
-		modulePath:       detectModulePath(),
-		moduleRoot:       detectModuleRoot(),
+		modulePath:       detectModulePath(goDir),
+		moduleRoot:       detectModuleRoot(goDir),
 		jobs:             jobs,
 		stdout:           e.Stdout,
 		stderr:           e.Stderr,
@@ -427,20 +431,44 @@ func detectDefaultBranch() string {
 	return "master"
 }
 
-func detectModulePath() string {
-	cmd := exec.Command("go", "list", "-m")
-	cmd.Env = os.Environ()
-	out, err := cmd.Output()
+// loadTargetPackages resolves the directory the run's go commands start in and
+// loads the target packages from it.
+func loadTargetPackages(opts *models.Options, execs []string, files []string) (string, error) {
+	goDir, err := resolveGoDir(opts, execs, files)
+	if err != nil {
+		return "", err
+	}
+	astutil.ClearIdentifierCache()
+	parser.ClearPackageCache()
+	if err := parser.PreparePackages(files, goDir); err != nil {
+		return "", fmt.Errorf("Cannot load target packages: %w", err)
+	}
+	return goDir, nil
+}
+
+// resolveGoDir returns the directory the run's go commands start in. A target
+// outside any single module is an error only when mutago itself runs go test.
+func resolveGoDir(opts *models.Options, execs []string, files []string) (string, error) {
+	goDir, err := goWorkDir(currentGoEnv(), files)
+	if err == nil {
+		return goDir, nil
+	}
+	if runsGoTest(opts, execs) {
+		return "", fmt.Errorf("Cannot resolve the module of the targets: %w", err)
+	}
+	return "", nil
+}
+
+func detectModulePath(goDir string) string {
+	out, err := goCommandIn(context.Background(), goDir, "list", "-m").Output()
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
 }
 
-func detectModuleRoot() string {
-	cmd := exec.Command("go", "env", "GOMOD")
-	cmd.Env = os.Environ()
-	out, err := cmd.Output()
+func detectModuleRoot(goDir string) string {
+	out, err := goCommandIn(context.Background(), goDir, "env", "GOMOD").Output()
 	if err != nil {
 		return ""
 	}
@@ -472,11 +500,12 @@ func mutateAll(r *mutationRun, pkgs []importing.Package, coverageProfiles []*cov
 			coverProfile = coverageProfiles[i]
 		}
 		perTestProf := perTestForPackage(r, importPkg)
+		testPkg := r.exec.importPaths.forFiles(importPkg.Files)
 		for _, file := range importPkg.Files {
 			if r.ctx.Err() != nil {
 				return 0, dryRunMutatorTotals, returnError
 			}
-			if _, code := processFile(r, file, coverProfile, perTestProf, dryRunMutatorTotals); code != 0 {
+			if _, code := processFile(r, file, testPkg, coverProfile, perTestProf, dryRunMutatorTotals); code != 0 {
 				return 0, dryRunMutatorTotals, code
 			}
 		}
@@ -486,7 +515,7 @@ func mutateAll(r *mutationRun, pkgs []importing.Package, coverageProfiles []*cov
 
 func configureAdaptiveTimeoutAndCoverage(opts *models.Options, pkgs []importing.Package, run *mutationRun) ([]*coverage.Profile, error) {
 	if opts.Exec.Coverage && !opts.Exec.NoExec && !opts.General.DryRun {
-		profiles, maxBaseline, err := prepareCoverageProfiles(opts, pkgs, run.exec.importPaths, run.tmpDir, run.modulePath, run.exec.extraTestFlags, run.report)
+		profiles, maxBaseline, err := prepareCoverageProfiles(opts, pkgs, run.exec, run.tmpDir, run.modulePath, run.report)
 		if err != nil {
 			return nil, err
 		}
@@ -498,11 +527,11 @@ func configureAdaptiveTimeoutAndCoverage(opts *models.Options, pkgs []importing.
 	return nil, nil
 }
 
-func prepareCoverageProfiles(opts *models.Options, pkgs []importing.Package, paths *importPaths, tmpDir string, modulePath string, extraTestFlags []string, report *models.Report) ([]*coverage.Profile, time.Duration, error) {
+func prepareCoverageProfiles(opts *models.Options, pkgs []importing.Package, ec execConfig, tmpDir string, modulePath string, report *models.Report) ([]*coverage.Profile, time.Duration, error) {
 	profiles := make([]*coverage.Profile, len(pkgs))
 	var maxBaseline time.Duration
 	for i, importPkg := range pkgs {
-		profile, elapsed, err := buildCoverageProfile(opts, paths.forFiles(importPkg.Files), tmpDir, modulePath, extraTestFlags)
+		profile, elapsed, err := buildCoverageProfile(opts, ec.importPaths.forFiles(importPkg.Files), ec.goDir, tmpDir, modulePath, ec.extraTestFlags)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -521,10 +550,10 @@ func perTestForPackage(r *mutationRun, importPkg importing.Package) *coverage.Pe
 	if !r.opts.Exec.PerTest || r.opts.Exec.NoExec || r.opts.General.DryRun || len(r.exec.execs) != 0 {
 		return nil
 	}
-	return buildPerTestCoverageProfile(r.stdout, r.opts, r.exec.importPaths.forFiles(importPkg.Files), r.modulePath, r.tmpDir, r.exec.numWorkers, r.exec.extraTestFlags)
+	return buildPerTestCoverageProfile(r.stdout, r.opts, r.exec.importPaths.forFiles(importPkg.Files), r.modulePath, r.tmpDir, r.exec)
 }
 
-func processFile(r *mutationRun, file string, coverProfile *coverage.Profile, perTestProf *coverage.PerTestProfile, dryRunMutatorTotals map[string]int) (int, int) {
+func processFile(r *mutationRun, file string, testPkg string, coverProfile *coverage.Profile, perTestProf *coverage.PerTestProfile, dryRunMutatorTotals map[string]int) (int, int) {
 	console.Verbose(r.opts, "Mutate %q", file)
 
 	annotationProcessor := annotation.NewProcessor()
@@ -570,6 +599,7 @@ func processFile(r *mutationRun, file string, coverProfile *coverage.Profile, pe
 
 	fc := &fileContext{
 		pkg:            pkg,
+		testPkg:        testPkg,
 		info:           info,
 		fset:           fset,
 		src:            src,
@@ -755,6 +785,7 @@ func queueMutation(r *mutationRun, fc *fileContext, mutation mutago.PositionedMu
 		ctx:            r.ctx,
 		opts:           r.opts,
 		pkg:            fc.pkg,
+		test:           goTestTarget{pkg: fc.testPkg, dir: r.exec.goDir},
 		mutant:         prepared.mutant,
 		coverProfile:   fc.coverProfile,
 		execs:          r.exec.execs,
@@ -848,32 +879,39 @@ func skipBaselineChecks(opts *models.Options, execs []string) bool {
 	return opts.Exec.Coverage || opts.Exec.NoExec || opts.General.DryRun || len(execs) > 0
 }
 
-func runBaselineChecks(stderr io.Writer, opts *models.Options, pkgs []importing.Package, paths *importPaths, execs []string, extraTestFlags []string) int {
-	if skipBaselineChecks(opts, execs) {
+// runsGoTest reports whether the run builds and tests the targets with
+// `go test`: for the built-in runner, or for the --coverage profile.
+func runsGoTest(opts *models.Options, execs []string) bool {
+	return !opts.Exec.NoExec && !opts.General.DryRun && (len(execs) == 0 || opts.Exec.Coverage)
+}
+
+func runBaselineChecks(stderr io.Writer, opts *models.Options, pkgs []importing.Package, ec execConfig) int {
+	if skipBaselineChecks(opts, ec.execs) {
 		return 0 // returnOk
 	}
 	timeout := opts.Exec.Timeout
-	flags := extraTestFlags
+	flags := ec.extraTestFlags
 	measureAdaptive := opts.Exec.TimeoutCoefficient > 0
 	if measureAdaptive {
 		timeout = adaptiveBaselineTimeoutSeconds
-		flags = uncachedTestFlags(extraTestFlags)
+		flags = uncachedTestFlags(ec.extraTestFlags)
 	}
 	var maxBaseline time.Duration
 	for _, importPkg := range pkgs {
-		pkgPath := paths.forFiles(importPkg.Files)
+		pkgPath := ec.importPaths.forFiles(importPkg.Files)
 		if pkgPath == "" {
-			continue
+			fmt.Fprintf(stderr, "Cannot resolve the package of %q — mutago must test the package of the mutated files\n", importPkg.Files)
+			return 3 // returnError
 		}
 		inv := goTestInvocation{
 			kind:           baselineRun,
 			target:         pkgPath,
+			dir:            ec.goDir,
 			recursive:      opts.Test.Recursive,
 			timeoutSeconds: timeout,
 			testFlags:      flags,
 		}
-		cmd := exec.Command("go", inv.args()...)
-		cmd.Env = os.Environ()
+		cmd := inv.command(context.Background())
 		start := time.Now()
 		out, err := cmd.CombinedOutput()
 		elapsed := time.Since(start)
@@ -905,7 +943,7 @@ func applyAdaptiveTimeoutFromBaseline(opts *models.Options, baseline time.Durati
 		baseline.Seconds(), opts.Exec.TimeoutCoefficient, derived)
 }
 
-func buildCoverageProfile(opts *models.Options, pkgPath string, tmpDir string, modulePath string, extraTestFlags []string) (*coverage.Profile, time.Duration, error) {
+func buildCoverageProfile(opts *models.Options, pkgPath string, goDir string, tmpDir string, modulePath string, extraTestFlags []string) (*coverage.Profile, time.Duration, error) {
 	if opts.Exec.NoExec || !opts.Exec.Coverage {
 		return nil, 0, nil
 	}
@@ -927,6 +965,7 @@ func buildCoverageProfile(opts *models.Options, pkgPath string, tmpDir string, m
 	inv := goTestInvocation{
 		kind:           coverageRun,
 		target:         pkgPath,
+		dir:            goDir,
 		recursive:      opts.Test.Recursive,
 		timeoutSeconds: timeout,
 		testFlags:      coverageTestFlags,
@@ -963,8 +1002,7 @@ func validateAdaptiveTimeoutTestCount(opts *models.Options) error {
 }
 
 func runCoverageProfile(inv goTestInvocation) error {
-	cmd := exec.Command("go", inv.args()...)
-	cmd.Env = os.Environ()
+	cmd := inv.command(context.Background())
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("coverage test failed for %q: %w\n%s", inv.target, err, out)
@@ -978,11 +1016,11 @@ func runCoverageProfile(inv goTestInvocation) error {
 // buildPerTestCoverageProfile maps each line of pkgPath to the tests that cover
 // it. With --test-recursive the tests of every subpackage are profiled too, so
 // the -run filter keeps them eligible just as the recursive mutant run does.
-func buildPerTestCoverageProfile(stdout io.Writer, opts *models.Options, pkgPath string, modulePath string, tmpDir string, numWorkers int, extraTestFlags []string) *coverage.PerTestProfile {
+func buildPerTestCoverageProfile(stdout io.Writer, opts *models.Options, pkgPath string, modulePath string, tmpDir string, ec execConfig) *coverage.PerTestProfile {
 	if pkgPath == "" {
 		return nil
 	}
-	tc := perTestToolchain{testFlags: extraTestFlags, timeoutSeconds: opts.Exec.Timeout}
+	tc := perTestToolchain{testFlags: ec.extraTestFlags, timeoutSeconds: opts.Exec.Timeout, dir: ec.goDir}
 	pkgs, err := coverage.ListTestPackages(tc, pkgPath, opts.Test.Recursive)
 	if err != nil {
 		console.Verbose(opts, "Per-test coverage unavailable for %q: %v", pkgPath, err)
@@ -995,7 +1033,7 @@ func buildPerTestCoverageProfile(stdout io.Writer, opts *models.Options, pkgPath
 	if testCount > 0 {
 		fmt.Fprintf(stdout, "Building per-test coverage map for %q (%d tests)...\n", pkgPath, testCount)
 	}
-	prof, err := coverage.BuildPerTestProfileForPackages(tc, pkgPath, pkgs, modulePath, tmpDir, numWorkers)
+	prof, err := coverage.BuildPerTestProfileForPackages(tc, pkgPath, pkgs, modulePath, tmpDir, ec.numWorkers)
 	if err != nil {
 		console.Verbose(opts, "Per-test coverage unavailable for %q: %v", pkgPath, err)
 		return nil
@@ -1641,9 +1679,14 @@ func prepareOverlay(stderr io.Writer, tmpDir, file, mutationFile string) (string
 
 func runGoTest(job execJob, overlayName string, startLine int) int {
 	ctx, opts := job.ctx, job.opts
+	if job.test.pkg == "" {
+		fmt.Fprintf(job.out.stderr, "mutago: cannot resolve the package of %q to test\n", job.source.originalFile)
+		return 3
+	}
 	inv := goTestInvocation{
 		kind:           mutantRun,
-		target:         job.pkg.Path(),
+		target:         job.test.pkg,
+		dir:            job.test.dir,
 		recursive:      opts.Test.Recursive,
 		timeoutSeconds: opts.Exec.Timeout,
 		testFlags:      job.extraTestFlags,
@@ -1656,8 +1699,7 @@ func runGoTest(job execJob, overlayName string, startLine int) int {
 	}
 	stable := stableExecFrom(ctx)
 	inv.execProgram = stable.wrapper
-	goTestCmd := exec.CommandContext(ctx, "go", inv.args()...)
-	goTestCmd.Env = os.Environ()
+	goTestCmd := inv.command(ctx)
 	if stable.wrapper != "" && stable.bin != "" && !hasTestFlag(job.extraTestFlags, "exec") {
 		goTestCmd.Env = append(goTestCmd.Env, "MUTAGO_STABLE_DIR="+stable.bin)
 	}

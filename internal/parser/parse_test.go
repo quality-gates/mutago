@@ -31,7 +31,7 @@ func TestPreparePackagesIndexesMultipleTargetPackages(t *testing.T) {
 		"../importing/filepathfixtures/first.go",
 		"../importing/filepathfixtures/secondfixturespackage/fourth.go",
 	}
-	assert.NoError(t, PreparePackages(files))
+	assert.NoError(t, PreparePackages(files, ""))
 
 	first, err := ParseAndTypeCheckFile(files[0], nil)
 	assert.NoError(t, err)
@@ -49,7 +49,7 @@ func TestPreparePackagesLoadsTargetDirectoriesInOneGraph(t *testing.T) {
 			"../importing/filepathfixtures/second.go",
 			"../importing/filepathfixtures/secondfixturespackage/fourth.go",
 			buildConstrained,
-		})
+		}, "")
 		assert.NoError(t, err)
 		_, err = ParseAndTypeCheckFile(buildConstrained, nil)
 		assert.NoError(t, err)
