@@ -74,7 +74,7 @@ If a generated mutant does not compile, it is skipped rather than counted as kil
 | `--blacklist <file>` | File of MD5 checksums to skip |
 | `--disable <mutator>` | Disable a mutator by name (repeatable). Supports trailing-`*` wildcard (e.g. `'arithmetic/*'`). **Quote wildcard patterns** to prevent shell glob expansion. A name that matches no mutator prints a warning on stderr. Config file equivalents: `disable_mutators` (denylist) and `enable_mutators` (allowlist) — see [config reference](config.md). |
 | `--git-diff-lines` | Only mutate lines changed since `--git-diff-base` (compared against the merge-base, so it matches the PR diff even when the branch is behind its target) |
-| `--git-diff-base` | Git ref to diff against (default: `HEAD`) |
+| `--git-diff-base` | Git ref to diff against (default: the remote-tracking ref named by `origin/HEAD`, such as `origin/main`; falls back to `master` if `origin/HEAD` cannot be resolved) |
 
 ## Baseline
 

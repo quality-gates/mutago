@@ -744,6 +744,86 @@ func TestMainReportsOriginalASTLines(t *testing.T) {
 	assert.Equal(t, expectedLines, actualLines)
 }
 
+func TestMainGitDiffDefaultUsesOriginHead(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/originhead\n\ngo 1.26.3\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - statement/return\n")
+	writeFixtureFile(t, filepath.Join(root, "origin.go"), "package originhead\n")
+	writeFixtureFile(t, filepath.Join(root, "origin_test.go"), "package originhead\n\nimport \"testing\"\n\nfunc TestOrigin(t *testing.T) {}\n")
+
+	runGit(t, root, "init", "-q")
+	runGit(t, root, "config", "user.email", "mutago@example.com")
+	runGit(t, root, "config", "user.name", "mutago test")
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-q", "-m", "base")
+	runGit(t, root, "branch", "-M", "main")
+	runGit(t, root, "checkout", "-qb", "origin-advance")
+	writeFixtureFile(t, filepath.Join(root, "origin.go"), "package originhead\n\nfunc OnOrigin() int { return 2 }\n")
+	runGit(t, root, "add", "origin.go")
+	runGit(t, root, "commit", "-q", "-m", "origin main change")
+	runGit(t, root, "update-ref", "refs/remotes/origin/main", "HEAD")
+	runGit(t, root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	runGit(t, root, "checkout", "-qb", "feature")
+	writeFixtureFile(t, filepath.Join(root, "feature.go"), "package originhead\n\nfunc Feature() int { return 3 }\n")
+	writeFixtureFile(t, filepath.Join(root, "feature_test.go"), "package originhead\n\nimport \"testing\"\n\nfunc TestFeature(t *testing.T) {}\n")
+	runGit(t, root, "add", "feature.go", "feature_test.go")
+	runGit(t, root, "commit", "-q", "-m", "feature change")
+
+	common := []string{"--dry-run", "--workers", "1", "--exec-timeout", "30", "--git-diff-lines", "--config", "mutago.yml", "."}
+	defaultOut := testMain(t, root, common, returnOk, "mutation(s) would be generated")
+	explicitOut := testMain(t, root, append([]string{"--git-diff-base", "origin/main"}, common...), returnOk, "mutation(s) would be generated")
+	assert.Equal(t, explicitOut, defaultOut)
+	assert.Contains(t, defaultOut, "feature.go:")
+	assert.NotContains(t, defaultOut, "origin.go:")
+}
+
+func TestMainGitDiffDefaultWorksWithoutLocalBaseBranch(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/originhead\n\ngo 1.26.3\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - statement/return\n")
+	writeFixtureFile(t, filepath.Join(root, "origin.go"), "package originhead\n\nfunc Value() int { return 1 }\n")
+	writeFixtureFile(t, filepath.Join(root, "origin_test.go"), "package originhead\n\nimport \"testing\"\n\nfunc TestValue(t *testing.T) {}\n")
+
+	runGit(t, root, "init", "-q")
+	runGit(t, root, "config", "user.email", "mutago@example.com")
+	runGit(t, root, "config", "user.name", "mutago test")
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-q", "-m", "base")
+	runGit(t, root, "branch", "-M", "main")
+	runGit(t, root, "update-ref", "refs/remotes/origin/main", "HEAD")
+	runGit(t, root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	runGit(t, root, "checkout", "-qb", "feature")
+	writeFixtureFile(t, filepath.Join(root, "origin.go"), "package originhead\n\nfunc Value() int { return 2 }\n")
+	runGit(t, root, "add", "origin.go")
+	runGit(t, root, "commit", "-q", "-m", "feature change")
+	runGit(t, root, "branch", "-D", "main")
+
+	out := testMain(t, root, []string{"--dry-run", "--workers", "1", "--exec-timeout", "30", "--git-diff-lines", "--config", "mutago.yml", "."}, returnOk, "mutation(s) would be generated")
+	assert.Contains(t, out, "origin.go:")
+}
+
+func TestMainGitDiffDefaultFallsBackToMaster(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/gitdifffallback\n\ngo 1.26.3\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - statement/return\n")
+	writeFixtureFile(t, filepath.Join(root, "value.go"), "package gitdifffallback\n\nfunc Value() int { return 1 }\n")
+	writeFixtureFile(t, filepath.Join(root, "value_test.go"), "package gitdifffallback\n\nimport \"testing\"\n\nfunc TestValue(t *testing.T) {}\n")
+
+	runGit(t, root, "init", "-q")
+	runGit(t, root, "config", "user.email", "mutago@example.com")
+	runGit(t, root, "config", "user.name", "mutago test")
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-q", "-m", "base")
+	runGit(t, root, "branch", "-M", "master")
+	runGit(t, root, "checkout", "-qb", "feature")
+	writeFixtureFile(t, filepath.Join(root, "value.go"), "package gitdifffallback\n\nfunc Value() int { return 2 }\n")
+	runGit(t, root, "add", "value.go")
+	runGit(t, root, "commit", "-q", "-m", "feature change")
+
+	out := testMain(t, root, []string{"--dry-run", "--workers", "1", "--exec-timeout", "30", "--git-diff-lines", "--config", "mutago.yml", "."}, returnOk, "mutation(s) would be generated")
+	assert.Contains(t, out, "value.go:")
+}
+
 func TestMainGitDiffUsesOriginalASTLines(t *testing.T) {
 	root := t.TempDir()
 	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/lineposition\n\ngo 1.26.3\n")

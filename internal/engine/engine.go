@@ -424,9 +424,7 @@ func detectDefaultBranch() string {
 	out, err := exec.Command("git", "symbolic-ref", "refs/remotes/origin/HEAD").Output()
 	if err == nil {
 		ref := strings.TrimSpace(string(out))
-		if idx := strings.LastIndex(ref, "/"); idx >= 0 {
-			return ref[idx+1:]
-		}
+		return strings.TrimPrefix(ref, "refs/remotes/")
 	}
 	return "master"
 }
