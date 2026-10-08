@@ -42,44 +42,9 @@ if ! git rev-parse --verify origin/main >/dev/null 2>&1; then
 	exit 1
 fi
 
-MUTAGO_BIN=$(mktemp -d)/mutago
-trap 'rm -rf "$(dirname "$MUTAGO_BIN")"' EXIT
-
-echo "pre-push: building mutago..."
-if ! go build -o "$MUTAGO_BIN" ./cmd/mutago; then
-	printf 'FAIL: go build ./cmd/mutago failed\n' >&2
-	exit 1
-fi
-
 echo "pre-push: running mutation testing scoped to the diff against origin/main..."
-# Same package list, timeout, quality gates, and changed-line scope as the
-# pull-request mode in .github/workflows/mutation.yml and CLAUDE.md.
-# --ignore-msi-with-no-mutations avoids failing pushes that don't touch these
-# packages at all.
 STATUS=0
-"$MUTAGO_BIN" \
-	--workers=1 \
-	--exec-timeout 30 \
-	--coverage \
-	--git-diff-lines \
-	--git-diff-base origin/main \
-	--ignore-msi-with-no-mutations \
-	--min-msi 75 \
-	--min-covered-msi 80 \
-	github.com/quality-gates/mutago/v2/mutator/arithmetic \
-	github.com/quality-gates/mutago/v2/mutator/branch \
-	github.com/quality-gates/mutago/v2/mutator/composite \
-	github.com/quality-gates/mutago/v2/mutator/concurrency \
-	github.com/quality-gates/mutago/v2/mutator/conditional \
-	github.com/quality-gates/mutago/v2/mutator/expression \
-	github.com/quality-gates/mutago/v2/mutator/loop \
-	github.com/quality-gates/mutago/v2/mutator/numbers \
-	github.com/quality-gates/mutago/v2/mutator/select \
-	github.com/quality-gates/mutago/v2/mutator/statement \
-	github.com/quality-gates/mutago/v2/internal/filter \
-	github.com/quality-gates/mutago/v2/internal/coverage \
-	github.com/quality-gates/mutago/v2/internal/gitdiff \
-	github.com/quality-gates/mutago/v2/internal/models || STATUS=$?
+GOMAXPROCS=1 MUTAGO_WORKERS=1 ./scripts/check-change.sh || STATUS=$?
 
 if [ "$STATUS" -eq 4 ]; then
 	printf '\nFAIL: mutation quality gate not met (escaped mutants in the diff against origin/main).\n' >&2
