@@ -27,38 +27,21 @@ All packages pass. `internal/importing` and `internal/parser` were once broken i
 
 ## Self-mutation and quality gates
 
-`.github/workflows/mutation.yml` runs mutago on itself with two hard gates:
-
-| Gate | Threshold | Flag |
-| :--- | :--- | :--- |
-| Overall MSI | ≥ 75% | `--min-msi 75` |
-| Covered-code MSI | ≥ 80% | `--min-covered-msi 80` |
-
-**Run the gates locally before committing.** Build first, then run against the same package list CI uses:
+**Before committing, run the changed-code gate:**
 
 ```bash
-go build -o /tmp/mutago ./cmd/mutago
-/tmp/mutago \
-  --exec-timeout 30 --coverage --min-msi 75 --min-covered-msi 80 \
-  github.com/quality-gates/mutago/v2/mutator/arithmetic \
-  github.com/quality-gates/mutago/v2/mutator/branch \
-  github.com/quality-gates/mutago/v2/mutator/composite \
-  github.com/quality-gates/mutago/v2/mutator/concurrency \
-  github.com/quality-gates/mutago/v2/mutator/conditional \
-  github.com/quality-gates/mutago/v2/mutator/expression \
-  github.com/quality-gates/mutago/v2/mutator/loop \
-  github.com/quality-gates/mutago/v2/mutator/numbers \
-  github.com/quality-gates/mutago/v2/mutator/select \
-  github.com/quality-gates/mutago/v2/mutator/statement \
-  github.com/quality-gates/mutago/v2/internal/filter \
-  github.com/quality-gates/mutago/v2/internal/coverage \
-  github.com/quality-gates/mutago/v2/internal/gitdiff \
-  github.com/quality-gates/mutago/v2/internal/models
+GOMAXPROCS=1 ./scripts/check-change.sh
 ```
 
-Exit code 4 means the gate failed (escaped mutants). Exit code 0 means all gates passed.
+[`scripts/check-change.sh`](scripts/check-change.sh) owns the package list, timeout,
+and MSI thresholds. It builds mutago and checks changed lines against `origin/main`.
+Stage new Go files before running it. Pass another base ref as its argument when needed. Pre-push and PR CI use this same
+gate; main CI passes `--full` to check the full tree. Exit 4 means a quality-gate
+failure; other nonzero exits are tool errors.
 
-Every mutant compiles into `$GOCACHE`, so one run adds tens of GB and can fill the disk. End any script or session that launches a mutation run with `go clean -cache`, or run it under a disposable cache (`GOCACHE=$(mktemp -d)`) and delete that directory afterwards.
+The script deletes its temporary binary, configuration, and private Go cache on
+exit. To reuse compiled code across tests and hooks, set `GOCACHE` to a cache you
+own and delete it at the end of the session. The script leaves that cache intact.
 
 ### Resource-safe mutation runs
 
@@ -87,7 +70,7 @@ advisory feeds and stays CI-only; it is not mirrored locally.
 Follow these steps in order when landing a change:
 
 1. **Build and test locally** — `go build ./...` and `go test ./...`. Restore `example/example.go` after.
-2. **Run quality gates** — use the command in the section below. Exit 0 = pass, exit 4 = escaped mutants.
+2. **Run quality gates** — use `scripts/check-change.sh` as described above. Exit 0 = pass, exit 4 = a quality-gate failure.
 3. **Manual smoke test** — build the binary and actually run it against a real package. Check that user-facing output looks right. Do not skip this.
 4. **Update docs if needed** — if your change adds, removes, or renames a flag, mutator, or user-facing behavior, update `README.md` and `docs/*.md` to match before committing.
 5. **Update CHANGELOG.md** — add an entry under `[Unreleased]` describing what changed (Added / Fixed / Changed). Keep entries concise. When releasing, rename the `[Unreleased]` section to the new version tag and update the comparison URL at the bottom.

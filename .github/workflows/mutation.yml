@@ -9,6 +9,7 @@ on:
       - go.mod
       - go.sum
       - .github/workflows/mutation.yml
+      - scripts/check-change.sh
   pull_request:
     branches: [main]
 
@@ -32,45 +33,14 @@ jobs:
         run: go build -o /usr/local/bin/mutago ./cmd/mutago
 
       - name: Run mutation testing
-        # Scoped to packages with isolated unit tests.
-        # Excluded:
-        #   cmd/               - integration tests re-invoke the binary (would recurse)
-        #   internal/importing  - resolution behaviour depends on GOPATH layout; excluded from mutation targets
-        #   internal/parser     - excluded from mutation targets (type-checker setup is test-infrastructure, not user logic)
-        # Pull requests mutate only lines in the PR. Pushes to main retain the full-tree
-        # gate so a faulty diff filter cannot hide a regression permanently.
-        # --coverage generates a profile before mutation to compute covered-code MSI
-        # and marks mutants in untested code as "not covered" rather than running them.
-        # --min-msi and --min-covered-msi enforce quality gates.
+        # PRs use changed lines. Main keeps the full-tree gate.
         env:
           EVENT_NAME: ${{ github.event_name }}
+          MUTAGO_BIN: /usr/local/bin/mutago
+          MUTAGO_WORKERS: "0"
         run: |
-          scope_args=()
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            scope_args=(
-              --git-diff-lines
-              --git-diff-base origin/main
-              --ignore-msi-with-no-mutations
-            )
+            ./scripts/check-change.sh
+          else
+            ./scripts/check-change.sh --full
           fi
-
-          mutago \
-            --exec-timeout 30 \
-            --coverage \
-            "${scope_args[@]}" \
-            --min-msi 75 \
-            --min-covered-msi 80 \
-            github.com/quality-gates/mutago/v2/mutator/arithmetic \
-            github.com/quality-gates/mutago/v2/mutator/branch \
-            github.com/quality-gates/mutago/v2/mutator/composite \
-            github.com/quality-gates/mutago/v2/mutator/concurrency \
-            github.com/quality-gates/mutago/v2/mutator/conditional \
-            github.com/quality-gates/mutago/v2/mutator/expression \
-            github.com/quality-gates/mutago/v2/mutator/loop \
-            github.com/quality-gates/mutago/v2/mutator/numbers \
-            github.com/quality-gates/mutago/v2/mutator/select \
-            github.com/quality-gates/mutago/v2/mutator/statement \
-            github.com/quality-gates/mutago/v2/internal/filter \
-            github.com/quality-gates/mutago/v2/internal/coverage \
-            github.com/quality-gates/mutago/v2/internal/gitdiff \
-            github.com/quality-gates/mutago/v2/internal/models

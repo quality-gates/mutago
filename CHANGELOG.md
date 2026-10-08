@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Local repair checks, pre-push, and PR CI use one changed-line self-mutation gate in `scripts/check-change.sh`. Main CI keeps full-tree mutation testing. MSI thresholds and mutant timeouts are unchanged.
+
 ### Fixed
 - `--git-diff-lines` now uses the full remote-tracking ref from `origin/HEAD` by default, avoiding mutations to unchanged target-branch code and working when there is no local base branch (#288).
 

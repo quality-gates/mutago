@@ -885,6 +885,18 @@ The main active alternative is [gremlins](https://github.com/singerdmx/gremlins)
 
 If you want the smallest possible tool to run locally and see which mutants survive, gremlins is a reasonable choice. If you want to enforce mutation score thresholds in CI, track accepted escapes in a baseline, or pipe results to an LLM for test suggestions, this tool is the better fit.
 
+## Development checks
+
+After building and testing, stage new Go files and run the local self-mutation gate:
+
+```bash
+GOMAXPROCS=1 ./scripts/check-change.sh
+```
+
+The script checks changed lines against `origin/main`. It owns the package list,
+timeout, and MSI thresholds used by pre-push and PR CI. Main CI runs the same
+script with `--full`. See [CLAUDE.md](CLAUDE.md) for cache cleanup and shipping.
+
 ## <a name="feature-request"></a>Can I make feature requests and report bugs and problems?
 
 Sure, just submit an [issue via the project tracker](https://github.com/quality-gates/mutago/issues/new) and I'll see what I can do.
