@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.24] — 2026-10-08
+
 ### Fixed
 - Running mutago from outside the targets' module (from a parent directory or an unrelated module) now tests the targets' package. Before, `go` ran in the current directory, could not resolve the package, and tested the current directory instead, which gave a false mutation score. Targets in more than one module, or in no module, are now a tool error (exit 3) (#287).
 
@@ -675,7 +677,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.23...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.24...HEAD
+[v2.10.24]: https://github.com/quality-gates/mutago/compare/v2.10.23...v2.10.24
 [v2.10.23]: https://github.com/quality-gates/mutago/compare/v2.10.22...v2.10.23
 [v2.10.22]: https://github.com/quality-gates/mutago/compare/v2.10.21...v2.10.22
 [v2.10.21]: https://github.com/quality-gates/mutago/compare/v2.10.20...v2.10.21
