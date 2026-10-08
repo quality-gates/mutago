@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- `--git-diff-lines` now uses the full remote-tracking ref from `origin/HEAD` by default, avoiding mutations to unchanged target-branch code and working when there is no local base branch (#288).
+
 ## [v2.10.24] — 2026-10-08
 
 ### Fixed

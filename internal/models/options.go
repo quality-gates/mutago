@@ -48,7 +48,7 @@ type Options struct {
 	// Pair with --ignore-msi-with-no-mutations for clean CI on unchanged packages.
 	GitDiff struct {
 		Lines bool   `long:"git-diff-lines" description:"Only mutate lines changed since the git diff base"`
-		Base  string `long:"git-diff-base" description:"Git ref to diff against for --git-diff-lines (default: auto-detected from origin/HEAD, falling back to master)"`
+		Base  string `long:"git-diff-base" description:"Git ref to diff against for --git-diff-lines (default: remote-tracking ref from origin/HEAD, e.g. origin/main; falls back to master)"`
 	} `group:"Git diff options"`
 
 	Logger struct {

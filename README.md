@@ -332,7 +332,7 @@ When `--coverage` is enabled, a failed clean coverage run stops Mutago with exit
 
 ### <a name="git-diff"></a>Git diff filtering (CI mode)
 
-`--git-diff-lines` limits mutation to lines changed since a given git ref. The comparison is made against the **merge-base** of that ref and your current branch, so it mutates exactly the lines a pull request shows — even when your branch is behind the target. Commits that landed on the target branch after you branched off are not attributed to your work. Combine it with `--ignore-msi-with-no-mutations` so the gate passes cleanly on PRs that touch no mutable code.
+`--git-diff-lines` limits mutation to lines changed since a given git ref. If you omit `--git-diff-base`, mutago uses the remote-tracking ref named by `origin/HEAD` (for example, `origin/main`), falling back to `master` if that symbolic ref cannot be resolved. The comparison is made against the **merge-base** of that ref and your current branch, so it mutates exactly the lines a pull request shows — even when your branch is behind the target. Commits that landed on the target branch after you branched off are not attributed to your work. Combine it with `--ignore-msi-with-no-mutations` so the gate passes cleanly on PRs that touch no mutable code.
 
 ```bash
 mutago \
