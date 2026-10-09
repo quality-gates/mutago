@@ -9,7 +9,8 @@ top-level `sources` object maps each source-file path to its original text.
 Mutants refer to that path through `mutator.originalFilePath`, so consumers can
 look up the source once instead of receiving a duplicate copy for every mutant.
 Each mutant also includes a `checksum` field containing the 32-character
-lowercase checksum accepted by `--blacklist`.
+lowercase checksum accepted by `--blacklist`, and an `id` field containing the
+stable ID used by `--baseline` and `--run-mutant-id`.
 
 The legacy `mutator.originalSourceCode` and `mutator.mutatedSourceCode` fields
 remain accepted by the Go model for compatibility, but new reports omit them.

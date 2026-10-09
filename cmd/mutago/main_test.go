@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/quality-gates/mutago/v2/internal/baseline"
 	"github.com/quality-gates/mutago/v2/internal/models"
 	"github.com/quality-gates/mutago/v2/internal/parser"
 
@@ -2030,6 +2031,45 @@ func TestMainMutantIDsIgnoreTargetSpelling(t *testing.T) {
 			assert.NotContains(t, out, "other.go")
 		})
 	}
+}
+
+// TestMainBaselineSeparatesSameTextMutants covers #274: an accepted escape must
+// not also accept a mutant with identical text elsewhere in the same file.
+func TestMainBaselineSeparatesSameTextMutants(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/sametext\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - arithmetic/base\n")
+	calc := "package sametext\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n\nfunc Sum(a, b int) int {\n\treturn a + b\n}\n"
+	writeFixtureFile(t, filepath.Join(root, "calc.go"), calc)
+	writeFixtureFile(t, filepath.Join(root, "calc_test.go"), "package sametext\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n\tif Add(1, 2) != 3 {\n\t\tt.Fatal(\"wrong\")\n\t}\n}\n")
+
+	baselinePath := filepath.Join(root, "mutago-baseline.json")
+	common := []string{"--workers", "1", "--exec-timeout", "30", "--config", "mutago.yml", "--baseline", baselinePath}
+	testMain(t, root, append([]string{"--update-baseline"}, append(common, ".")...), returnOk, "")
+	testMain(t, root, append([]string{"--fail-on-escaped"}, append(common, ".")...), returnOk, "mutation score")
+
+	writeFixtureFile(t, filepath.Join(root, "calc.go"), calc+"\nfunc Plus(a, b int) int {\n\treturn a + b\n}\n")
+	testMain(t, root, append([]string{"--fail-on-escaped"}, append(common, ".")...), returnMsiThresholdNotMet, "1 new mutant(s) escaped")
+
+	testMain(t, root, append([]string{"--update-baseline"}, append(common, ".")...), returnOk, "")
+	bl, err := baseline.Load(baselinePath)
+	require.NoError(t, err)
+	require.Len(t, bl.Mutants, 2)
+	assert.Len(t, bl.IDSet(), len(bl.Mutants), "each escape needs its own baseline ID")
+
+	plusID := bl.Mutants[1].ID
+	out := testMain(t, root, append([]string{"--run-mutant-id", plusID}, append(common, ".")...), returnOk, "ESCAPED")
+	assert.Contains(t, out, "calc.go:12")
+	assert.NotContains(t, out, "calc.go:8")
+	assert.NotContains(t, out, "calc.go:4")
+
+	// --match drops the earlier same-text mutants; Plus must keep its ID.
+	matchPath := filepath.Join(root, "match-baseline.json")
+	testMain(t, root, []string{"--update-baseline", "--match", "Plus", "--workers", "1", "--exec-timeout", "30", "--config", "mutago.yml", "--baseline", matchPath, "."}, returnOk, "")
+	matched, err := baseline.Load(matchPath)
+	require.NoError(t, err)
+	require.Len(t, matched.Mutants, 1)
+	assert.Equal(t, plusID, matched.Mutants[0].ID)
 }
 
 // writeOutsideModuleFixture lays out a module under parent/mod with two

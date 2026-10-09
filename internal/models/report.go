@@ -56,6 +56,9 @@ type MutatorStats struct {
 
 // Mutant is the result of one mutation attempt.
 type Mutant struct {
+	// ID is the stable identity the engine assigns at discovery. Baselines,
+	// --run-mutant-id, and the agentic and GitLab reports all use it.
+	ID            string  `json:"id,omitempty"`
 	Checksum      string  `json:"checksum,omitempty"`
 	Mutator       Mutator `json:"mutator"`
 	Diff          string  `json:"diff"`
