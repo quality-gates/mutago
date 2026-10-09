@@ -742,6 +742,7 @@
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">      </span><span class="no">./...</span>
 </code></pre></div>
 <p>Once you've written tests to kill the known survivors, remove them from the baseline with <code>--update-baseline</code> and tighten the gate.</p>
+<p>Baseline IDs ignore line numbers, so moving code does not invalidate them. When one mutator makes the same change to identical lines in one file, each mutant gets its own ID, numbered in source order. Inserting a new identical line above an accepted one changes the numbering, so that change is reported as a new escape.</p>
 <h2 id="pr-only-mode-changed-lines-only">PR-only mode (changed lines only)<a class="headerlink" href="#pr-only-mode-changed-lines-only" title="Permanent link">&para;</a></h2>
 <p>Limit mutation to lines changed in the PR to keep feedback fast and relevant:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v6</span>

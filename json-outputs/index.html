@@ -695,7 +695,8 @@ top-level <code>sources</code> object maps each source-file path to its original
 Mutants refer to that path through <code>mutator.originalFilePath</code>, so consumers can
 look up the source once instead of receiving a duplicate copy for every mutant.
 Each mutant also includes a <code>checksum</code> field containing the 32-character
-lowercase checksum accepted by <code>--blacklist</code>.</p>
+lowercase checksum accepted by <code>--blacklist</code>, and an <code>id</code> field containing the
+stable ID used by <code>--baseline</code> and <code>--run-mutant-id</code>.</p>
 <p>The legacy <code>mutator.originalSourceCode</code> and <code>mutator.mutatedSourceCode</code> fields
 remain accepted by the Go model for compatibility, but new reports omit them.</p>
 <h2 id="-logger-summary-json"><code>--logger-summary-json</code><a class="headerlink" href="#-logger-summary-json" title="Permanent link">&para;</a></h2>
