@@ -6,6 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Mutants that make the same change to identical lines in one file now get distinct stable IDs. Before, they shared one ID, so a baseline that accepted one escape also hid new escapes at the other sites from `--fail-on-escaped`, and `--run-mutant-id` ran all of them. The engine now assigns each mutant its ID once, at discovery; the baseline, agentic `id`, GitLab `fingerprint`, and `--run-mutant-id` all use it. Existing baselines stay valid except for the second and later members of a same-text group: re-run `--update-baseline` to record those (#274).
+- `statement/return` now lists the variables it keeps alive in source order. Before, a return that used several such variables could produce a different mutant text, checksum, and ID on each run.
+
 ## [v2.10.25] — 2026-10-08
 
 ### Changed

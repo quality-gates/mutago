@@ -219,11 +219,11 @@ func UnsafeLocalVars(info *types.Info, node ast.Node) []ast.Expr {
 		return nil
 	}
 
-	nodeUses, varFirstIdent := collectNodeVarUses(info, idx, node)
+	nodeUses, firstUses := collectNodeVarUses(info, idx, node)
 	var unsafe []ast.Expr
-	for v, count := range nodeUses {
-		if count >= idx.useCounts[v] {
-			id := varFirstIdent[v]
+	for _, id := range firstUses {
+		v := info.Uses[id].(*types.Var)
+		if nodeUses[v] >= idx.useCounts[v] {
 			unsafe = append(unsafe, &ast.Ident{Name: id.Name})
 		}
 	}
@@ -244,9 +244,12 @@ func isEnclosingLocalVar(idx *safetyIndex, obj types.Object, node ast.Node) (*ty
 	return v, true
 }
 
-func collectNodeVarUses(info *types.Info, idx *safetyIndex, node ast.Node) (map[*types.Var]int, map[*types.Var]*ast.Ident) {
+// collectNodeVarUses counts uses of enclosing local variables inside node. It
+// also returns each variable's first identifier in source order, so callers
+// can produce stable output.
+func collectNodeVarUses(info *types.Info, idx *safetyIndex, node ast.Node) (map[*types.Var]int, []*ast.Ident) {
 	nodeUses := make(map[*types.Var]int)
-	varFirstIdent := make(map[*types.Var]*ast.Ident)
+	var firstUses []*ast.Ident
 
 	ast.Inspect(node, func(n ast.Node) bool {
 		id, ok := n.(*ast.Ident)
@@ -258,15 +261,15 @@ func collectNodeVarUses(info *types.Info, idx *safetyIndex, node ast.Node) (map[
 			return true
 		}
 		if v, ok := isEnclosingLocalVar(idx, obj, node); ok {
-			nodeUses[v]++
-			if _, seen := varFirstIdent[v]; !seen {
-				varFirstIdent[v] = id
+			if nodeUses[v] == 0 {
+				firstUses = append(firstUses, id)
 			}
+			nodeUses[v]++
 		}
 		return true
 	})
 
-	return nodeUses, varFirstIdent
+	return nodeUses, firstUses
 }
 
 // CreateNoopOfExpressions creates a blank assignment statement for the given expressions

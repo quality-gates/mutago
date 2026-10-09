@@ -171,6 +171,9 @@ type fileContext struct {
 	perTestProf    *coverage.PerTestProfile
 	filters        []filter.NodeFilter
 	originalSource []byte
+	// identities maps mutator name to the stable IDs of its edits in this
+	// file, keyed by mutationEdit.key. See mutantIdentities.
+	identities map[string]map[string]string
 }
 
 // Run executes the mutation testing lifecycle based on options and baseline.
@@ -653,6 +656,7 @@ func mutate(r *mutationRun, fc *fileContext, node ast.Node, mutationID int, dryR
 func applyMutator(r *mutationRun, m mutatorItem, fc *fileContext, node ast.Node, mutationID int, originalSourceCode []byte, dryRunCounts, dryRunGlobalTotals map[string]int) int {
 	console.Debug(r.opts, "Mutator %s", m.Name)
 
+	prepareMutantIdentities(r, fc, m)
 	mutatorAnnotated := annotation.DecoratorFilter(m.Mutator, m.Name, fc.filters...)
 	changed := mutago.MutateWalkWithPositions(fc.pkg, fc.info, node, mutatorAnnotated)
 
@@ -721,11 +725,12 @@ func prepareScopedMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutat
 	relFile := baseline.RelPath(fc.absFile, r.moduleRoot)
 	checksum := stableMutationEditKey(relFile, originalSourceCode, edit)
 	mutant.Checksum = checksum
-	id, err := scopeMutantID(r, relFile, m.Name, originalSourceCode, edit)
+	id, err := discoveredMutantID(r, fc, m, edit)
 	if err != nil {
 		recordCaptureFailure(r, mutant, err)
 		return preparedMutation{}, false
 	}
+	mutant.ID = id
 	return preparedMutation{
 		candidate: scopeCandidate{
 			relFile:  relFile,
@@ -740,11 +745,38 @@ func prepareScopedMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutat
 	}, true
 }
 
-func scopeMutantID(r *mutationRun, relFile, mutatorName string, original []byte, edit mutationEdit) (string, error) {
-	if r.opts.Exec.RunMutantID == "" {
+// needsMutantIDs reports whether discovery must assign stable IDs.
+// A dry run needs them only to select --run-mutant-id.
+func needsMutantIDs(opts *models.Options) bool {
+	return !opts.General.DryRun || opts.Exec.RunMutantID != ""
+}
+
+// prepareMutantIdentities assigns IDs to every edit of mutator m in the file.
+// It must run before the filtered walk starts, because a walk changes the AST
+// in place while each mutation is pending.
+func prepareMutantIdentities(r *mutationRun, fc *fileContext, m mutatorItem) {
+	if !needsMutantIDs(r.opts) {
+		return
+	}
+	if _, done := fc.identities[m.Name]; done {
+		return
+	}
+	if fc.identities == nil {
+		fc.identities = make(map[string]map[string]string)
+	}
+	relFile := baseline.RelPath(fc.absFile, r.moduleRoot)
+	fc.identities[m.Name] = mutantIdentities(fc.pkg, fc.info, fc.fset, fc.src, fc.originalSource, relFile, m.Name, m.Mutator)
+}
+
+// discoveredMutantID returns the stable ID that prepareMutantIdentities gave edit.
+func discoveredMutantID(r *mutationRun, fc *fileContext, m mutatorItem, edit mutationEdit) (string, error) {
+	if !needsMutantIDs(r.opts) {
 		return "", nil
 	}
-	return mutantIDForEdit(relFile, mutatorName, original, edit)
+	if id, ok := fc.identities[m.Name][edit.key()]; ok {
+		return id, nil
+	}
+	return "", fmt.Errorf("no stable ID for %s edit at bytes %d:%d", m.Name, edit.start, edit.end)
 }
 
 func recordCaptureFailure(r *mutationRun, mutant models.Mutant, err error) {
@@ -1228,7 +1260,7 @@ func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *mod
 	if opts.Exec.RunMutantID != "" {
 		return returnOk
 	}
-	return checkQualityGates(stderr, opts, report, bl, moduleRoot)
+	return checkQualityGates(stderr, opts, report, bl)
 }
 
 func handleBaselineUpdate(stdout, stderr io.Writer, opts *models.Options, report *models.Report, moduleRoot string) (bool, int) {
@@ -1366,7 +1398,7 @@ func printGitHubAnnotations(stdout io.Writer, report *models.Report) {
 	}
 }
 
-func checkQualityGates(stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File, moduleRoot string) int {
+func checkQualityGates(stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File) int {
 	if opts.Score.IgnoreMsiWithNoMutations && report.Stats.TotalMutantsCount == 0 {
 		return returnOk
 	}
@@ -1374,7 +1406,7 @@ func checkQualityGates(stderr io.Writer, opts *models.Options, report *models.Re
 	minMsi := resolveThreshold(opts.Score.MinMsi, opts.Config.MinMsi)
 	minCoveredMsi := resolveThreshold(opts.Score.MinCoveredMsi, opts.Config.MinCoveredMsi)
 
-	escapedFail := checkEscapedGate(stderr, opts, report, bl, moduleRoot)
+	escapedFail := checkEscapedGate(stderr, opts, report, bl)
 	msiFail := checkMsiGate(stderr, report, minMsi)
 	coveredFail := checkCoveredMsiGate(stderr, report, minCoveredMsi)
 
@@ -1391,11 +1423,11 @@ func resolveThreshold(cliValue, configValue float64) float64 {
 	return cliValue
 }
 
-func checkEscapedGate(stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File, moduleRoot string) bool {
+func checkEscapedGate(stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File) bool {
 	if !opts.Score.FailOnEscaped {
 		return false
 	}
-	newEscapes := bl.NewEscapes(report.Escaped, moduleRoot)
+	newEscapes := bl.NewEscapes(report.Escaped)
 	if len(newEscapes) == 0 {
 		return false
 	}

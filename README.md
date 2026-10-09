@@ -357,7 +357,7 @@ mutago --update-baseline ./...
 mutago --fail-on-escaped --baseline mutago-baseline.json ./...
 ```
 
-Commit `mutago-baseline.json` to your repo. The baseline uses stable mutant IDs — they survive refactors that shift line numbers without changing the actual code.
+Commit `mutago-baseline.json` to your repo. The baseline uses stable mutant IDs — they survive refactors that shift line numbers without changing the actual code. When one mutator makes the same change to identical lines in one file, each mutant gets its own ID, numbered in source order, so accepting one does not accept the others.
 
 ### <a name="agentic-json"></a>LLM-ready report
 

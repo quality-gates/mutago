@@ -271,7 +271,6 @@ func MakeAgenticJSONReport(report models.Report, moduleRoot string) error {
 	testFiles := make(map[string][]string)
 	for _, m := range report.Escaped {
 		relFile := baseline.RelPath(m.Mutator.OriginalFilePath, moduleRoot)
-		id := baseline.MutantID(relFile, m.Mutator.MutatorName, m.Diff)
 		const contextRadius = 3
 		source := report.Sources[m.Mutator.OriginalFilePath]
 		if source == "" {
@@ -290,7 +289,7 @@ func MakeAgenticJSONReport(report models.Report, moduleRoot string) error {
 			testFiles[dir] = packageTests
 		}
 		mutants = append(mutants, AgenticMutant{
-			ID:               id,
+			ID:               m.ID,
 			Checksum:         m.Checksum,
 			File:             relFile,
 			Line:             m.Mutator.OriginalStartLine,
@@ -390,14 +389,13 @@ func MakeGitLabReport(report models.Report, moduleRoot string) error {
 	issues := make([]gitLabIssue, 0, len(report.Escaped))
 	for _, m := range report.Escaped {
 		relFile := baseline.RelPath(m.Mutator.OriginalFilePath, moduleRoot)
-		id := baseline.MutantID(relFile, m.Mutator.MutatorName, m.Diff)
 		desc := fmt.Sprintf("Escaped mutant (%s) at %s:%d — no test kills this mutation",
 			m.Mutator.MutatorName, relFile, m.Mutator.OriginalStartLine)
 		issues = append(issues, gitLabIssue{
 			Type:        "issue",
 			Description: desc,
 			Severity:    "minor",
-			Fingerprint: id,
+			Fingerprint: m.ID,
 			Location: gitLabLocation{
 				Path:  relFile,
 				Lines: gitLabLines{Begin: int(m.Mutator.OriginalStartLine)},

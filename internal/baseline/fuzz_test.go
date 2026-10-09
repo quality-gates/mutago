@@ -58,7 +58,7 @@ func FuzzLoad(f *testing.F) {
 		if fl != nil {
 			// IDSet and NewEscapes must not panic on the parsed file.
 			_ = fl.IDSet()
-			_ = fl.NewEscapes(nil, "/module/root")
+			_ = fl.NewEscapes(nil)
 		}
 	})
 }

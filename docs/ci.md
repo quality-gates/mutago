@@ -56,6 +56,8 @@ Then in CI, only fail when something *new* escapes:
 
 Once you've written tests to kill the known survivors, remove them from the baseline with `--update-baseline` and tighten the gate.
 
+Baseline IDs ignore line numbers, so moving code does not invalidate them. When one mutator makes the same change to identical lines in one file, each mutant gets its own ID, numbered in source order. Inserting a new identical line above an accepted one changes the numbering, so that change is reported as a new escape.
+
 ## PR-only mode (changed lines only)
 
 Limit mutation to lines changed in the PR to keep feedback fast and relevant:

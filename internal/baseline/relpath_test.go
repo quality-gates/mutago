@@ -32,29 +32,26 @@ func newModule(t *testing.T) string {
 	return root
 }
 
-func TestNewEscapes_MatchesAcceptedMutantForEveryTargetSpelling(t *testing.T) {
-	root := newModule(t)
-	accepted := &File{Version: 1, Mutants: []Entry{{
-		ID:   MutantID("internal/store/store.go", "arithmetic/base", storeDiff),
-		File: "internal/store/store.go",
-	}}}
+func TestNewEscapes_MatchesOnlyRecordedIDs(t *testing.T) {
+	first := storeMutant("internal/store/store.go")
+	first.ID = MutantIDAt("internal/store/store.go", "arithmetic/base", storeDiff, 0)
+	second := storeMutant("internal/store/store.go")
+	second.ID = MutantIDAt("internal/store/store.go", "arithmetic/base", storeDiff, 1)
+	accepted := &File{Version: 1, Mutants: []Entry{{ID: first.ID, File: "internal/store/store.go"}}}
 
-	cases := []struct {
-		name, cwd, path string
-	}{
-		{"dot-slash from module root", root, "./internal/store/store.go"},
-		{"relative from module root", root, "internal/store/store.go"},
-		{"absolute", root, filepath.Join(root, "internal", "store", "store.go")},
-		{"relative from package dir", filepath.Join(root, "internal", "store"), "store.go"},
-		{"dot-slash from package dir", filepath.Join(root, "internal", "store"), "./store.go"},
+	got := accepted.NewEscapes([]models.Mutant{first, second})
+	if len(got) != 1 || got[0].ID != second.ID {
+		t.Fatalf("want only the second same-text mutant as a new escape, got %+v", got)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Chdir(tc.cwd)
-			if got := accepted.NewEscapes([]models.Mutant{storeMutant(tc.path)}, root); len(got) != 0 {
-				t.Fatalf("accepted mutant reported as new escape for target %q from %q", tc.path, tc.cwd)
-			}
-		})
+}
+
+func TestMutantIDAt_OccurrenceZeroKeepsMutantID(t *testing.T) {
+	id0 := MutantIDAt("internal/store/store.go", "arithmetic/base", storeDiff, 0)
+	if id0 != MutantID("internal/store/store.go", "arithmetic/base", storeDiff) {
+		t.Fatal("occurrence 0 must keep the MutantID hash so existing baselines stay valid")
+	}
+	if id1 := MutantIDAt("internal/store/store.go", "arithmetic/base", storeDiff, 1); id1 == id0 {
+		t.Fatal("occurrence 1 must not share occurrence 0's ID")
 	}
 }
 

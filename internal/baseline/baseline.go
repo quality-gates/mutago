@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/quality-gates/mutago/v2/internal/models"
@@ -37,7 +38,16 @@ type Entry struct {
 // It hashes the relative file path, mutator name, and the actual changed
 // lines from the diff — deliberately excluding line numbers so the ID
 // survives refactors that only shift surrounding code.
+// It is MutantIDAt with occurrence 0.
 func MutantID(relFile, mutatorName, diff string) string {
+	return MutantIDAt(relFile, mutatorName, diff, 0)
+}
+
+// MutantIDAt returns the stable identifier of the nth mutant (from 0, in source
+// order) whose file, mutator and changed lines all match. Occurrence 0 keeps
+// the MutantID hash, so baselines written before same-text mutants were told
+// apart stay valid for every mutant except the later members of such a group.
+func MutantIDAt(relFile, mutatorName, diff string, occurrence int) string {
 	var removed, added strings.Builder
 	for line := range strings.SplitSeq(diff, "\n") {
 		switch {
@@ -52,6 +62,9 @@ func MutantID(relFile, mutatorName, diff string) string {
 		}
 	}
 	key := relFile + "\x00" + mutatorName + "\x00" + removed.String() + "\x00" + added.String()
+	if occurrence > 0 {
+		key += "\x00" + strconv.Itoa(occurrence)
+	}
 	h := md5.Sum([]byte(key))
 	return fmt.Sprintf("%x", h)
 }
@@ -83,18 +96,16 @@ func (f *File) IDSet() map[string]struct{} {
 	return s
 }
 
-// NewEscapes returns mutants from escaped that are not recorded in this baseline.
-// When f is nil (no baseline loaded), all mutants are considered new.
-func (f *File) NewEscapes(escaped []models.Mutant, moduleRoot string) []models.Mutant {
+// NewEscapes returns mutants from escaped whose ID is not recorded in this
+// baseline. When f is nil (no baseline loaded), all mutants are considered new.
+func (f *File) NewEscapes(escaped []models.Mutant) []models.Mutant {
 	if f == nil {
 		return escaped
 	}
 	knownIDs := f.IDSet()
 	var result []models.Mutant
 	for _, m := range escaped {
-		relFile := RelPath(m.Mutator.OriginalFilePath, moduleRoot)
-		id := MutantID(relFile, m.Mutator.MutatorName, m.Diff)
-		if _, known := knownIDs[id]; !known {
+		if _, known := knownIDs[m.ID]; !known {
 			result = append(result, m)
 		}
 	}
@@ -108,7 +119,7 @@ func Write(path string, escaped []models.Mutant, moduleRoot string) error {
 	for _, m := range escaped {
 		relFile := RelPath(m.Mutator.OriginalFilePath, moduleRoot)
 		entries = append(entries, Entry{
-			ID:      MutantID(relFile, m.Mutator.MutatorName, m.Diff),
+			ID:      m.ID,
 			File:    relFile,
 			Mutator: m.Mutator.MutatorName,
 			Line:    m.Mutator.OriginalStartLine,

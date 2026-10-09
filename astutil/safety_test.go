@@ -69,6 +69,29 @@ func Foo() int {
 	assert.True(t, IsSafeToRemove(info, expr))
 }
 
+func TestUnsafeLocalVars_SourceOrder(t *testing.T) {
+	src := `package example
+
+func Foo() int {
+	a, b, c, d, e := 1, 2, 3, 4, 5
+	return a + b + c + d + e
+}
+`
+	_, file, _, info := parseAndTypeCheckSource(t, src)
+	fn := file.Decls[0].(*ast.FuncDecl)
+	ret := fn.Body.List[1].(*ast.ReturnStmt)
+	expr := ret.Results[0]
+
+	// The order sets the mutated text, so it must not follow map iteration.
+	for i := 0; i < 50; i++ {
+		var names []string
+		for _, v := range UnsafeLocalVars(info, expr) {
+			names = append(names, v.(*ast.Ident).Name)
+		}
+		require.Equal(t, []string{"a", "b", "c", "d", "e"}, names)
+	}
+}
+
 func TestUnsafeLocalVars_Param(t *testing.T) {
 	src := `package example
 
