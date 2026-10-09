@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.26] — 2026-10-09
+
 ### Fixed
 - Mutants that make the same change to identical lines in one file now get distinct stable IDs. Before, they shared one ID, so a baseline that accepted one escape also hid new escapes at the other sites from `--fail-on-escaped`, and `--run-mutant-id` ran all of them. The engine now assigns each mutant its ID once, at discovery; the baseline, agentic `id`, GitLab `fingerprint`, and `--run-mutant-id` all use it. Existing baselines stay valid except for the second and later members of a same-text group: re-run `--update-baseline` to record those (#274).
 - `statement/return` now lists the variables it keeps alive in source order. Before, a return that used several such variables could produce a different mutant text, checksum, and ID on each run.
@@ -689,7 +691,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.25...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.26...HEAD
+[v2.10.26]: https://github.com/quality-gates/mutago/compare/v2.10.25...v2.10.26
 [v2.10.25]: https://github.com/quality-gates/mutago/compare/v2.10.24...v2.10.25
 [v2.10.24]: https://github.com/quality-gates/mutago/compare/v2.10.23...v2.10.24
 [v2.10.23]: https://github.com/quality-gates/mutago/compare/v2.10.22...v2.10.23
