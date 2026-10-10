@@ -38,6 +38,13 @@ go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
 mutago --version
 ```
 
+## Custom mutators
+
+Register your own operators with `mutator.Register`, then blank-import their
+package in a full mutago clone and build a custom binary. Copying only
+`cmd/mutago/main.go` into another module will not build because it uses internal
+packages. See the [custom mutator guide](docs/custom-mutators.md) for a walkthrough.
+
 ## Tune the gate
 
 Start without score floors while you learn the escape set. Add coverage so
