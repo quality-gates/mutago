@@ -1,0 +1,49 @@
+# cwd: <git root>/svc (module root); git root is one level up
+$ mutago --workers=1 --exec-timeout=10 --quiet --no-diffs --logger-github --logger-gitlab ./pkg
+ESCAPED pkg/calc.go:8 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:13 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:16 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:12 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:15 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:8 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:4 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:8 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:8 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:13 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:16 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 35.29% (6 killed, 11 escaped, 0 errored, 0 not covered, 0 skipped, 17 total)
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   1 / 2    (50%)
+  branch/if                            killed   0 / 2    (0%)
+  conditional/negated                  killed   2 / 2    (100%)
+  expression/comparison                killed   0 / 2    (0%)
+  numbers/decrementer                  killed   1 / 2    (50%)
+  numbers/incrementer                  killed   0 / 2    (0%)
+  statement/return                     killed   2 / 5    (40%)
+::warning file=svc/pkg/calc.go,line=8,title=Mutant escaped (arithmetic/base)::Escaped mutation at svc/pkg/calc.go:8 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=13,title=Mutant escaped (branch/if)::Escaped mutation at svc/pkg/calc.go:13 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=16,title=Mutant escaped (branch/if)::Escaped mutation at svc/pkg/calc.go:16 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=12,title=Mutant escaped (expression/comparison)::Escaped mutation at svc/pkg/calc.go:12 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=15,title=Mutant escaped (expression/comparison)::Escaped mutation at svc/pkg/calc.go:15 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=8,title=Mutant escaped (numbers/decrementer)::Escaped mutation at svc/pkg/calc.go:8 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=4,title=Mutant escaped (numbers/incrementer)::Escaped mutation at svc/pkg/calc.go:4 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=8,title=Mutant escaped (numbers/incrementer)::Escaped mutation at svc/pkg/calc.go:8 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=8,title=Mutant escaped (statement/return)::Escaped mutation at svc/pkg/calc.go:8 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=13,title=Mutant escaped (statement/return)::Escaped mutation at svc/pkg/calc.go:13 — add a test to kill it
+::warning file=svc/pkg/calc.go,line=16,title=Mutant escaped (statement/return)::Escaped mutation at svc/pkg/calc.go:16 — add a test to kill it
+exit=0
+
+$ jq -r ".[].location.path" mutago-gitlab.json | sort -u
+pkg/calc.go

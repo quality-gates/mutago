@@ -1,0 +1,76 @@
+$ mutago --config all.yml --workers=1 --exec-timeout=10 --no-diffs ./b
+ESCAPED b/b.go:5 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED b/b.go:4 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED b/b.go:4 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED b/b.go:7 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED b/b.go:5 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 0.00% (0 killed, 5 escaped, 0 errored, 0 not covered, 0 skipped, 5 total)
+
+Per-mutator breakdown:
+  branch/if                            killed   0 / 1    (0%)
+  conditional/negated                  killed   0 / 1    (0%)
+  expression/comparison                killed   0 / 1    (0%)
+  statement/return                     killed   0 / 2    (0%)
+exit=0
+
+$ mutago --config all.yml --workers=1 --exec-timeout=10 --no-diffs --test-recursive ./b
+KILLED b/b.go:5 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED b/b.go:4 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED b/b.go:4 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED b/b.go:7 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED b/b.go:5 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 80.00% (4 killed, 1 escaped, 0 errored, 0 not covered, 0 skipped, 5 total)
+
+Per-mutator breakdown:
+  branch/if                            killed   1 / 1    (100%)
+  conditional/negated                  killed   1 / 1    (100%)
+  expression/comparison                killed   0 / 1    (0%)
+  statement/return                     killed   2 / 2    (100%)
+exit=0
+
+$ mutago --config all.yml --workers=1 --exec-timeout=10 --no-diffs ./tagged
+ESCAPED tagged/t.go:3 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED tagged/t.go:3 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED tagged/t.go:3 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED tagged/t.go:3 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 0.00% (0 killed, 4 escaped, 0 errored, 0 not covered, 0 skipped, 4 total)
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   0 / 1    (0%)
+  numbers/decrementer                  killed   0 / 1    (0%)
+  numbers/incrementer                  killed   0 / 1    (0%)
+  statement/return                     killed   0 / 1    (0%)
+exit=0
+
+$ mutago --config all.yml --workers=1 --exec-timeout=10 --no-diffs --test-flags=-tags=integration ./tagged
+KILLED tagged/t.go:3 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED tagged/t.go:3 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED tagged/t.go:3 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED tagged/t.go:3 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 100.00% (4 killed, 0 escaped, 0 errored, 0 not covered, 0 skipped, 4 total)
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   1 / 1    (100%)
+  numbers/decrementer                  killed   1 / 1    (100%)
+  numbers/incrementer                  killed   1 / 1    (100%)
+  statement/return                     killed   1 / 1    (100%)
+exit=0
+

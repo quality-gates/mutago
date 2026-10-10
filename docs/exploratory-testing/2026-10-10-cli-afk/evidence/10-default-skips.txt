@@ -1,0 +1,25 @@
+$ mutago --dry-run ./...
+a/a.go:
+	arithmetic/base: 1
+	statement/return: 1
+
+Per-mutator totals across all files:
+  arithmetic/base                          1
+  statement/return                         1
+
+Total: 2 mutation(s) would be generated. No files written, no tests run.
+Note: this count uses the same scope as a real run (changed lines, blacklist, duplicate edits, and --run-mutant-id). It does not apply coverage.
+exit=0
+
+$ mutago --dry-run ./b
+Could not find any suitable Go source files
+exit=3
+
+$ mutago --dry-run --test-recursive ./b
+Could not find any suitable Go source files
+exit=3
+
+$ mutago --dry-run ./b/b.go
+Could not find any suitable Go source files
+exit=3
+
