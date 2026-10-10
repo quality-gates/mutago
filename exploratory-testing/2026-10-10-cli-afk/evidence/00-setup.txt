@@ -1,0 +1,6 @@
+go version go1.26.6 darwin/arm64
+f47b7ae9416fb96b7c1efbdc8ab34e1208996175
+ProductName:		macOS
+ProductVersion:		26.6.2
+BuildVersion:		25G83
+mutago dev

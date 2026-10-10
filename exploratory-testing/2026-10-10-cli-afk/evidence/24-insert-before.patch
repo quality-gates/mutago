@@ -1,0 +1,27 @@
+diff --git a/pkg/calc.go b/pkg/calc.go
+index d33941d..470a146 100644
+--- a/pkg/calc.go
++++ b/pkg/calc.go
+@@ -4,6 +4,10 @@ func Inc(x int) int {
+ 	return x + 1
+ }
+ 
++func IncMiddle(x int) int {
++	return x + 1
++}
++
+ func IncAgain(x int) int {
+ 	return x + 1
+ }
+diff --git a/pkg/calc_test.go b/pkg/calc_test.go
+index 607ef2d..7b775a5 100644
+--- a/pkg/calc_test.go
++++ b/pkg/calc_test.go
+@@ -7,6 +7,7 @@ func TestInc(t *testing.T) {
+ 		t.Fatal("inc")
+ 	}
+ 	_ = IncAgain(1)
++	_ = IncMiddle(1)
+ }
+ 
+ func TestClamp(t *testing.T) {

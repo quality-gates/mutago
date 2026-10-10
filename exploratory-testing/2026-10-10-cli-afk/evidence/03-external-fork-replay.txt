@@ -1,0 +1,10 @@
+# Replay from empty module; main.go fetched from tag v2.10.26; one blank import added
+$ go get github.com/quality-gates/mutago/v2@v2.10.26
+go: upgraded go 1.26 => 1.26.6
+go: added github.com/quality-gates/mutago/v2 v2.10.26
+$ go mod tidy
+exit=0
+$ go build ./cmd/mutago
+package example.com/custom/cmd/mutago
+	cmd/mutago/main.go:19:2: use of internal package github.com/quality-gates/mutago/v2/internal/baseline not allowed
+exit=1
