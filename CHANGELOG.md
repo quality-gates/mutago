@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- The custom mutator guide now builds from a full mutago clone with an external module, explains the internal-package restriction, and uses an example that does not duplicate a built-in mutator (#300).
+
 ## [v2.10.26] — 2026-10-09
 
 ### Fixed
