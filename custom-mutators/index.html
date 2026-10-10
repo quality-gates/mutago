@@ -523,6 +523,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Wiring into the binary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#try-a-mutation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try a mutation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -666,6 +683,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Wiring into the binary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#try-a-mutation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try a mutation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -700,7 +734,7 @@
 
 
 <h1 id="writing-custom-mutators">Writing Custom Mutators<a class="headerlink" href="#writing-custom-mutators" title="Permanent link">&para;</a></h1>
-<p>mutago exposes a public registration API so you can add mutation operators without forking the binary.</p>
+<p>mutago exposes a public registration API for custom mutation operators. To use them in the CLI, build a custom binary from a clone of the mutago repository.</p>
 <h2 id="the-mutator-signature">The Mutator signature<a class="headerlink" href="#the-mutator-signature" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Mutator</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">pkg</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">Package</span><span class="p">,</span><span class="w"> </span><span class="nx">info</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">Info</span><span class="p">,</span><span class="w"> </span><span class="nx">node</span><span class="w"> </span><span class="nx">ast</span><span class="p">.</span><span class="nx">Node</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="nx">Mutation</span>
 </code></pre></div>
@@ -712,13 +746,14 @@
 </ul>
 <h2 id="the-mutation-type">The Mutation type<a class="headerlink" href="#the-mutation-type" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Mutation</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nx">Change</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nx">Reset</span><span class="w">  </span><span class="kd">func</span><span class="p">()</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">}</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nx">Position</span><span class="w"> </span><span class="nx">token</span><span class="p">.</span><span class="nx">Pos</span><span class="w"> </span><span class="c1">// optional; defaults to the visited node's position</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nx">Change</span><span class="w">   </span><span class="kd">func</span><span class="p">()</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nx">Reset</span><span class="w">    </span><span class="kd">func</span><span class="p">()</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="p">}</span>
 </code></pre></div>
 <p>Both functions close over the AST node and modify it in place. The framework calls <code>Change</code>, prints the mutated file, runs the tests, then calls <code>Reset</code>.</p>
 <h2 id="registration">Registration<a class="headerlink" href="#registration" title="Permanent link">&para;</a></h2>
-<p>Call <code>mutator.Register</code> from an <code>init()</code> function:</p>
+<p>Call <code>mutator.Register</code> from an <code>init()</code> function. This example changes the string literal <code>"hello"</code> to <code>"HELLO"</code>, an edit that no built-in mutator makes:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">package</span><span class="w"> </span><span class="nx">mypkg</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="p">(</span>
@@ -730,28 +765,75 @@
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">)</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="kd">func</span><span class="w"> </span><span class="nx">init</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nx">mutator</span><span class="p">.</span><span class="nx">Register</span><span class="p">(</span><span class="s">"mypkg/flip-sign"</span><span class="p">,</span><span class="w"> </span><span class="nx">flipSign</span><span class="p">)</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nx">mutator</span><span class="p">.</span><span class="nx">Register</span><span class="p">(</span><span class="s">"mypkg/greeting-uppercase"</span><span class="p">,</span><span class="w"> </span><span class="nx">uppercaseGreeting</span><span class="p">)</span>
 <a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="p">}</span>
 <a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="kd">func</span><span class="w"> </span><span class="nx">flipSign</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">Package</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">Info</span><span class="p">,</span><span class="w"> </span><span class="nx">node</span><span class="w"> </span><span class="nx">ast</span><span class="p">.</span><span class="nx">Node</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="nx">mutator</span><span class="p">.</span><span class="nx">Mutation</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="nx">n</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">node</span><span class="p">.(</span><span class="o">*</span><span class="nx">ast</span><span class="p">.</span><span class="nx">UnaryExpr</span><span class="p">)</span>
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">!</span><span class="nx">ok</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">Op</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nx">token</span><span class="p">.</span><span class="nx">SUB</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="kd">func</span><span class="w"> </span><span class="nx">uppercaseGreeting</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">Package</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">Info</span><span class="p">,</span><span class="w"> </span><span class="nx">node</span><span class="w"> </span><span class="nx">ast</span><span class="p">.</span><span class="nx">Node</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="nx">mutator</span><span class="p">.</span><span class="nx">Mutation</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="nx">n</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">node</span><span class="p">.(</span><span class="o">*</span><span class="nx">ast</span><span class="p">.</span><span class="nx">BasicLit</span><span class="p">)</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">!</span><span class="nx">ok</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">Kind</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nx">token</span><span class="p">.</span><span class="nx">STRING</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">Value</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">`"hello"`</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span>
 <a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">[]</span><span class="nx">mutator</span><span class="p">.</span><span class="nx">Mutation</span><span class="p">{</span>
-<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">        </span><span class="p">{</span><span class="nx">Change</span><span class="p">:</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">Op</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">token</span><span class="p">.</span><span class="nx">ADD</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="nx">Reset</span><span class="p">:</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">Op</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">token</span><span class="p">.</span><span class="nx">SUB</span><span class="w"> </span><span class="p">}},</span>
-<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="p">}</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="nx">original</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">Value</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">[]</span><span class="nx">mutator</span><span class="p">.</span><span class="nx">Mutation</span><span class="p">{</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">        </span><span class="p">{</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">            </span><span class="nx">Position</span><span class="p">:</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">Pos</span><span class="p">(),</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">            </span><span class="nx">Change</span><span class="p">:</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">Value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">`"HELLO"`</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">            </span><span class="nx">Reset</span><span class="p">:</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">n</span><span class="p">.</span><span class="nx">Value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">original</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="p">}</span>
 </code></pre></div>
 <h2 id="wiring-into-the-binary">Wiring into the binary<a class="headerlink" href="#wiring-into-the-binary" title="Permanent link">&para;</a></h2>
-<p>Because Go's <code>init()</code> functions only run for imported packages, you need a fork of <code>cmd/mutago/main.go</code> that blank-imports your package:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="p">(</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">"github.com/yourorg/mypkg"</span><span class="w"> </span><span class="c1">// registers mypkg/flip-sign</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">"github.com/quality-gates/mutago/v2/mutator/arithmetic"</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="c1">// ... other built-in mutators</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">)</span>
+<p>Go's <code>init()</code> functions only run for imported packages. Blank-import your package in the <strong>full mutago clone</strong>, keeping its module path <code>github.com/quality-gates/mutago/v2</code> unchanged. Do not copy <code>cmd/mutago/main.go</code> into your own module: it imports mutago's <code>internal/</code> packages, which Go forbids importing from outside that module tree. A <code>replace</code> directive alone does not lift that restriction.</p>
+<p>The following walkthrough keeps your mutator in a separate module. Start in a fresh directory with Go 1.26.6 or newer:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>mkdir<span class="w"> </span>custom-mutago
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">cd</span><span class="w"> </span>custom-mutago
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>custom/mypkg
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">cd</span><span class="w"> </span>custom
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>go<span class="w"> </span>mod<span class="w"> </span>init<span class="w"> </span>example.com/custom
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/quality-gates/mutago/v2@v2.10.26
 </code></pre></div>
-<p>Build your fork with <code>go build ./cmd/mutago</code> and use it in place of the upstream binary.</p>
+<p>Save the registration example above as <code>mypkg/mypkg.go</code>. Then clone mutago alongside your module and wire it in:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">cd</span><span class="w"> </span>..
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/quality-gates/mutago.git
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">cd</span><span class="w"> </span>mutago
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>go<span class="w"> </span>mod<span class="w"> </span>edit<span class="w"> </span>-require<span class="o">=</span>example.com/custom@v0.0.0
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>go<span class="w"> </span>mod<span class="w"> </span>edit<span class="w"> </span>-replace<span class="o">=</span>example.com/custom<span class="o">=</span>../custom
+</code></pre></div>
+<p>Add this line to the existing import block in the clone's <code>cmd/mutago/main.go</code>. Leave all existing imports, including the built-in mutators, in place:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nx">_</span><span class="w"> </span><span class="s">"example.com/custom/mypkg"</span><span class="w"> </span><span class="c1">// registers mypkg/greeting-uppercase</span>
+</code></pre></div>
+<p>Build and check registration:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>go<span class="w"> </span>mod<span class="w"> </span>tidy
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>go<span class="w"> </span>build<span class="w"> </span>-o<span class="w"> </span>mutago<span class="w"> </span>./cmd/mutago
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>./mutago<span class="w"> </span>--list-mutators
+</code></pre></div>
+<p>The list should include <code>mypkg/greeting-uppercase</code>. For a published mutator module, use its real module path and version in <code>require</code> and the import; omit the local <code>replace</code>.</p>
+<h3 id="try-a-mutation">Try a mutation<a class="headerlink" href="#try-a-mutation" title="Permanent link">&para;</a></h3>
+<p>From the clone's <code>mutago</code> directory, create the target directory:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>../custom/greeting
+</code></pre></div>
+<p>In <code>custom/greeting/greeting.go</code>, create:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">package</span><span class="w"> </span><span class="nx">greeting</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kd">func</span><span class="w"> </span><span class="nx">Greeting</span><span class="p">()</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="s">"hello"</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<p>In <code>custom/greeting/greeting_test.go</code>, create:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">package</span><span class="w"> </span><span class="nx">greeting</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="kn">import</span><span class="w"> </span><span class="s">"testing"</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="kd">func</span><span class="w"> </span><span class="nx">TestGreeting</span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">got</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">Greeting</span><span class="p">();</span><span class="w"> </span><span class="nx">got</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">"hello"</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">        </span><span class="nx">t</span><span class="p">.</span><span class="nx">Fatalf</span><span class="p">(</span><span class="s">"Greeting() = %q, want hello"</span><span class="p">,</span><span class="w"> </span><span class="nx">got</span><span class="p">)</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="p">}</span>
+</code></pre></div>
+<p>From the clone's <code>mutago</code> directory, run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">cd</span><span class="w"> </span>../custom
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>../mutago/mutago<span class="w"> </span>--verbose<span class="w"> </span>--workers<span class="o">=</span><span class="m">1</span><span class="w"> </span>--exec-timeout<span class="o">=</span><span class="m">30</span><span class="w"> </span>./greeting
+</code></pre></div>
+<p>The output should include a <code>KILLED</code> mutant named <code>mypkg/greeting-uppercase</code> and a mutation score. All built-in mutators remain enabled. mutago removes duplicate edits, so a custom example such as <code>-x</code> → <code>+x</code> would instead duplicate <code>arithmetic/negate</code> and might not appear.</p>
 <h2 id="guidelines">Guidelines<a class="headerlink" href="#guidelines" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Return <code>nil</code> quickly if the node type isn't one your mutator handles — the mutator is called for every node in every file.</li>
