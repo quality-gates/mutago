@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.27] — 2026-10-10
+
 ### Fixed
 - The custom mutator guide now builds from a full mutago clone with an external module, explains the internal-package restriction, and uses an example that does not duplicate a built-in mutator (#300).
 
@@ -694,7 +696,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.26...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.27...HEAD
+[v2.10.27]: https://github.com/quality-gates/mutago/compare/v2.10.26...v2.10.27
 [v2.10.26]: https://github.com/quality-gates/mutago/compare/v2.10.25...v2.10.26
 [v2.10.25]: https://github.com/quality-gates/mutago/compare/v2.10.24...v2.10.25
 [v2.10.24]: https://github.com/quality-gates/mutago/compare/v2.10.23...v2.10.24
