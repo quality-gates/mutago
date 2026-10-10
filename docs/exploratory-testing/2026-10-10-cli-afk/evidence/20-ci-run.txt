@@ -1,0 +1,54 @@
+$ mutago --workers=1 --exec-timeout=10 --no-diffs --logger-github --logger-gitlab --logger-summary-json --logger-agentic-json --coverage ./pkg
+KILLED pkg/calc.go:4 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:8 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED pkg/calc.go:13 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED pkg/calc.go:16 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED pkg/calc.go:12 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED pkg/calc.go:15 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:12 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:15 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED pkg/calc.go:4 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:8 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:4 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:8 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED pkg/calc.go:4 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED pkg/calc.go:8 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED pkg/calc.go:18 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED pkg/calc.go:13 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED pkg/calc.go:16 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 35.29% (6 killed, 7 escaped, 0 errored, 4 not covered, 0 skipped, 17 total)
+The covered-code mutation score is 46.15%
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   1 / 2    (50%)
+  conditional/negated                  killed   2 / 2    (100%)
+  expression/comparison                killed   0 / 2    (0%)
+  numbers/decrementer                  killed   1 / 2    (50%)
+  numbers/incrementer                  killed   0 / 2    (0%)
+  statement/return                     killed   2 / 3    (67%)
+::warning file=pkg/calc.go,line=8,title=Mutant escaped (arithmetic/base)::Escaped mutation at pkg/calc.go:8 — add a test to kill it
+::warning file=pkg/calc.go,line=12,title=Mutant escaped (expression/comparison)::Escaped mutation at pkg/calc.go:12 — add a test to kill it
+::warning file=pkg/calc.go,line=15,title=Mutant escaped (expression/comparison)::Escaped mutation at pkg/calc.go:15 — add a test to kill it
+::warning file=pkg/calc.go,line=8,title=Mutant escaped (numbers/decrementer)::Escaped mutation at pkg/calc.go:8 — add a test to kill it
+::warning file=pkg/calc.go,line=4,title=Mutant escaped (numbers/incrementer)::Escaped mutation at pkg/calc.go:4 — add a test to kill it
+::warning file=pkg/calc.go,line=8,title=Mutant escaped (numbers/incrementer)::Escaped mutation at pkg/calc.go:8 — add a test to kill it
+::warning file=pkg/calc.go,line=8,title=Mutant escaped (statement/return)::Escaped mutation at pkg/calc.go:8 — add a test to kill it
+exit=0
+

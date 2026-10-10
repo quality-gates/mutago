@@ -1,0 +1,86 @@
+[
+  {
+    "type": "issue",
+    "description": "Escaped mutant (arithmetic/base) at pkg/calc.go:8 — no test kills this mutation",
+    "severity": "minor",
+    "fingerprint": "aec1cc1ef62596851cd8beb54930ceff",
+    "location": {
+      "path": "pkg/calc.go",
+      "lines": {
+        "begin": 8
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "description": "Escaped mutant (expression/comparison) at pkg/calc.go:12 — no test kills this mutation",
+    "severity": "minor",
+    "fingerprint": "1ba597332e558c7db35f2b6e9cf4dbcf",
+    "location": {
+      "path": "pkg/calc.go",
+      "lines": {
+        "begin": 12
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "description": "Escaped mutant (expression/comparison) at pkg/calc.go:15 — no test kills this mutation",
+    "severity": "minor",
+    "fingerprint": "fbc47159e81768b9b34e2bea1811d4fd",
+    "location": {
+      "path": "pkg/calc.go",
+      "lines": {
+        "begin": 15
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "description": "Escaped mutant (numbers/decrementer) at pkg/calc.go:8 — no test kills this mutation",
+    "severity": "minor",
+    "fingerprint": "600cd5b1ca4891e3f6b30e9981c75b3b",
+    "location": {
+      "path": "pkg/calc.go",
+      "lines": {
+        "begin": 8
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "description": "Escaped mutant (numbers/incrementer) at pkg/calc.go:4 — no test kills this mutation",
+    "severity": "minor",
+    "fingerprint": "e0145c13b0305ec1470ed222ec1376e9",
+    "location": {
+      "path": "pkg/calc.go",
+      "lines": {
+        "begin": 4
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "description": "Escaped mutant (numbers/incrementer) at pkg/calc.go:8 — no test kills this mutation",
+    "severity": "minor",
+    "fingerprint": "e05ad65ad702b9fcfa92e646aa1b47da",
+    "location": {
+      "path": "pkg/calc.go",
+      "lines": {
+        "begin": 8
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "description": "Escaped mutant (statement/return) at pkg/calc.go:8 — no test kills this mutation",
+    "severity": "minor",
+    "fingerprint": "7059529572ad9ddf3627508729e97479",
+    "location": {
+      "path": "pkg/calc.go",
+      "lines": {
+        "begin": 8
+      }
+    }
+  }
+]

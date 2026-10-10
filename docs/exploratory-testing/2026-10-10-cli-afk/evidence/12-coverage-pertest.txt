@@ -1,0 +1,96 @@
+$ mutago --config all.yml --workers=1 --exec-timeout=10 --no-diffs --coverage --test-recursive ./b
+KILLED b/b.go:5 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED b/b.go:4 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED b/b.go:4 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED b/b.go:7 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED b/b.go:5 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 80.00% (4 killed, 1 escaped, 0 errored, 0 not covered, 0 skipped, 5 total)
+The covered-code mutation score is 80.00%
+
+Per-mutator breakdown:
+  branch/if                            killed   1 / 1    (100%)
+  conditional/negated                  killed   1 / 1    (100%)
+  expression/comparison                killed   0 / 1    (0%)
+  statement/return                     killed   2 / 2    (100%)
+exit=0
+
+$ mutago --config all.yml --workers=1 --exec-timeout=10 --no-diffs --coverage --per-test --test-recursive ./b
+Building per-test coverage map for "example.com/multi/b" (1 tests)...
+KILLED b/b.go:5 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED b/b.go:4 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ESCAPED b/b.go:4 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED b/b.go:7 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED b/b.go:5 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 80.00% (4 killed, 1 escaped, 0 errored, 0 not covered, 0 skipped, 5 total)
+The covered-code mutation score is 80.00%
+
+Per-mutator breakdown:
+  branch/if                            killed   1 / 1    (100%)
+  conditional/negated                  killed   1 / 1    (100%)
+  expression/comparison                killed   0 / 1    (0%)
+  statement/return                     killed   2 / 2    (100%)
+exit=0
+
+$ mutago --config all.yml --workers=1 --exec-timeout=10 --no-diffs --coverage --per-test --test-flags=-tags=integration ./tagged
+Building per-test coverage map for "example.com/multi/tagged" (1 tests)...
+KILLED tagged/t.go:3 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED tagged/t.go:3 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED tagged/t.go:3 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED tagged/t.go:3 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 100.00% (4 killed, 0 escaped, 0 errored, 0 not covered, 0 skipped, 4 total)
+The covered-code mutation score is 100.00%
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   1 / 1    (100%)
+  numbers/decrementer                  killed   1 / 1    (100%)
+  numbers/incrementer                  killed   1 / 1    (100%)
+  statement/return                     killed   1 / 1    (100%)
+exit=0
+
+$ mutago --config all.yml --workers=1 --exec-timeout=10 --no-diffs --coverage --per-test ./...
+Building per-test coverage map for "example.com/multi/a" (1 tests)...
+KILLED a/a.go:3 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED a/a.go:3 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED b/b.go:5 (branch/if)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED b/b.go:4 (conditional/negated)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED b/b.go:4 (expression/comparison)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED b/b.go:7 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED b/b.go:5 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+Building per-test coverage map for "example.com/multi/b/c" (1 tests)...
+NOT COVERED tagged/t.go:3 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED tagged/t.go:3 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED tagged/t.go:3 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+NOT COVERED tagged/t.go:3 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 18.18% (2 killed, 0 escaped, 0 errored, 9 not covered, 0 skipped, 11 total)
+The covered-code mutation score is 100.00%
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   1 / 1    (100%)
+  statement/return                     killed   1 / 1    (100%)
+exit=0
+

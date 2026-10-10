@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "mutants": [
+    {
+      "id": "aec1cc1ef62596851cd8beb54930ceff",
+      "file": "pkg/calc.go",
+      "mutator": "arithmetic/base",
+      "line": 8
+    },
+    {
+      "id": "6fa98bb8c2b6b28ebccbaf24ae9e12b0",
+      "file": "pkg/calc.go",
+      "mutator": "branch/if",
+      "line": 13
+    },
+    {
+      "id": "abd1a67eaf09ed6cb5043465eeae965f",
+      "file": "pkg/calc.go",
+      "mutator": "branch/if",
+      "line": 16
+    },
+    {
+      "id": "1ba597332e558c7db35f2b6e9cf4dbcf",
+      "file": "pkg/calc.go",
+      "mutator": "expression/comparison",
+      "line": 12
+    },
+    {
+      "id": "fbc47159e81768b9b34e2bea1811d4fd",
+      "file": "pkg/calc.go",
+      "mutator": "expression/comparison",
+      "line": 15
+    },
+    {
+      "id": "600cd5b1ca4891e3f6b30e9981c75b3b",
+      "file": "pkg/calc.go",
+      "mutator": "numbers/decrementer",
+      "line": 8
+    },
+    {
+      "id": "e0145c13b0305ec1470ed222ec1376e9",
+      "file": "pkg/calc.go",
+      "mutator": "numbers/incrementer",
+      "line": 4
+    },
+    {
+      "id": "e05ad65ad702b9fcfa92e646aa1b47da",
+      "file": "pkg/calc.go",
+      "mutator": "numbers/incrementer",
+      "line": 8
+    },
+    {
+      "id": "7059529572ad9ddf3627508729e97479",
+      "file": "pkg/calc.go",
+      "mutator": "statement/return",
+      "line": 8
+    },
+    {
+      "id": "4f5d5b8cddeab4809013e8b229ad0e70",
+      "file": "pkg/calc.go",
+      "mutator": "statement/return",
+      "line": 13
+    },
+    {
+      "id": "4622f36be10ec4a652d3a5d725e10f4c",
+      "file": "pkg/calc.go",
+      "mutator": "statement/return",
+      "line": 16
+    }
+  ]
+}

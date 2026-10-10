@@ -1,0 +1,4 @@
+$ go build ./cmd/mutago   # module example.com/custom, copied cmd/mutago/main.go + blank import of ./flip, requires mutago/v2 v2.10.26
+package example.com/custom/cmd/mutago
+	cmd/mutago/main.go:19:2: use of internal package github.com/quality-gates/mutago/v2/internal/baseline not allowed
+exit=1
