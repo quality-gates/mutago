@@ -698,12 +698,14 @@ func (s scriptedToolchain) RunTest(_, testName, profilePath string) *exec.Cmd {
 const writeValidProfile = `printf 'mode: set\nexample.com/m/rec/rec.go:3.24,5.2 1 1\n' > "$1"`
 
 func TestBuildPerTestProfile_UnavailableWhenAnyProfileIsLost(t *testing.T) {
-	for name, lost := range map[string]string{
-		"missing":   "exit 0",
-		"malformed": `printf 'mode: set\nexample.com/m/rec/rec.go:3.24,5.2 1 x\n' > "$1"`,
+	for name, lostScript := range map[string]string{
+		"missing":    "exit 0",
+		"empty":      `: > "$1"`,
+		"headerless": `printf 'example.com/m/rec/rec.go:3.24,5.2 1 1\n' > "$1"`,
+		"malformed":  `printf 'mode: set\nexample.com/m/rec/rec.go:3.24,5.2 1 x\n' > "$1"`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			tc := scriptedToolchain{runs: map[string]string{"TestTouch": writeValidProfile, "TestCheck": lost}}
+			tc := scriptedToolchain{runs: map[string]string{"TestTouch": writeValidProfile, "TestCheck": lostScript}}
 			pkgs := []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch", "TestCheck"}}}
 
 			prof, err := BuildPerTestProfileForPackages(tc, "example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 1)

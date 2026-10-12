@@ -1450,8 +1450,7 @@ func TestMainPerTestLostProfileFallsBackToFullSuite(t *testing.T) {
 		returnOk,
 		"mutation score",
 	)
-	assert.Contains(t, out, "Per-test coverage unavailable")
-	assert.Contains(t, out, "TestCheck")
+	assert.Contains(t, out, "per-test profile for TestCheck")
 	assert.NotContains(t, out, "ESCAPED")
 }
 

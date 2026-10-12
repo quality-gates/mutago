@@ -7,7 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
-- `--per-test` no longer trusts a partial coverage map. If any test's coverage profile is missing or unreadable, mutago drops the map and runs the full suite for every mutant, and `--verbose` names the test and profile. Before, that test looked like it covered nothing, so it could be left out of mutant runs and let mutants escape. A failing test that still writes a valid profile counts as before (#306).
+- `--per-test` no longer trusts a partial coverage map. If any test's coverage profile is missing, empty, or unreadable, mutago drops the map and runs the full suite for every mutant, and `--verbose` names the test and profile. Before, that test looked like it covered nothing, so it could be left out of mutant runs and let mutants escape. A failing test that still writes a valid profile counts as before (#306).
 
 ## [v2.10.27] — 2026-10-10
 

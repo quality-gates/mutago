@@ -2,6 +2,7 @@ package coverage
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -330,9 +331,8 @@ func listPackages(tc Toolchain, pattern string) ([]string, error) {
 
 // BuildPerTestProfile runs each test function in pkgPath individually with
 // -coverprofile to build a map of which lines each test covers.  It uses up
-// to workers goroutines in parallel.  Returns nil and an error on any hard
-// failure, including any test whose profile is missing or unreadable, so the
-// caller falls back to the full test suite rather than trusting a partial map.
+// to workers goroutines in parallel.  Returns nil on any hard failure (the
+// caller falls back to the full test suite).
 //
 // tc builds the list, compile and run commands, so flags such as -tags, -short
 // and -race are consistent between profile-building and mutation test runs.
@@ -358,8 +358,10 @@ func BuildPerTestProfileForTests(tc Toolchain, pkgPath, modulePath, tmpDir strin
 // BuildPerTestProfileForPackages builds one profile from the tests of every
 // package in pkgs, as listed by ListTestPackages. Each test binary is built
 // with -coverpkg=pkgPath, so tests in subpackages are credited with the
-// pkgPath lines they cover. A test that fails still counts when it wrote a
-// valid profile.
+// pkgPath lines they cover. If any test's profile is missing or unreadable it
+// returns nil and an error naming each such test, so the caller falls back to
+// the full suite rather than trusting a partial map. A test that fails still
+// counts when it wrote a valid profile.
 func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPackage, modulePath, tmpDir string, workers int) (*PerTestProfile, error) {
 	if len(pkgs) == 0 {
 		return nil, nil
@@ -456,12 +458,26 @@ func runPerTestWorker(tc Toolchain, jobs <-chan perTestJob, results chan<- perTe
 
 		_ = tc.RunTest(job.binaryPath, job.name, profPath).Run() // test failures are expected; we only care about coverage
 
-		prof, err := ParseProfile(profPath, modulePath)
+		prof, err := parsePerTestProfile(profPath, modulePath)
 		if err != nil {
 			err = fmt.Errorf("per-test profile for %s (%s): %w", job.name, profPath, err)
 		}
 		results <- perTestResult{name: job.name, prof: prof, err: err}
 	}
+}
+
+// parsePerTestProfile parses a profile a test binary wrote, which always
+// starts with a mode line. A file without one, such as an empty file from an
+// interrupted write, is lost coverage rather than a test that covers nothing.
+func parsePerTestProfile(path, modulePath string) (*Profile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.HasPrefix(data, []byte("mode:")) {
+		return nil, errors.New("profile has no mode line")
+	}
+	return ParseProfile(path, modulePath)
 }
 
 func applyPerTestResult(p *PerTestProfile, r perTestResult) {
