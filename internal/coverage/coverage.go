@@ -2,6 +2,7 @@ package coverage
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -329,8 +330,9 @@ func listPackages(tc Toolchain, pattern string) ([]string, error) {
 
 // BuildPerTestProfile runs each test function in pkgPath individually with
 // -coverprofile to build a map of which lines each test covers.  It uses up
-// to workers goroutines in parallel.  Returns nil on any hard failure (the
-// caller falls back to the full test suite).
+// to workers goroutines in parallel.  Returns nil and an error on any hard
+// failure, including any test whose profile is missing or unreadable, so the
+// caller falls back to the full test suite rather than trusting a partial map.
 //
 // tc builds the list, compile and run commands, so flags such as -tags, -short
 // and -race are consistent between profile-building and mutation test runs.
@@ -356,7 +358,8 @@ func BuildPerTestProfileForTests(tc Toolchain, pkgPath, modulePath, tmpDir strin
 // BuildPerTestProfileForPackages builds one profile from the tests of every
 // package in pkgs, as listed by ListTestPackages. Each test binary is built
 // with -coverpkg=pkgPath, so tests in subpackages are credited with the
-// pkgPath lines they cover.
+// pkgPath lines they cover. A test that fails still counts when it wrote a
+// valid profile.
 func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPackage, modulePath, tmpDir string, workers int) (*PerTestProfile, error) {
 	if len(pkgs) == 0 {
 		return nil, nil
@@ -375,7 +378,7 @@ func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPac
 		workers = 1
 	}
 	results := profileTests(tc, jobs, workers, modulePath)
-	return mergePerTestProfiles(results, len(jobs)), nil
+	return mergePerTestProfiles(results, len(jobs))
 }
 
 // perTestJob is a work item for a per-test profiling worker.
@@ -384,10 +387,12 @@ type perTestJob struct {
 	binaryPath string
 }
 
-// perTestResult carries the coverage profile produced by one worker.
+// perTestResult carries the coverage profile produced by one worker, or the
+// error that kept it from reading one.
 type perTestResult struct {
 	name string
 	prof *Profile
+	err  error
 }
 
 func compileCoverageTestBinary(tc Toolchain, pkgPath, coverPkg, tmpDir string) (string, error) {
@@ -415,10 +420,22 @@ func profileTests(tc Toolchain, jobList []perTestJob, workers int, modulePath st
 	return results
 }
 
-func mergePerTestProfiles(results <-chan perTestResult, count int) *PerTestProfile {
+// mergePerTestProfiles returns an error instead of a map when any test's
+// profile was lost: a partial map would read as "this test covers nothing" and
+// let the -run filter exclude it.
+func mergePerTestProfiles(results <-chan perTestResult, count int) (*PerTestProfile, error) {
 	p := &PerTestProfile{data: make(map[string]map[int][]string)}
+	var errs []error
 	for i := 0; i < count; i++ {
-		applyPerTestResult(p, <-results)
+		r := <-results
+		if r.err != nil {
+			errs = append(errs, r.err)
+			continue
+		}
+		applyPerTestResult(p, r)
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 	for _, lines := range p.data {
 		for line, names := range lines {
@@ -426,7 +443,7 @@ func mergePerTestProfiles(results <-chan perTestResult, count int) *PerTestProfi
 			lines[line] = slices.Compact(names)
 		}
 	}
-	return p
+	return p, nil
 }
 
 // runPerTestWorker writes each test's profile beside its binary, so tests that
@@ -441,17 +458,13 @@ func runPerTestWorker(tc Toolchain, jobs <-chan perTestJob, results chan<- perTe
 
 		prof, err := ParseProfile(profPath, modulePath)
 		if err != nil {
-			results <- perTestResult{name: job.name, prof: nil}
-			continue
+			err = fmt.Errorf("per-test profile for %s (%s): %w", job.name, profPath, err)
 		}
-		results <- perTestResult{name: job.name, prof: prof}
+		results <- perTestResult{name: job.name, prof: prof, err: err}
 	}
 }
 
 func applyPerTestResult(p *PerTestProfile, r perTestResult) {
-	if r.prof == nil {
-		return
-	}
 	for relPath, lines := range r.prof.coveredLines {
 		if p.data[relPath] == nil {
 			p.data[relPath] = make(map[int][]string)

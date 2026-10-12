@@ -1431,6 +1431,30 @@ func TestMainPerTestRecursiveKeepsSubpackageTests(t *testing.T) {
 	assert.NotContains(t, out, "ESCAPED")
 }
 
+func TestMainPerTestLostProfileFallsBackToFullSuite(t *testing.T) {
+	// Only TestCheck checks Double, and it exits before writing a profile when
+	// profiled alone. Its lost profile must not read as "covers nothing", or
+	// the -run filter keeps only TestTouch and every mutant escapes (#306).
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/lost\n\ngo 1.22\n")
+	writeFixtureFile(t, filepath.Join(root, "calc.go"), "package lost\n\nfunc Double(a int) int {\n\treturn a * 2\n}\n")
+	writeFixtureFile(t, filepath.Join(root, "calc_test.go"), "package lost\n\nimport (\n\t\"flag\"\n\t\"os\"\n\t\"testing\"\n)\n\n"+
+		"func TestTouch(t *testing.T) { _ = Double(3) }\n\n"+
+		"func TestCheck(t *testing.T) {\n\tif Double(3) != 6 {\n\t\tt.Fatal(\"bad\")\n\t}\n"+
+		"\tif flag.Lookup(\"test.run\").Value.String() == \"^TestCheck$\" {\n\t\tos.Exit(0)\n\t}\n}\n")
+
+	out := testMain(
+		t,
+		root,
+		[]string{"--workers", "1", "--exec-timeout", "30", "--coverage", "--per-test", "--verbose", "--min-msi", "100", "."},
+		returnOk,
+		"mutation score",
+	)
+	assert.Contains(t, out, "Per-test coverage unavailable")
+	assert.Contains(t, out, "TestCheck")
+	assert.NotContains(t, out, "ESCAPED")
+}
+
 func TestMainPerTestHonoursBuildTags(t *testing.T) {
 	// Only a test behind a build tag checks Double; the untagged test merely
 	// calls it. --test-flags=-tags=integration must reach the per-test test

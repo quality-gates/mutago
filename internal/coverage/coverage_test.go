@@ -1,6 +1,7 @@
 package coverage
 
 import (
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -679,4 +680,65 @@ func TestBuildPerTestProfile_NoTests(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, prof)
 	assert.NoDirExists(t, tmp, "nothing is compiled when there are no tests")
+}
+
+// scriptedToolchain compiles nothing and runs each test as the shell script
+// named for it in runs, with $1 set to the test's profile path.
+type scriptedToolchain struct {
+	runs map[string]string
+}
+
+func (s scriptedToolchain) ListTests(string) *exec.Cmd                 { return exec.Command("true") }
+func (s scriptedToolchain) ListPackages(string) *exec.Cmd              { return exec.Command("true") }
+func (s scriptedToolchain) CompileTestBinary(_, _, _ string) *exec.Cmd { return exec.Command("true") }
+func (s scriptedToolchain) RunTest(_, testName, profilePath string) *exec.Cmd {
+	return exec.Command("sh", "-c", s.runs[testName], "sh", profilePath)
+}
+
+const writeValidProfile = `printf 'mode: set\nexample.com/m/rec/rec.go:3.24,5.2 1 1\n' > "$1"`
+
+func TestBuildPerTestProfile_UnavailableWhenAnyProfileIsLost(t *testing.T) {
+	for name, lost := range map[string]string{
+		"missing":   "exit 0",
+		"malformed": `printf 'mode: set\nexample.com/m/rec/rec.go:3.24,5.2 1 x\n' > "$1"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc := scriptedToolchain{runs: map[string]string{"TestTouch": writeValidProfile, "TestCheck": lost}}
+			pkgs := []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch", "TestCheck"}}}
+
+			prof, err := BuildPerTestProfileForPackages(tc, "example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 1)
+
+			require.Error(t, err)
+			assert.Nil(t, prof, "a partial map must not restrict mutant tests")
+			assert.Contains(t, err.Error(), "TestCheck")
+			assert.Contains(t, err.Error(), "coverage.out")
+			assert.NotContains(t, err.Error(), "TestTouch")
+		})
+	}
+}
+
+func TestBuildPerTestProfile_NamesEveryLostProfile(t *testing.T) {
+	tc := scriptedToolchain{runs: map[string]string{"TestTouch": "exit 0", "TestCheck": "exit 0"}}
+	pkgs := []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch", "TestCheck"}}}
+
+	prof, err := BuildPerTestProfileForPackages(tc, "example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 1)
+
+	assert.Nil(t, prof)
+	assert.ErrorIs(t, err, fs.ErrNotExist, "the profile's own error stays inspectable")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TestTouch")
+	assert.Contains(t, err.Error(), "TestCheck")
+}
+
+func TestBuildPerTestProfile_FailingTestWithValidProfileIsCovered(t *testing.T) {
+	tc := scriptedToolchain{runs: map[string]string{
+		"TestTouch": writeValidProfile,
+		"TestCheck": writeValidProfile + "; exit 1",
+	}}
+	pkgs := []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch", "TestCheck"}}}
+
+	prof, err := BuildPerTestProfileForPackages(tc, "example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"TestCheck", "TestTouch"}, prof.CoveringTestsRelative("rec/rec.go", 4))
 }
