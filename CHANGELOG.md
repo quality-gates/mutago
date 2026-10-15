@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- `--no-exec` writes the mutated files again (one per mutant in the temp dir, kept with `--do-not-remove-tmp-folder`). It no longer runs quality gates, writes reports, or updates the baseline. Before, it wrote no mutants, could exit 4 from a gate on an empty report, and `--update-baseline` wiped the baseline file (#312).
 - `--git-diff-lines` now finds changed lines when `go.mod` is in a subdirectory of the repository. Before, it found no mutants there, so a changed-code gate with `--ignore-msi-with-no-mutations` passed without testing anything. `--logger-gitlab` paths now include the module's directory (for example `svc/calc.go`), and `--logger-github` paths no longer start with `../` when the checkout path goes through a symlink. Mutant IDs and baselines are unchanged (#311).
 
 ## [v2.10.28] — 2026-10-12

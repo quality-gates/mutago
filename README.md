@@ -114,6 +114,7 @@ Beyond finding escaped mutants, mutago can enforce quality gates in CI — faili
 | Quiet mode — suppress killed/skip noise | `--quiet` |
 | Suppress diff output | `--no-diffs` |
 | Dry-run mode — count mutations without running tests | `--dry-run` |
+| Generate-only mode — write mutant sources without running tests, reports, baseline update, or gates | `--no-exec` |
 | Baseline pre-flight check — fail fast if tests already broken | default (was `--noop`) |
 | Fail on any escape without a score threshold | `--fail-on-escaped` |
 | Run a single mutant by stable ID | `--run-mutant-id` |

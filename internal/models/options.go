@@ -35,7 +35,7 @@ type Options struct {
 
 	Exec struct {
 		Exec               string  `long:"exec" description:"Execute this command for every mutation (by default the built-in exec command is used)"`
-		NoExec             bool    `long:"no-exec" description:"Skip the built-in exec command and just generate the mutations"`
+		NoExec             bool    `long:"no-exec" description:"Skip the built-in exec command and just generate the mutations; skips the summary, reports, baseline update, and quality gates"`
 		Timeout            uint    `long:"exec-timeout" description:"Sets a timeout for the command execution (in seconds)" default:"10"`
 		RunMutantID        string  `long:"run-mutant-id" description:"Run only the mutant with this stable ID. Copy the id field from mutago-agentic.json to target a specific survivor. Other mutants are not classified or counted. --dry-run counts only this mutant. Quality gates and the summary line are suppressed in this mode."`
 		Coverage           bool    `long:"coverage" description:"Run go test -coverprofile before mutating to compute covered-code MSI and mark uncovered mutants"`
