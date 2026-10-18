@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- On Windows, multi-package targets (such as `./...`) now group target files by their directory and match `exclude_dirs` using slash-normalized paths. Before, `path.Dir` collapsed all files into one package tested only by the first package's tests, and `exclude_dirs` never matched backslash paths (#319).
+
 ## [v2.10.30] — 2026-10-16
 
 ### Fixed
