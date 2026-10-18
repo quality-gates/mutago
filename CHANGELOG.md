@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.31] — 2026-10-18
+
 ### Fixed
 - On Windows, multi-package targets (such as `./...`) now group target files by their directory and match `exclude_dirs` using slash-normalized paths. Before, `path.Dir` collapsed all files into one package tested only by the first package's tests, and `exclude_dirs` never matched backslash paths (#319).
 
@@ -715,7 +717,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.30...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.31...HEAD
+[v2.10.31]: https://github.com/quality-gates/mutago/compare/v2.10.30...v2.10.31
 [v2.10.30]: https://github.com/quality-gates/mutago/compare/v2.10.29...v2.10.30
 [v2.10.29]: https://github.com/quality-gates/mutago/compare/v2.10.28...v2.10.29
 [v2.10.28]: https://github.com/quality-gates/mutago/compare/v2.10.27...v2.10.28
