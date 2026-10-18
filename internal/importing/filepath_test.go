@@ -2,12 +2,38 @@ package importing
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/quality-gates/mutago/v2/internal/models"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func toSlashSlice(paths []string) []string {
+	if paths == nil {
+		return nil
+	}
+	out := make([]string, len(paths))
+	for i, p := range paths {
+		out[i] = filepath.ToSlash(p)
+	}
+	return out
+}
+
+func toSlashPackages(pkgs []Package) []Package {
+	if pkgs == nil {
+		return nil
+	}
+	out := make([]Package, len(pkgs))
+	for i, p := range pkgs {
+		out[i] = Package{
+			Name:  filepath.ToSlash(p.Name),
+			Files: toSlashSlice(p.Files),
+		}
+	}
+	return out
+}
 
 func TestFilesOfArgs(t *testing.T) {
 	for _, test := range []struct {
@@ -37,7 +63,7 @@ func TestFilesOfArgs(t *testing.T) {
 		},
 	} {
 		var opts = &models.Options{}
-		got := FilesOfArgs(test.args, opts)
+		got := toSlashSlice(FilesOfArgs(test.args, opts))
 		assert.Equal(t, test.expect, got, fmt.Sprintf("With args: %#v", test.args))
 	}
 }
@@ -45,7 +71,7 @@ func TestFilesOfArgs(t *testing.T) {
 func TestFilesOfArgsIncludesCgoFiles(t *testing.T) {
 	var opts = &models.Options{}
 
-	got := FilesOfArgs([]string{"./cgofixture"}, opts)
+	got := toSlashSlice(FilesOfArgs([]string{"./cgofixture"}, opts))
 
 	assert.Equal(t, []string{"cgofixture/cgo.go"}, got)
 }
@@ -81,9 +107,23 @@ func TestPackagesWithFilesOfArgs(t *testing.T) {
 				"../importing/filepathfixtures/third.go",
 			}}},
 		},
+		{
+			[]string{"./filepathfixtures/..."},
+			[]Package{
+				{Name: "filepathfixtures", Files: []string{
+					"filepathfixtures/fifth.go",
+					"filepathfixtures/first.go",
+					"filepathfixtures/second.go",
+					"filepathfixtures/third.go",
+				}},
+				{Name: "filepathfixtures/secondfixturespackage", Files: []string{
+					"filepathfixtures/secondfixturespackage/fourth.go",
+				}},
+			},
+		},
 	} {
 		var opts = &models.Options{}
-		got := PackagesWithFilesOfArgs(test.args, opts)
+		got := toSlashPackages(PackagesWithFilesOfArgs(test.args, opts))
 		assert.Equal(t, test.expect, got, fmt.Sprintf("With args: %#v", test.args))
 	}
 }
@@ -108,7 +148,7 @@ func TestFilesWithSkipWithoutTests(t *testing.T) {
 	} {
 		var opts = &models.Options{}
 		opts.Config.SkipFileWithoutTest = true
-		got := FilesOfArgs(test.args, opts)
+		got := toSlashSlice(FilesOfArgs(test.args, opts))
 		assert.Equal(t, test.expect, got, fmt.Sprintf("With args: %#v", test.args))
 	}
 }
@@ -141,7 +181,7 @@ func TestFilesWithSkipWithBuildTagsTests(t *testing.T) {
 	} {
 		var opts = models.NewOptions()
 		opts.Config.SkipFileWithBuildTag = true
-		got := FilesOfArgs(test.args, opts)
+		got := toSlashSlice(FilesOfArgs(test.args, opts))
 		assert.Equal(t, test.expect, got, fmt.Sprintf("With args: %#v", test.args))
 	}
 }
@@ -151,7 +191,7 @@ func TestFilesWithBuildTagsOnlyDoesNotSkipUntestedFiles(t *testing.T) {
 	opts.Config.SkipFileWithoutTest = false
 	opts.Config.SkipFileWithBuildTag = true
 
-	got := FilesOfArgs([]string{"./filepathfixtures"}, opts)
+	got := toSlashSlice(FilesOfArgs([]string{"./filepathfixtures"}, opts))
 	assert.Equal(t, []string{"filepathfixtures/first.go", "filepathfixtures/second.go"}, got)
 }
 
@@ -214,7 +254,14 @@ func TestFilesWithExcludedDirs(t *testing.T) {
 	} {
 		var opts = &models.Options{}
 		opts.Config.ExcludeDirs = test.config
-		got := FilesOfArgs(test.args, opts)
+		got := toSlashSlice(FilesOfArgs(test.args, opts))
 		assert.Equal(t, test.expect, got, fmt.Sprintf("With args: %#v", test.args))
 	}
+}
+
+func TestShouldSkipFileBackslashExcludesDir(t *testing.T) {
+	opts := &models.Options{}
+	opts.Config.ExcludeDirs = []string{"filepathfixtures/secondfixturespackage"}
+	filename := `filepathfixtures\secondfixturespackage\fourth.go`
+	assert.True(t, shouldSkipFile(filename, opts), "expected backslash-separated filename to be excluded by slash-written exclude_dirs")
 }

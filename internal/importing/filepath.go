@@ -14,7 +14,6 @@ import (
 	"go/build"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -45,7 +44,7 @@ func packagesWithFilesOfArgs(args []string, opts *models.Options) map[string]map
 			continue
 		}
 		fileLookup[filename] = struct{}{}
-		pkgName := path.Dir(filename)
+		pkgName := filepath.Dir(filename)
 		pkg, ok := pkgs[pkgName]
 		if !ok {
 			pkg = make(map[string]struct{})
@@ -85,13 +84,19 @@ func resolveFileList(args []string) []string {
 	return filenames
 }
 
+// toSlash converts path separators in p to slashes across all platforms.
+func toSlash(p string) string {
+	return strings.ReplaceAll(filepath.ToSlash(p), `\`, `/`)
+}
+
 // shouldSkipFile reports whether filename should be excluded from mutation.
 func shouldSkipFile(filename string, opts *models.Options) bool {
 	if strings.HasSuffix(filename, testFileSuffix) {
 		return true
 	}
+	slashFilename := toSlash(filename)
 	for _, exDir := range opts.Config.ExcludeDirs {
-		if strings.HasPrefix(filename, exDir) {
+		if strings.HasPrefix(slashFilename, toSlash(exDir)) {
 			return true
 		}
 	}
