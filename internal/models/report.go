@@ -67,11 +67,40 @@ type Mutant struct {
 
 // Mutator describes what was mutated.
 type Mutator struct {
-	MutatorName        string `json:"mutatorName"`
-	OriginalSourceCode string `json:"originalSourceCode,omitempty"`
-	MutatedSourceCode  string `json:"mutatedSourceCode,omitempty"`
-	OriginalFilePath   string `json:"originalFilePath"`
-	OriginalStartLine  int64  `json:"originalStartLine"`
+	MutatorName        string            `json:"mutatorName"`
+	OriginalSourceCode string            `json:"originalSourceCode,omitempty"`
+	MutatedSourceCode  string            `json:"mutatedSourceCode,omitempty"`
+	OriginalFilePath   string            `json:"originalFilePath"`
+	OriginalStartLine  int64             `json:"originalStartLine"`
+	Location           *MutationLocation `json:"location,omitempty"`
+}
+
+// Coordinate pairs a filename with its one-based line.
+type Coordinate struct {
+	Filename string `json:"filename"`
+	Line     int64  `json:"line"`
+}
+
+// MutationLocation keeps physical source and directive-adjusted coverage positions.
+type MutationLocation struct {
+	Physical Coordinate `json:"physical"`
+	Coverage Coordinate `json:"coverage"`
+}
+
+// SourceLocation returns the physical position. Old reports have no paired location.
+func (m Mutator) SourceLocation() Coordinate {
+	if m.Location != nil {
+		return m.Location.Physical
+	}
+	return Coordinate{Filename: m.OriginalFilePath, Line: m.OriginalStartLine}
+}
+
+// CoverageLocation returns the directive-adjusted position.
+func (m Mutator) CoverageLocation() Coordinate {
+	if m.Location != nil {
+		return m.Location.Coverage
+	}
+	return Coordinate{Filename: m.OriginalFilePath, Line: m.OriginalStartLine}
 }
 
 // Calculate computes derived metrics and per-mutator breakdowns.

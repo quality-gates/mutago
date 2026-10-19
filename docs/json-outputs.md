@@ -15,6 +15,28 @@ stable ID used by `--baseline` and `--run-mutant-id`.
 The legacy `mutator.originalSourceCode` and `mutator.mutatedSourceCode` fields
 remain accepted by the Go model for compatibility, but new reports omit them.
 
+Each mutator also has a paired `location`:
+
+```json
+{
+  "physical": {"filename": "calc.go", "line": 5},
+  "coverage": {"filename": "/project/virtual.go", "line": 200}
+}
+```
+
+Each view keeps its filename and one-based line together. `physical` identifies
+source on disk. `coverage` follows Go's `//line` directives. Git scope, source
+snippets, console links, and GitHub/GitLab locations use the physical view.
+Coverage lookup uses the coverage view, with the existing shifted-profile
+fallbacks. Without directives, both views identify the same statement.
+
+The old fields keep their meaning: `originalFilePath` is the physical path and
+`originalStartLine` is the directive-adjusted line. Console and CI annotation
+lines can therefore differ from `originalStartLine`. Do not combine that legacy
+line with the physical path for source navigation. Old reports without
+`location` still load; their physical line cannot be recovered from these fields
+alone. Mutant IDs and baseline entries do not change.
+
 ## `--logger-summary-json`
 
 Writes `mutago-summary.json`. Useful for CI badges, dashboards, and downstream scripts.
@@ -86,7 +108,7 @@ Writes `mutago-agentic.json`. A richer payload designed for LLM consumption. Eac
 | `mutants[].id` | string | Stable hash of file + mutator + diff — survives refactors that shift line numbers, and is the same however the file target is spelled on the command line |
 | `mutants[].checksum` | string | 32-character checksum accepted by `--blacklist` |
 | `mutants[].file` | string | Path to the mutated file, relative to the module root |
-| `mutants[].line` | int | Line number of the mutation |
+| `mutants[].line` | int | Physical source line number of the mutation |
 | `mutants[].mutator` | string | Mutator name (e.g. `branch/if`, `statement/return`) |
 | `mutants[].diff` | string | Unified diff of original vs mutated code |
 | `mutants[].context_start_line` | int | 1-based source line number of `context_lines[0]`; use this to anchor the context snippet without guessing offsets |

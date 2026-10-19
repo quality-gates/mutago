@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Keep paired physical and coverage locations for mutations. Git scope, snippets, console links, and CI annotations now use physical lines in files with `//line` directives; legacy report fields and mutant IDs stay unchanged (#304).
+
 ## [v2.10.32] — 2026-10-19
 
 ### Fixed

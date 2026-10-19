@@ -435,6 +435,14 @@ the top-level `sources` map, keyed by file path. Mutants reference that text via
 `mutator.originalFilePath`; new reports omit the legacy per-mutant
 `originalSourceCode` and `mutatedSourceCode` copies.
 
+Each mutator includes `location.physical` and `location.coverage`, each with
+`filename` and one-based `line`. Git scope, snippets, console links, and CI
+annotations use physical coordinates; coverage follows `//line` directives.
+The legacy `originalFilePath` (physical path) and `originalStartLine`
+(directive-adjusted line) stay unchanged, so console and annotation lines can
+differ from `originalStartLine`. IDs are unchanged. See
+[JSON Output Schemas](docs/json-outputs.md) for details.
+
 #### `--logger-summary-json`
 
 Writes `mutago-summary.json` after each run. Useful for badges, dashboards, and downstream scripts.
