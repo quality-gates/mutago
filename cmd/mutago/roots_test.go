@@ -93,6 +93,10 @@ func TestMainGitDiffLinesAdmitsChangedLinesWhenModuleIsBelowRepoRoot(t *testing.
 	require.NotEmpty(t, mutants, "changed lines in svc/calc.go must produce mutants")
 	for _, m := range mutants {
 		assert.GreaterOrEqual(t, m.Mutator.OriginalStartLine, int64(5), "mutant outside the changed lines: %+v", m.Mutator)
+		require.NotNil(t, m.Mutator.Location)
+		assert.Equal(t, models.Coordinate{Filename: m.Mutator.OriginalFilePath, Line: m.Mutator.OriginalStartLine}, m.Mutator.SourceLocation())
+		assert.Equal(t, m.Mutator.OriginalStartLine, m.Mutator.CoverageLocation().Line)
+		assert.Equal(t, "calc.go", filepath.Base(m.Mutator.CoverageLocation().Filename))
 	}
 }
 

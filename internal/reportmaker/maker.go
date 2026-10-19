@@ -270,19 +270,20 @@ func MakeAgenticJSONReport(report models.Report, moduleRoot string) error {
 	sourceLines := make(map[string][]string)
 	testFiles := make(map[string][]string)
 	for _, m := range report.Escaped {
-		relFile := baseline.RelPath(m.Mutator.OriginalFilePath, moduleRoot)
+		location := m.Mutator.SourceLocation()
+		relFile := baseline.RelPath(location.Filename, moduleRoot)
 		const contextRadius = 3
-		source := report.Sources[m.Mutator.OriginalFilePath]
+		source := report.Sources[location.Filename]
 		if source == "" {
 			source = m.Mutator.OriginalSourceCode
 		}
-		lines, ok := sourceLines[m.Mutator.OriginalFilePath]
+		lines, ok := sourceLines[location.Filename]
 		if !ok {
 			lines = strings.Split(source, "\n")
-			sourceLines[m.Mutator.OriginalFilePath] = lines
+			sourceLines[location.Filename] = lines
 		}
-		ctxLines, ctxStart := extractContextFromLines(lines, int(m.Mutator.OriginalStartLine), contextRadius)
-		dir := filepath.Dir(m.Mutator.OriginalFilePath)
+		ctxLines, ctxStart := extractContextFromLines(lines, int(location.Line), contextRadius)
+		dir := filepath.Dir(location.Filename)
 		packageTests, ok := testFiles[dir]
 		if !ok {
 			packageTests = findTestFiles(dir, moduleRoot)
@@ -292,7 +293,7 @@ func MakeAgenticJSONReport(report models.Report, moduleRoot string) error {
 			ID:               m.ID,
 			Checksum:         m.Checksum,
 			File:             relFile,
-			Line:             m.Mutator.OriginalStartLine,
+			Line:             location.Line,
 			Mutator:          m.Mutator.MutatorName,
 			Description:      generateInstanceDescription(m.Mutator.MutatorName, m.Diff),
 			KillHint:         killHints[m.Mutator.MutatorName],
@@ -389,9 +390,10 @@ type gitLabLines struct {
 func MakeGitLabReport(report models.Report, repoPath func(file string) string) error {
 	issues := make([]gitLabIssue, 0, len(report.Escaped))
 	for _, m := range report.Escaped {
-		relFile := repoPath(m.Mutator.OriginalFilePath)
+		location := m.Mutator.SourceLocation()
+		relFile := repoPath(location.Filename)
 		desc := fmt.Sprintf("Escaped mutant (%s) at %s:%d — no test kills this mutation",
-			m.Mutator.MutatorName, relFile, m.Mutator.OriginalStartLine)
+			m.Mutator.MutatorName, relFile, location.Line)
 		issues = append(issues, gitLabIssue{
 			Type:        "issue",
 			Description: desc,
@@ -399,7 +401,7 @@ func MakeGitLabReport(report models.Report, repoPath func(file string) string) e
 			Fingerprint: m.ID,
 			Location: gitLabLocation{
 				Path:  relFile,
-				Lines: gitLabLines{Begin: int(m.Mutator.OriginalStartLine)},
+				Lines: gitLabLines{Begin: int(location.Line)},
 			},
 		})
 	}
