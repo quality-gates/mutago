@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.33] — 2026-10-19
+
 ### Fixed
 - Keep paired physical and coverage locations for mutations. Git scope, snippets, console links, and CI annotations now use physical lines in files with `//line` directives; legacy report fields and mutant IDs stay unchanged (#304).
 
@@ -725,7 +727,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.32...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.33...HEAD
+[v2.10.33]: https://github.com/quality-gates/mutago/compare/v2.10.32...v2.10.33
 [v2.10.32]: https://github.com/quality-gates/mutago/compare/v2.10.31...v2.10.32
 [v2.10.31]: https://github.com/quality-gates/mutago/compare/v2.10.30...v2.10.31
 [v2.10.30]: https://github.com/quality-gates/mutago/compare/v2.10.29...v2.10.30
