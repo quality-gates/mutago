@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.32] — 2026-10-19
+
 ### Fixed
 - `--coverage` now runs mutations in `switch`, type-switch, and `select` case conditions when the enclosing statement header is covered. Go coverage profiles do not emit separate ranges for clause expressions, so these mutations were previously reported as `NOT COVERED` (#297).
 
@@ -720,7 +722,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.31...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.32...HEAD
+[v2.10.32]: https://github.com/quality-gates/mutago/compare/v2.10.31...v2.10.32
 [v2.10.31]: https://github.com/quality-gates/mutago/compare/v2.10.30...v2.10.31
 [v2.10.30]: https://github.com/quality-gates/mutago/compare/v2.10.29...v2.10.30
 [v2.10.29]: https://github.com/quality-gates/mutago/compare/v2.10.28...v2.10.29
