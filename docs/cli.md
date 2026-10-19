@@ -56,6 +56,12 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | `--per-test` | Build a per-test coverage map and run only the tests that cover each mutation. Best for packages with slow tests. Pairs well with `--coverage`. With `--test-recursive`, the map also covers subpackage tests. If any test's coverage profile is missing or unreadable, mutago runs the full suite instead. |
 | `--test-flags` | Extra flags passed to every `go test` call (e.g. `--test-flags=-short`). Use the `=` form for values starting with a dash. Adaptive timeout preserves a positive `-count=N`, adds `-count=1` when absent, and rejects `-count=0`. Ignored when `--exec` is set. |
 
+### Clause condition coverage
+
+Go's statement coverage profiles do not record separate coverage counters for expression conditions in `switch`, type switch, or `select` case clauses (`*ast.CaseClause.List` or `*ast.CommClause.Comm`). A condition evaluated solely as false would therefore appear as uncovered in raw profiles. Under `--coverage`, mutations in clause conditions are treated as covered if their enclosing `switch`, type switch, or `select` statement header is covered. Clause bodies continue to use their own line coverage (an unselected clause body remains `NOT COVERED`).
+
+*Limitation:* A header hit indicates that the switch statement ran, but cannot prove that an earlier clause did not always match first and shadow subsequent clauses. If an earlier clause always matches, mutants in subsequent conditions will be tested and reported as `ESCAPED` (a visible diagnostic) rather than `NOT COVERED`.
+
 ## Vet
 
 Every built-in `go test` run (baseline pre-flight, coverage, and mutant runs) passes `-vet=off` by default. A mutant is not meant to be lint-clean, and a `go vet` diagnostic on mutated code would fail the run and be miscounted as KILLED. The baseline and coverage runs use the same setting so they judge tests the same way the mutant runs do. Pass your own `-vet` via `--test-flags` to re-enable it (e.g. `--test-flags=-vet=all`); your flag wins in every run and no duplicate is added.

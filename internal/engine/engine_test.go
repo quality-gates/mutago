@@ -1038,3 +1038,230 @@ func TestStableExecWrapperKeepsConcurrentBinariesApart(t *testing.T) {
 		t.Fatal("reused files ran the wrong payload")
 	}
 }
+
+func reportStatusMap(rep *models.Report) map[string]string {
+	m := make(map[string]string)
+	for _, mut := range rep.Killed {
+		m[mut.ID] = "KILLED"
+	}
+	for _, mut := range rep.Escaped {
+		m[mut.ID] = "ESCAPED"
+	}
+	for _, mut := range rep.NotCovered {
+		m[mut.ID] = "NOT COVERED"
+	}
+	for _, mut := range rep.Errored {
+		m[mut.ID] = "ERRORED"
+	}
+	return m
+}
+
+func allReportMutants(rep *models.Report) []models.Mutant {
+	var muts []models.Mutant
+	muts = append(muts, rep.Killed...)
+	muts = append(muts, rep.Escaped...)
+	muts = append(muts, rep.NotCovered...)
+	return muts
+}
+
+func checkCaseMutantCoverage(t *testing.T, mut models.Mutant, covStatuses, noCovStatuses map[string]string) (int, int, int) {
+	t.Helper()
+	covStatus := covStatuses[mut.ID]
+	noCovStatus := noCovStatuses[mut.ID]
+	line := mut.Mutator.OriginalStartLine
+	switch line {
+	case 5, 7:
+		if covStatus == "NOT COVERED" {
+			t.Errorf("line %d mutant %s was unexpectedly marked NOT COVERED with --coverage", line, mut.ID)
+		} else if noCovStatus != "" && covStatus != noCovStatus {
+			t.Errorf("line %d mutant %s status %s under --coverage does not match status %s without coverage",
+				line, mut.ID, covStatus, noCovStatus)
+		}
+		if line == 5 {
+			return 1, 0, 0
+		}
+		return 0, 0, 1
+	case 6:
+		if covStatus != "NOT COVERED" {
+			t.Errorf("line 6 (unexecuted clause body) mutant %s has status %s, want NOT COVERED", mut.ID, covStatus)
+		}
+		return 0, 1, 0
+	}
+	return 0, 0, 0
+}
+
+// TestEngineCoverageRunsCaseExpressionMutations verifies that condition mutations
+// in case clauses are treated as covered when the enclosing switch statement is
+// covered, while unexecuted clause bodies remain NOT COVERED (#297).
+func TestEngineCoverageRunsCaseExpressionMutations(t *testing.T) {
+	_ = os.MkdirAll("./testdata", 0755)
+	tempDir, err := os.MkdirTemp("./testdata", "caseexprcov-*")
+	if err != nil {
+		t.Fatalf("failed to create temp package: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	src := `package caseexprcov
+
+func Label(code int) string {
+	switch {
+	case code >= 600:
+		return "invalid"
+	case code >= 500:
+		return "server"
+	}
+	return "ok"
+}
+`
+	testSrc := `package caseexprcov
+
+import "testing"
+
+func TestLabel(t *testing.T) {
+	for code, want := range map[int]string{500: "server", 599: "server", 499: "ok"} {
+		if got := Label(code); got != want {
+			t.Fatalf("Label(%d) = %q, want %q", code, got, want)
+		}
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(tempDir, "pkg.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("failed to write pkg.go: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "pkg_test.go"), []byte(testSrc), 0644); err != nil {
+		t.Fatalf("failed to write pkg_test.go: %v", err)
+	}
+
+	optsNoCov := &models.Options{}
+	optsNoCov.Exec.Timeout = 10
+	optsNoCov.Remaining.Targets = []string{"./" + tempDir}
+
+	var stdoutNoCov, stderrNoCov bytes.Buffer
+	engineNoCov := &Engine{Stdout: &stdoutNoCov, Stderr: &stderrNoCov}
+	resNoCov, err := engineNoCov.Run(context.Background(), optsNoCov, nil)
+	if err != nil || resNoCov.Report == nil {
+		t.Fatalf("run without coverage failed (err=%v, rep=%v)", err, resNoCov.Report)
+	}
+	noCovStatuses := reportStatusMap(resNoCov.Report)
+
+	optsCov := &models.Options{}
+	optsCov.Exec.Coverage = true
+	optsCov.Exec.Timeout = 10
+	optsCov.Remaining.Targets = []string{"./" + tempDir}
+
+	var stdoutCov, stderrCov bytes.Buffer
+	engineCov := &Engine{Stdout: &stdoutCov, Stderr: &stderrCov}
+	resCov, err := engineCov.Run(context.Background(), optsCov, nil)
+	if err != nil || resCov.Report == nil {
+		t.Fatalf("run with coverage failed (err=%v, rep=%v)", err, resCov.Report)
+	}
+	covStatuses := reportStatusMap(resCov.Report)
+
+	var line5Count, line6Count, line7Count int
+	for _, mut := range allReportMutants(resCov.Report) {
+		l5, l6, l7 := checkCaseMutantCoverage(t, mut, covStatuses, noCovStatuses)
+		line5Count += l5
+		line6Count += l6
+		line7Count += l7
+	}
+
+	if line5Count == 0 || line6Count == 0 || line7Count == 0 {
+		t.Errorf("expected mutants on lines 5, 6, and 7; got line5=%d line6=%d line7=%d", line5Count, line6Count, line7Count)
+	}
+}
+
+func recordReturnPos(positions map[string]token.Pos, line int, pos token.Pos) {
+	switch line {
+	case 6:
+		positions["expr_body"] = pos
+	case 11:
+		positions["type_body"] = pos
+	case 16:
+		positions["recv_body"] = pos
+	case 18:
+		positions["send_body"] = pos
+	case 21:
+		positions["func_body"] = pos
+	}
+}
+
+func collectAnchorPositions(file *ast.File, fset *token.FileSet) map[string]token.Pos {
+	positions := make(map[string]token.Pos)
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch n := node.(type) {
+		case *ast.BinaryExpr:
+			positions["expr_cond"] = n.OpPos
+		case *ast.Ident:
+			if n.Name == "int" && fset.Position(n.Pos()).Line == 10 {
+				positions["type_cond"] = n.Pos()
+			}
+		case *ast.UnaryExpr:
+			positions["recv_cond"] = n.OpPos
+		case *ast.SendStmt:
+			positions["send_cond"] = n.Arrow
+		case *ast.ReturnStmt:
+			recordReturnPos(positions, fset.Position(n.Pos()).Line, n.Pos())
+		}
+		return true
+	})
+	return positions
+}
+
+func TestCoverageAnchorForMutationOnlyMatchesClauseExpressions(t *testing.T) {
+	src := `package sample
+
+func Example(x any, ch chan int, out chan int) int {
+	switch {
+	case x != nil:
+		return 1
+	}
+
+	switch v := x.(type) {
+	case int:
+		return v
+	}
+
+	select {
+	case <-ch:
+		return 2
+	case out <- 3:
+		return 3
+	}
+
+	return 0
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "sample.go", src, 0)
+	if err != nil {
+		t.Fatalf("failed to parse fixture: %v", err)
+	}
+
+	positions := collectAnchorPositions(file, fset)
+
+	tests := []struct {
+		name     string
+		posKey   string
+		wantLine int
+	}{
+		{"expr switch condition", "expr_cond", 4},
+		{"expr switch body", "expr_body", 0},
+		{"type switch condition", "type_cond", 9},
+		{"type switch body", "type_body", 0},
+		{"select recv comm", "recv_cond", 14},
+		{"select recv body", "recv_body", 0},
+		{"select send comm", "send_cond", 14},
+		{"select send body", "send_body", 0},
+		{"func body return", "func_body", 0},
+	}
+	for _, tc := range tests {
+		anchor := coverageAnchorForMutation(file, positions[tc.posKey])
+		if tc.wantLine == 0 {
+			if anchor.IsValid() {
+				t.Errorf("%s: want no anchor, got line %d", tc.name, fset.Position(anchor).Line)
+			}
+		} else if fset.Position(anchor).Line != tc.wantLine {
+			t.Errorf("%s: got anchor line %d, want line %d", tc.name, fset.Position(anchor).Line, tc.wantLine)
+		}
+	}
+}

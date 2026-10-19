@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- `--coverage` now runs mutations in `switch`, type-switch, and `select` case conditions when the enclosing statement header is covered. Go coverage profiles do not emit separate ranges for clause expressions, so these mutations were previously reported as `NOT COVERED` (#297).
+
 ## [v2.10.31] — 2026-10-18
 
 ### Fixed

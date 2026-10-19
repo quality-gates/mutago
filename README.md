@@ -326,6 +326,8 @@ Add `--coverage` to generate a coverage profile first. Mutants on uncovered line
 mutago --coverage --min-msi 50 --min-covered-msi 75 ./...
 ```
 
+Because Go coverage profiles do not record separate coverage counters for `switch` or `select` case condition expressions, condition mutations are treated as covered whenever their enclosing statement header is covered. Clause bodies continue to use their own line coverage. Note that a covered switch header indicates the switch ran, but cannot prove an earlier clause did not shadow later ones (shadowed conditions will test and report as escaped mutants rather than being silently marked not-covered).
+
 The final summary includes a per-mutator breakdown so you can see which mutation types your tests are weakest against.
 
 By default mutago runs the test suite once without any mutations first (the baseline pre-flight check). If the clean suite already fails — the package does not compile, or a test is red — mutago exits immediately with a tool error (exit 3) rather than producing meaningless results. The `--noop` flag is kept for backward compatibility but has no effect; the check is always on for normal runs (it is skipped under `--coverage`, `--no-exec`, `--dry-run`, or a custom `--exec`).
