@@ -453,6 +453,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clause-condition-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clause condition coverage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -732,6 +749,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clause-condition-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clause condition coverage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -974,6 +1008,9 @@
 </tr>
 </tbody>
 </table>
+<h3 id="clause-condition-coverage">Clause condition coverage<a class="headerlink" href="#clause-condition-coverage" title="Permanent link">&para;</a></h3>
+<p>Go's statement coverage profiles do not record separate coverage counters for expression conditions in <code>switch</code>, type switch, or <code>select</code> case clauses (<code>*ast.CaseClause.List</code> or <code>*ast.CommClause.Comm</code>). A condition evaluated solely as false would therefore appear as uncovered in raw profiles. Under <code>--coverage</code>, mutations in clause conditions are treated as covered if their enclosing <code>switch</code>, type switch, or <code>select</code> statement header is covered. Clause bodies continue to use their own line coverage (an unselected clause body remains <code>NOT COVERED</code>).</p>
+<p><em>Limitation:</em> A header hit indicates that the switch statement ran, but cannot prove that an earlier clause did not always match first and shadow subsequent clauses. If an earlier clause always matches, mutants in subsequent conditions will be tested and reported as <code>ESCAPED</code> (a visible diagnostic) rather than <code>NOT COVERED</code>.</p>
 <h2 id="vet">Vet<a class="headerlink" href="#vet" title="Permanent link">&para;</a></h2>
 <p>Every built-in <code>go test</code> run (baseline pre-flight, coverage, and mutant runs) passes <code>-vet=off</code> by default. A mutant is not meant to be lint-clean, and a <code>go vet</code> diagnostic on mutated code would fail the run and be miscounted as KILLED. The baseline and coverage runs use the same setting so they judge tests the same way the mutant runs do. Pass your own <code>-vet</code> via <code>--test-flags</code> to re-enable it (e.g. <code>--test-flags=-vet=all</code>); your flag wins in every run and no duplicate is added.</p>
 <p>With <code>--test-recursive</code>, every run targets <code>&lt;package&gt;/...</code>, so the baseline and coverage runs cover the same tests as the mutant runs. The coverage run also passes <code>-coverpkg=&lt;package&gt;</code>, so tests in subpackages count towards the package's coverage.</p>
