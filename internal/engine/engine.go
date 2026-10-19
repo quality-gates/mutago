@@ -125,29 +125,29 @@ type execJob struct {
 	pkg            *types.Package
 	test           goTestTarget
 	mutant         models.Mutant
-	coverProfile   *coverage.Profile
+	covScope       jobCoverageScope
 	execs          []string
 	perTestProf    *coverage.PerTestProfile
 	extraTestFlags []string
 	tmpDir         string
 	out            jobOutput
 	source         mutationSource
-	// packageLevelDecl is true when the mutation sits inside a package-level
-	// const/var/type/import declaration. Such declarations are not executable
-	// and never appear in `go test` coverage profiles, so the --coverage
-	// filter must not skip them as NOT COVERED (see #83).
+}
+
+type jobCoverageScope struct {
+	profile          *coverage.Profile
 	packageLevelDecl bool
-	// directiveShifted is true when a //line directive altered the position
-	// mutago reports for this mutation (filename and/or line differ from the
-	// raw source position). Go's coverage profile records such positions under
-	// the directive's filename (or "." for a filename-less directive), not the
-	// physical file, so the coverage lookup must consult the directive
-	// filename too (see #84).
 	directiveShifted bool
-	// adjRelFile is the directive-adjusted filename relative to the module
-	// root (the filename Go's coverage profile uses for this position). It is
-	// only meaningful when directiveShifted is true.
-	adjRelFile string
+	adjRelFile       string
+	anchor           coverageAnchor
+}
+
+type coverageAnchor struct {
+	file             string
+	relFile          string
+	rawLine          int
+	line             int
+	directiveShifted bool
 }
 
 type mutationSource struct {
@@ -780,6 +780,29 @@ func noteRejectedMutation(r *mutationRun, c scopeCandidate, reason skipReason) {
 	}
 }
 
+func buildJobCoverageScope(r *mutationRun, fc *fileContext, mutation mutago.PositionedMutation, adjPos, rawPos token.Position) jobCoverageScope {
+	anchorPos := coverageAnchorForMutation(fc.src, mutation.Position)
+	var anchor coverageAnchor
+	if anchorPos.IsValid() {
+		anchorAdj := fc.fset.PositionFor(anchorPos, true)
+		anchorRaw := fc.fset.PositionFor(anchorPos, false)
+		anchor = coverageAnchor{
+			file:             fc.absFile,
+			relFile:          r.roots.ModulePath(filepath.Join(r.roots.module, anchorAdj.Filename)),
+			rawLine:          anchorRaw.Line,
+			line:             anchorAdj.Line,
+			directiveShifted: anchorAdj.Filename != anchorRaw.Filename || anchorAdj.Line != anchorRaw.Line,
+		}
+	}
+	return jobCoverageScope{
+		profile:          fc.coverProfile,
+		packageLevelDecl: isPackageLevelDecl(fc.src, mutation.Position),
+		directiveShifted: adjPos.Filename != rawPos.Filename || adjPos.Line != rawPos.Line,
+		adjRelFile:       r.roots.ModulePath(filepath.Join(r.roots.module, adjPos.Filename)),
+		anchor:           anchor,
+	}
+}
+
 func queueMutation(r *mutationRun, jobs chan<- execJob, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalSourceCode []byte, prepared preparedMutation) {
 	adjPos := fc.fset.PositionFor(mutation.Position, true)
 	rawPos := fc.fset.PositionFor(mutation.Position, false)
@@ -789,7 +812,7 @@ func queueMutation(r *mutationRun, jobs chan<- execJob, fc *fileContext, mutatio
 		pkg:            fc.pkg,
 		test:           goTestTarget{pkg: fc.testPkg, dir: r.exec.goDir},
 		mutant:         prepared.mutant,
-		coverProfile:   fc.coverProfile,
+		covScope:       buildJobCoverageScope(r, fc, mutation, adjPos, rawPos),
 		execs:          r.exec.execs,
 		perTestProf:    fc.perTestProf,
 		extraTestFlags: r.exec.extraTestFlags,
@@ -804,9 +827,6 @@ func queueMutation(r *mutationRun, jobs chan<- execJob, fc *fileContext, mutatio
 			original:     originalSourceCode,
 			edit:         prepared.edit,
 		},
-		packageLevelDecl: isPackageLevelDecl(fc.src, mutation.Position),
-		directiveShifted: adjPos.Filename != rawPos.Filename || adjPos.Line != rawPos.Line,
-		adjRelFile:       r.roots.ModulePath(filepath.Join(r.roots.module, adjPos.Filename)),
 	}
 	select {
 	case <-r.ctx.Done():
@@ -1529,6 +1549,88 @@ func stableMutationKey(original, mutated []byte) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+func isEnclosingHeader(node ast.Node) bool {
+	switch node.(type) {
+	case *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt:
+		return true
+	default:
+		return false
+	}
+}
+
+func positionInExprs(exprs []ast.Expr, pos token.Pos) bool {
+	for _, expr := range exprs {
+		if pos >= expr.Pos() && pos <= expr.End() {
+			return true
+		}
+	}
+	return false
+}
+
+func matchClauseCondition(node ast.Node, position token.Pos) bool {
+	switch n := node.(type) {
+	case *ast.CaseClause:
+		return positionInExprs(n.List, position)
+	case *ast.CommClause:
+		return n.Comm != nil && position >= n.Comm.Pos() && position <= n.Comm.End()
+	default:
+		return false
+	}
+}
+
+func nodeSpansPosition(node ast.Node, pos token.Pos) bool {
+	return node != nil && pos >= node.Pos() && pos <= node.End()
+}
+
+// coverageAnchorForMutation returns the enclosing switch/type-switch/select
+// header for a mutation inside a case or communication clause. Go coverage
+// profiles record execution for the header, but not a separate range for each
+// clause expression.
+func coverageAnchorForMutation(root ast.Node, position token.Pos) token.Pos {
+	if root == nil || !position.IsValid() {
+		return token.NoPos
+	}
+
+	var enclosing []token.Pos
+	var anchor token.Pos
+
+	ast.Inspect(root, func(node ast.Node) bool {
+		if anchor.IsValid() || !nodeSpansPosition(node, position) {
+			return false
+		}
+		if isEnclosingHeader(node) {
+			enclosing = append(enclosing, node.Pos())
+			return true
+		}
+		if matchClauseCondition(node, position) && len(enclosing) > 0 {
+			anchor = enclosing[len(enclosing)-1]
+			return false
+		}
+		return true
+	})
+	return anchor
+}
+
+func shiftedLineCovered(profile *coverage.Profile, shifted bool, relFile string, line int) bool {
+	if !shifted || relFile == "" {
+		return false
+	}
+	if profile.IsCoveredRelative(relFile, line) {
+		return true
+	}
+	return profile.IsLineCoveredAnywhere(line)
+}
+
+func anchorCovered(profile *coverage.Profile, a coverageAnchor) bool {
+	if a.rawLine > 0 && profile.IsCovered(a.file, a.rawLine) {
+		return true
+	}
+	if a.directiveShifted {
+		return shiftedLineCovered(profile, true, a.relFile, a.line)
+	}
+	return false
+}
+
 // mutationCovered reports whether the mutation at startLine is reached by any
 // test, accounting for //line directives. The primary lookup uses the physical
 // file path (the common case, where the adjusted line equals the raw line). For
@@ -1539,16 +1641,14 @@ func stableMutationKey(original, mutated []byte) string {
 // change and is filed under a third filename; it is gated on directiveShifted
 // so it never applies to ordinary positions (see #84).
 func mutationCovered(job execJob, startLine int) bool {
-	if job.coverProfile.IsCovered(job.source.absFile, startLine) {
+	cov := job.covScope
+	if cov.profile.IsCovered(job.source.absFile, startLine) {
 		return true
 	}
-	if !job.directiveShifted || job.adjRelFile == "" {
-		return false
-	}
-	if job.coverProfile.IsCoveredRelative(job.adjRelFile, startLine) {
+	if anchorCovered(cov.profile, cov.anchor) {
 		return true
 	}
-	return job.coverProfile.IsLineCoveredAnywhere(startLine)
+	return shiftedLineCovered(cov.profile, cov.directiveShifted, cov.adjRelFile, startLine)
 }
 
 // isPackageLevelDecl reports whether pos lies within a package-level
@@ -1578,7 +1678,7 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex) {
 	mutant := job.mutant
 
 	startLine := mutant.Mutator.OriginalStartLine
-	notCovered := !job.packageLevelDecl && job.coverProfile != nil && startLine > 0 && !mutationCovered(job, int(startLine))
+	notCovered := !job.covScope.packageLevelDecl && job.covScope.profile != nil && startLine > 0 && !mutationCovered(job, int(startLine))
 	if notCovered {
 		mu.Lock()
 		defer mu.Unlock()
