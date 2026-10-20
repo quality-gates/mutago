@@ -45,6 +45,34 @@ func TestCheckChangeExcludesUnchangedSurvivors(t *testing.T) {
 	}
 }
 
+// Under GOMAXPROCS=1 with a cold cache, internal/coverage's baseline can
+// exceed 30 seconds (#239). The gate must wait for slow baselines.
+func TestCheckChangeAllowsSlowBaseline(t *testing.T) {
+	t.Parallel()
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(t.TempDir(), "mutago")
+	runCommand(t, root, "go", "build", "-o", binary, "./cmd/mutago")
+	workspace, _ := mutationWorkspace(t)
+	writeFixture(t, workspace, "internal/coverage/probe_test.go", `package probe
+
+import (
+	"testing"
+	"time"
+)
+
+func TestSlowBaseline(t *testing.T) { time.Sleep(31 * time.Second) }
+`)
+	runCommand(t, workspace, "git", "add", ".")
+	runCommand(t, workspace, "git", "commit", "-qm", "slow baseline")
+	output, err := runGate(root, workspace, binary, "HEAD")
+	if err != nil {
+		t.Fatalf("gate failed on a slow baseline: %v\n%s", err, output)
+	}
+}
+
 func runGate(root, workspace, binary, base string) ([]byte, error) {
 	cmd := exec.Command(filepath.Join(root, "scripts", "check-change.sh"), base)
 	cmd.Dir = workspace
