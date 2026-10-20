@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.34] — 2026-10-20
+
 ### Fixed
 - The changed-code mutation gate (`scripts/check-change.sh`, used by pre-push and CI) now allows 120 seconds per test run instead of 30. Under `GOMAXPROCS=1` with a cold cache, the `internal/coverage` baseline could exceed 30 seconds and stop the gate with a tool error (#239).
 
@@ -730,7 +732,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.33...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.34...HEAD
+[v2.10.34]: https://github.com/quality-gates/mutago/compare/v2.10.33...v2.10.34
 [v2.10.33]: https://github.com/quality-gates/mutago/compare/v2.10.32...v2.10.33
 [v2.10.32]: https://github.com/quality-gates/mutago/compare/v2.10.31...v2.10.32
 [v2.10.31]: https://github.com/quality-gates/mutago/compare/v2.10.30...v2.10.31
