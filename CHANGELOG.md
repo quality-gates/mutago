@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.35] — 2026-10-20
+
 ### Fixed
 - `--coverage` now runs `select/case-remove`, `select/default-remove`, and the right-operand `expression/remove` in a case condition when the enclosing `switch` or `select` is covered. The coverage anchor is now read from the unmutated file, so it no longer misses these mutants once the mutation is applied. Go 1.27 coverage profiles made them show as `NOT COVERED` (#326).
 
@@ -735,7 +737,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.34...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.35...HEAD
+[v2.10.35]: https://github.com/quality-gates/mutago/compare/v2.10.34...v2.10.35
 [v2.10.34]: https://github.com/quality-gates/mutago/compare/v2.10.33...v2.10.34
 [v2.10.33]: https://github.com/quality-gates/mutago/compare/v2.10.32...v2.10.33
 [v2.10.32]: https://github.com/quality-gates/mutago/compare/v2.10.31...v2.10.32
