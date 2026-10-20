@@ -326,7 +326,7 @@ Add `--coverage` to generate a coverage profile first. Mutants on uncovered line
 mutago --coverage --min-msi 50 --min-covered-msi 75 ./...
 ```
 
-Because Go coverage profiles do not record separate coverage counters for `switch` or `select` case condition expressions, condition mutations are treated as covered whenever their enclosing statement header is covered. Clause bodies continue to use their own line coverage. Note that a covered switch header indicates the switch ran, but cannot prove an earlier clause did not shadow later ones (shadowed conditions will test and report as escaped mutants rather than being silently marked not-covered).
+Because Go coverage profiles do not record separate coverage counters for `switch` or `select` case condition expressions, mutations in a clause head (its `case` or `default` keyword, condition, and colon) are treated as covered whenever their enclosing statement header is covered. Clause bodies continue to use their own line coverage. Note that a covered switch header indicates the switch ran, but cannot prove an earlier clause did not shadow later ones (shadowed conditions will test and report as escaped mutants rather than being silently marked not-covered).
 
 The final summary includes a per-mutator breakdown so you can see which mutation types your tests are weakest against.
 

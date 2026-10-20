@@ -1207,7 +1207,7 @@ func collectAnchorPositions(file *ast.File, fset *token.FileSet) map[string]toke
 	return positions
 }
 
-func TestCoverageAnchorForMutationOnlyMatchesClauseExpressions(t *testing.T) {
+func TestClauseHeadsAnchorOnlyMatchesClauseHeads(t *testing.T) {
 	src := `package sample
 
 func Example(x any, ch chan int, out chan int) int {
@@ -1255,7 +1255,7 @@ func Example(x any, ch chan int, out chan int) int {
 		{"func body return", "func_body", 0},
 	}
 	for _, tc := range tests {
-		anchor := coverageAnchorForMutation(file, positions[tc.posKey])
+		anchor := collectClauseHeads(file).anchor(positions[tc.posKey])
 		if tc.wantLine == 0 {
 			if anchor.IsValid() {
 				t.Errorf("%s: want no anchor, got line %d", tc.name, fset.Position(anchor).Line)

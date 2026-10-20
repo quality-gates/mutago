@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- `--coverage` now runs `select/case-remove`, `select/default-remove`, and the right-operand `expression/remove` in a case condition when the enclosing `switch` or `select` is covered. The coverage anchor is now read from the unmutated file, so it no longer misses these mutants once the mutation is applied. Go 1.27 coverage profiles made them show as `NOT COVERED` (#326).
+
 ## [v2.10.34] — 2026-10-20
 
 ### Fixed

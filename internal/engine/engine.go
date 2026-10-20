@@ -173,7 +173,8 @@ type fileContext struct {
 	originalSource []byte
 	// identities maps mutator name to the stable IDs of its edits in this
 	// file, keyed by mutationEdit.key. See mutantIdentities.
-	identities map[string]map[string]string
+	identities  map[string]map[string]string
+	clauseHeads clauseHeads
 }
 
 // Run executes the mutation testing lifecycle based on options and baseline.
@@ -597,6 +598,7 @@ func processFile(r *mutationRun, file string, testPkg string, coverProfile *cove
 		perTestProf:    perTestProf,
 		filters:        nodeFilters,
 		originalSource: originalSource,
+		clauseHeads:    collectClauseHeads(src),
 	}
 
 	return mutateFile(r, fc)
@@ -784,7 +786,7 @@ func noteRejectedMutation(r *mutationRun, c scopeCandidate, reason skipReason) {
 }
 
 func buildJobCoverageScope(r *mutationRun, fc *fileContext, mutation mutago.PositionedMutation) jobCoverageScope {
-	anchorPos := coverageAnchorForMutation(fc.src, mutation.Position)
+	anchorPos := fc.clauseHeads.anchor(mutation.Position)
 	var anchor coverageAnchor
 	if anchorPos.IsValid() {
 		anchorAdj := fc.fset.PositionFor(anchorPos, true)
@@ -1547,68 +1549,6 @@ func stableMutationKey(original, mutated []byte) string {
 		}
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
-}
-
-func isEnclosingHeader(node ast.Node) bool {
-	switch node.(type) {
-	case *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt:
-		return true
-	default:
-		return false
-	}
-}
-
-func positionInExprs(exprs []ast.Expr, pos token.Pos) bool {
-	for _, expr := range exprs {
-		if pos >= expr.Pos() && pos <= expr.End() {
-			return true
-		}
-	}
-	return false
-}
-
-func matchClauseCondition(node ast.Node, position token.Pos) bool {
-	switch n := node.(type) {
-	case *ast.CaseClause:
-		return positionInExprs(n.List, position)
-	case *ast.CommClause:
-		return n.Comm != nil && position >= n.Comm.Pos() && position <= n.Comm.End()
-	default:
-		return false
-	}
-}
-
-func nodeSpansPosition(node ast.Node, pos token.Pos) bool {
-	return node != nil && pos >= node.Pos() && pos <= node.End()
-}
-
-// coverageAnchorForMutation returns the enclosing switch/type-switch/select
-// header for a mutation inside a case or communication clause. Go coverage
-// profiles record execution for the header, but not a separate range for each
-// clause expression.
-func coverageAnchorForMutation(root ast.Node, position token.Pos) token.Pos {
-	if root == nil || !position.IsValid() {
-		return token.NoPos
-	}
-
-	var enclosing []token.Pos
-	var anchor token.Pos
-
-	ast.Inspect(root, func(node ast.Node) bool {
-		if anchor.IsValid() || !nodeSpansPosition(node, position) {
-			return false
-		}
-		if isEnclosingHeader(node) {
-			enclosing = append(enclosing, node.Pos())
-			return true
-		}
-		if matchClauseCondition(node, position) && len(enclosing) > 0 {
-			anchor = enclosing[len(enclosing)-1]
-			return false
-		}
-		return true
-	})
-	return anchor
 }
 
 func shiftedLineCovered(profile *coverage.Profile, shifted bool, relFile string, line int) bool {
