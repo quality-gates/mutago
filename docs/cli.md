@@ -58,7 +58,7 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 
 ### Clause condition coverage
 
-Go's statement coverage profiles do not record separate coverage counters for expression conditions in `switch`, type switch, or `select` case clauses (`*ast.CaseClause.List` or `*ast.CommClause.Comm`). A condition evaluated solely as false would therefore appear as uncovered in raw profiles. Under `--coverage`, mutations in clause conditions are treated as covered if their enclosing `switch`, type switch, or `select` statement header is covered. Clause bodies continue to use their own line coverage (an unselected clause body remains `NOT COVERED`).
+Go's statement coverage profiles do not record separate coverage counters for expression conditions in `switch`, type switch, or `select` case clauses (`*ast.CaseClause.List` or `*ast.CommClause.Comm`). A condition evaluated solely as false would therefore appear as uncovered in raw profiles. Under `--coverage`, mutations in a clause head (from its `case` or `default` keyword to its colon, which includes `select/case-remove` and `select/default-remove`) are treated as covered if their enclosing `switch`, type switch, or `select` statement header is covered. The clause heads are read before any mutation is applied. Clause bodies continue to use their own line coverage (an unselected clause body remains `NOT COVERED`).
 
 *Limitation:* A header hit indicates that the switch statement ran, but cannot prove that an earlier clause did not always match first and shadow subsequent clauses. If an earlier clause always matches, mutants in subsequent conditions will be tested and reported as `ESCAPED` (a visible diagnostic) rather than `NOT COVERED`.
 
