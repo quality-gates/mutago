@@ -20,11 +20,12 @@ fi
 printf 'json_output: false\n' > "$temporary_directory/config.yml"
 
 # Targets have isolated unit tests. CLI tests recurse; importing and parser
-# depend on package-loading test infrastructure.
+# depend on package-loading test infrastructure. The timeout covers a cold-cache
+# internal/coverage baseline under GOMAXPROCS=1 on a busy host.
 "$binary" \
 	--config "$temporary_directory/config.yml" \
 	--workers "${MUTAGO_WORKERS:-1}" \
-	--exec-timeout 30 \
+	--exec-timeout 120 \
 	--coverage \
 	"$@" \
 	--min-msi 75 \

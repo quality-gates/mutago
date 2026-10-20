@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- The changed-code mutation gate (`scripts/check-change.sh`, used by pre-push and CI) now allows 120 seconds per test run instead of 30. Under `GOMAXPROCS=1` with a cold cache, the `internal/coverage` baseline could exceed 30 seconds and stop the gate with a tool error (#239).
+
 ## [v2.10.33] — 2026-10-19
 
 ### Fixed
