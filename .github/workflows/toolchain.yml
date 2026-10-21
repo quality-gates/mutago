@@ -1,0 +1,27 @@
+name: Latest Go Toolchain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  latest-go:
+    # mutago must read export data from newer toolchains than go.mod pins (#332).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+
+      - name: Run mutago on a stdlib-importing package
+        env:
+          GOTOOLCHAIN: local
+        run: ./scripts/ci/toolchain-compat.sh
