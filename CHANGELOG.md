@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.37] — 2026-10-21
+
 ### Fixed
 - Load target packages under Go 1.27.2 and later. `golang.org/x/tools` is now v0.52.0, which reads export data version 5; v0.49.0 could not, so type-dependent mutants were lost. A new CI job runs mutago on a stdlib-importing package under the latest Go 1.27.x (#332).
 
@@ -745,7 +747,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.36...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.37...HEAD
+[v2.10.37]: https://github.com/quality-gates/mutago/compare/v2.10.36...v2.10.37
 [v2.10.36]: https://github.com/quality-gates/mutago/compare/v2.10.35...v2.10.36
 [v2.10.35]: https://github.com/quality-gates/mutago/compare/v2.10.34...v2.10.35
 [v2.10.34]: https://github.com/quality-gates/mutago/compare/v2.10.33...v2.10.34
