@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.36] — 2026-10-21
+
 ### Fixed
 - Stop with a tool error (exit 3) and package diagnostics when target packages have load or type errors, rather than silently dropping type-dependent mutants (#331).
 
@@ -740,7 +742,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.35...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.36...HEAD
+[v2.10.36]: https://github.com/quality-gates/mutago/compare/v2.10.35...v2.10.36
 [v2.10.35]: https://github.com/quality-gates/mutago/compare/v2.10.34...v2.10.35
 [v2.10.34]: https://github.com/quality-gates/mutago/compare/v2.10.33...v2.10.34
 [v2.10.33]: https://github.com/quality-gates/mutago/compare/v2.10.32...v2.10.33
