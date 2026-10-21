@@ -9,6 +9,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"golang.org/x/tools/go/packages"
@@ -74,6 +75,9 @@ func PreparePackages(files []string, dir string) error {
 	if err != nil {
 		return err
 	}
+	if err := packageLoadErrors(pkgs); err != nil {
+		return err
+	}
 	index := make(map[string]loadedFile)
 	for _, pkg := range pkgs {
 		for _, file := range pkg.Syntax {
@@ -93,6 +97,20 @@ func PreparePackages(files []string, dir string) error {
 	}
 	pkgCacheMu.Unlock()
 	return nil
+}
+
+// packageLoadErrors checks target packages only, not their dependency graph.
+func packageLoadErrors(pkgs []*packages.Package) error {
+	var diagnostics []string
+	for _, pkg := range pkgs {
+		for _, err := range pkg.Errors {
+			diagnostics = append(diagnostics, fmt.Sprintf("%s: %s", pkg.PkgPath, err))
+		}
+	}
+	if len(diagnostics) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%d package load error(s) in target packages; cannot safely generate mutants without complete types: %s", len(diagnostics), strings.Join(diagnostics, "; "))
 }
 
 func packagePatterns(files []string) ([]string, map[string]struct{}, error) {
@@ -205,6 +223,9 @@ func ParseAndTypeCheckFile(file string, collectors []filter.NodeCollector) (*Che
 	}
 
 	if pkg, f := fileInLoadedPkg(entry, fileAbs); f != nil {
+		if err := packageLoadErrors(entry.pkgs); err != nil {
+			return nil, fmt.Errorf("Could not load package of file %q: %v", file, err)
+		}
 		applyCollectors(collectors, f, entry.fset, fileAbs)
 		return &CheckedFile{File: f, Fset: entry.fset, Pkg: pkg.Types, Info: pkg.TypesInfo}, nil
 	}

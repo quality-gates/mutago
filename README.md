@@ -332,6 +332,8 @@ The final summary includes a per-mutator breakdown so you can see which mutation
 
 By default mutago runs the test suite once without any mutations first (the baseline pre-flight check). If the clean suite already fails — the package does not compile, or a test is red — mutago exits immediately with a tool error (exit 3) rather than producing meaningless results. The `--noop` flag is kept for backward compatibility but has no effect; the check is always on for normal runs (it is skipped under `--coverage`, `--no-exec`, `--dry-run`, or a custom `--exec`).
 
+Before generating any mutants, mutago checks target packages for load and type errors. If any are found, it reports the error count and package diagnostics and stops with a tool error (exit 3), even when `go test` builds successfully. This prevents incomplete type information from silently dropping mutants, and also applies to `--dry-run` and `--no-exec`.
+
 If a generated mutant does not compile, it is skipped rather than counted as killed by a test.
 
 You can run mutago from outside the targets' module, such as from a parent directory or from another module. It runs `go` in the targets' module, so the result matches a run from inside it. Targets that span more than one module, or are not in a module, are a tool error (exit 3); run mutago once per module. This check is skipped when a `go.work` workspace is in use, and when a custom `--exec` runs the tests.

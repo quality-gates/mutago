@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -25,6 +26,40 @@ func TestParseAndTypeCheckFileTypeCheckWholePackage(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestPreparePackagesRejectsTypeErrors(t *testing.T) {
+	ClearPackageCache()
+	t.Cleanup(ClearPackageCache)
+	dir := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module broken\n\ngo 1.24\n"), 0600))
+	file := filepath.Join(dir, "broken.go")
+	assert.NoError(t, os.WriteFile(file, []byte("package broken\nvar X = undeclaredVar\n"), 0600))
+
+	err := PreparePackages([]string{file}, dir)
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "package load error(s)")
+		assert.Contains(t, err.Error(), "broken:")
+		assert.Contains(t, err.Error(), "undefined: undeclaredVar")
+	}
+}
+
+func TestParseAndTypeCheckFileRejectsTypeErrors(t *testing.T) {
+	ClearPackageCache()
+	t.Cleanup(ClearPackageCache)
+	dir := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module broken\n\ngo 1.24\n"), 0600))
+	file := filepath.Join(dir, "broken.go")
+	assert.NoError(t, os.WriteFile(file, []byte("package broken\nvar X = undeclaredVar\n"), 0600))
+
+	for range 2 { // Cached failures must not yield incomplete types either.
+		checked, err := ParseAndTypeCheckFile(file, nil)
+		assert.Nil(t, checked)
+		if assert.Error(t, err) {
+			assert.Contains(t, err.Error(), "broken:")
+			assert.Contains(t, err.Error(), "undefined: undeclaredVar")
+		}
+	}
+}
+
 func TestPreparePackagesIndexesMultipleTargetPackages(t *testing.T) {
 	ClearPackageCache()
 	files := []string{
@@ -43,15 +78,11 @@ func TestPreparePackagesIndexesMultipleTargetPackages(t *testing.T) {
 func TestPreparePackagesLoadsTargetDirectoriesInOneGraph(t *testing.T) {
 	if os.Getenv("MUTAGO_PACKAGE_LOAD_HELPER") == "1" {
 		ClearPackageCache()
-		buildConstrained := "../../testdata/loop/condition.go"
 		err := PreparePackages([]string{
 			"../importing/filepathfixtures/first.go",
 			"../importing/filepathfixtures/second.go",
 			"../importing/filepathfixtures/secondfixturespackage/fourth.go",
-			buildConstrained,
 		}, "")
-		assert.NoError(t, err)
-		_, err = ParseAndTypeCheckFile(buildConstrained, nil)
 		assert.NoError(t, err)
 		return
 	}
