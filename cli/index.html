@@ -473,6 +473,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#target-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target loading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#vet" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -769,6 +780,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#target-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target loading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#vet" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1011,6 +1033,8 @@
 <h3 id="clause-condition-coverage">Clause condition coverage<a class="headerlink" href="#clause-condition-coverage" title="Permanent link">&para;</a></h3>
 <p>Go's statement coverage profiles do not record separate coverage counters for expression conditions in <code>switch</code>, type switch, or <code>select</code> case clauses (<code>*ast.CaseClause.List</code> or <code>*ast.CommClause.Comm</code>). A condition evaluated solely as false would therefore appear as uncovered in raw profiles. Under <code>--coverage</code>, mutations in a clause head (from its <code>case</code> or <code>default</code> keyword to its colon, which includes <code>select/case-remove</code> and <code>select/default-remove</code>) are treated as covered if their enclosing <code>switch</code>, type switch, or <code>select</code> statement header is covered. The clause heads are read before any mutation is applied. Clause bodies continue to use their own line coverage (an unselected clause body remains <code>NOT COVERED</code>).</p>
 <p><em>Limitation:</em> A header hit indicates that the switch statement ran, but cannot prove that an earlier clause did not always match first and shadow subsequent clauses. If an earlier clause always matches, mutants in subsequent conditions will be tested and reported as <code>ESCAPED</code> (a visible diagnostic) rather than <code>NOT COVERED</code>.</p>
+<h2 id="target-loading">Target loading<a class="headerlink" href="#target-loading" title="Permanent link">&para;</a></h2>
+<p>Before generating mutants, mutago stops with a tool error (exit 3) if any target package has load or type errors. The <code>Cannot load target packages</code> diagnostic includes the error count, package paths, and error text. This applies even when <code>go test</code> succeeds, and also to <code>--dry-run</code> and <code>--no-exec</code>; mutago never silently skips type-dependent mutants because a target failed to type-check.</p>
 <h2 id="vet">Vet<a class="headerlink" href="#vet" title="Permanent link">&para;</a></h2>
 <p>Every built-in <code>go test</code> run (baseline pre-flight, coverage, and mutant runs) passes <code>-vet=off</code> by default. A mutant is not meant to be lint-clean, and a <code>go vet</code> diagnostic on mutated code would fail the run and be miscounted as KILLED. The baseline and coverage runs use the same setting so they judge tests the same way the mutant runs do. Pass your own <code>-vet</code> via <code>--test-flags</code> to re-enable it (e.g. <code>--test-flags=-vet=all</code>); your flag wins in every run and no duplicate is added.</p>
 <p>With <code>--test-recursive</code>, every run targets <code>&lt;package&gt;/...</code>, so the baseline and coverage runs cover the same tests as the mutant runs. The coverage run also passes <code>-coverpkg=&lt;package&gt;</code>, so tests in subpackages count towards the package's coverage.</p>
