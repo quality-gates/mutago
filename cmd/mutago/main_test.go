@@ -28,6 +28,20 @@ func TestVersionFlag(t *testing.T) {
 	}
 }
 
+func TestMainRejectsTargetTypeErrors(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module broken\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "broken.go"), "package broken\nfunc Add(a, b int) int { return a + b + undeclaredVar }\n")
+	writeFixtureFile(t, filepath.Join(root, "broken_test.go"), "package broken\n")
+
+	out := testMain(t, root, []string{"--workers", "1", "--exec-timeout", "10", "."}, returnError, "Cannot load target packages")
+	assert.Contains(t, out, "broken:")
+	assert.Contains(t, out, "undefined: undeclaredVar")
+	assert.NotContains(t, out, "KILLED")
+	assert.NotContains(t, out, "ESCAPED")
+	assert.NotContains(t, out, "mutation score")
+}
+
 func TestMainSimple(t *testing.T) {
 	testMain(
 		t,

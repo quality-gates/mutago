@@ -825,17 +825,13 @@ func Add(a, b int) int {
 		Stderr: &stderr,
 	}
 	res, err := e.Run(context.Background(), opts, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	// Type errors now stop at target loading, before baseline or mutation.
+	if err == nil || !strings.Contains(err.Error(), "Cannot load target packages") ||
+		!strings.Contains(err.Error(), "undefined: undeclaredVar") {
+		t.Fatalf("expected target-loading diagnostic, got result=%+v err=%v", res, err)
 	}
-	if res.ExitCode != 3 {
-		t.Fatalf("expected exit code 3 (tool error) for an uncompilable package, got %d (stdout=%q stderr=%q)",
-			res.ExitCode, stdout.String(), stderr.String())
-	}
-	if res.Report != nil && res.Report.Stats.KilledCount > 0 && res.Report.Stats.TotalMutantsCount > 0 &&
-		res.Report.Stats.KilledCount == res.Report.Stats.TotalMutantsCount {
-		t.Fatalf("broken-build package reported all mutants KILLED (false green): killed=%d total=%d stdout=%q stderr=%q",
-			res.Report.Stats.KilledCount, res.Report.Stats.TotalMutantsCount, stdout.String(), stderr.String())
+	if res.Report != nil {
+		t.Fatalf("broken-build package must not produce a mutation report: %+v", res.Report)
 	}
 }
 

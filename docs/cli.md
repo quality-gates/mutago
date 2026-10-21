@@ -62,6 +62,10 @@ Go's statement coverage profiles do not record separate coverage counters for ex
 
 *Limitation:* A header hit indicates that the switch statement ran, but cannot prove that an earlier clause did not always match first and shadow subsequent clauses. If an earlier clause always matches, mutants in subsequent conditions will be tested and reported as `ESCAPED` (a visible diagnostic) rather than `NOT COVERED`.
 
+## Target loading
+
+Before generating mutants, mutago stops with a tool error (exit 3) if any target package has load or type errors. The `Cannot load target packages` diagnostic includes the error count, package paths, and error text. This applies even when `go test` succeeds, and also to `--dry-run` and `--no-exec`; mutago never silently skips type-dependent mutants because a target failed to type-check.
+
 ## Vet
 
 Every built-in `go test` run (baseline pre-flight, coverage, and mutant runs) passes `-vet=off` by default. A mutant is not meant to be lint-clean, and a `go vet` diagnostic on mutated code would fail the run and be miscounted as KILLED. The baseline and coverage runs use the same setting so they judge tests the same way the mutant runs do. Pass your own `-vet` via `--test-flags` to re-enable it (e.g. `--test-flags=-vet=all`); your flag wins in every run and no duplicate is added.
