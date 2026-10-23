@@ -105,6 +105,7 @@ type mutationRun struct {
 	tmpDir           string
 	exec             execConfig
 	report           *models.Report
+	results          *completedResults
 	mu               *sync.Mutex
 	modulePath       string
 	roots            sourceRoots
@@ -213,6 +214,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	loopCode := mutateAll(run, pkgs, coverageProfiles)
 
 	cleanup()
+	run.results.fill(report)
 
 	if loopCode != returnOk {
 		return Result{Report: report, ExitCode: loopCode}, ctx.Err()
@@ -293,6 +295,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, mode runMode
 	warnIgnoredSelectors(e.Stderr, opts)
 
 	report := &models.Report{}
+	results := &completedResults{}
 	var reportMu sync.Mutex
 
 	numWorkers := calcNumWorkers(opts, execs)
@@ -307,13 +310,13 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, mode runMode
 	var jobWg *sync.WaitGroup
 	runMutantIDFound := &atomic.Bool{}
 	if mode.executes() {
-		jobs, jobWg = startWorkerPool(opts, numWorkers, report, &reportMu, tmpDir)
+		jobs, jobWg = startWorkerPool(opts, numWorkers, results, &reportMu, tmpDir)
 	}
 
 	var stopProgress chan struct{}
 	var progressWg *sync.WaitGroup
 	if progressMonitorEnabled(opts, mode) {
-		stopProgress, progressWg = startProgressMonitor(opts, report, &reportMu, e.Stderr)
+		stopProgress, progressWg = startProgressMonitor(results, e.Stderr)
 	}
 
 	run := &mutationRun{
@@ -331,6 +334,7 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, mode runMode
 			mode:           mode,
 		},
 		report:           report,
+		results:          results,
 		mu:               &reportMu,
 		modulePath:       detectModulePath(goDir),
 		roots:            resolveSourceRoots(goDir),
@@ -763,10 +767,7 @@ func recordCaptureFailure(r *mutationRun, mutant models.Mutant, err error) {
 	out := fmt.Sprintf("INTERNAL ERROR %s\n", err.Error())
 	fmt.Fprintf(r.stdout, "%s", out)
 	mutant.ProcessOutput = out
-	r.mu.Lock()
-	r.report.Errored = append(r.report.Errored, mutant)
-	r.report.Stats.ErrorCount++
-	r.mu.Unlock()
+	r.results.addErrored(mutant)
 }
 
 func noteRejectedMutation(r *mutationRun, c scopeCandidate, reason skipReason) {
@@ -1094,7 +1095,7 @@ func calcNumWorkers(opts *models.Options, execs []string) int {
 	return n
 }
 
-func startWorkerPool(opts *models.Options, numWorkers int, report *models.Report, mu *sync.Mutex, tmpDir string) (chan execJob, *sync.WaitGroup) {
+func startWorkerPool(opts *models.Options, numWorkers int, results *completedResults, outMu *sync.Mutex, tmpDir string) (chan execJob, *sync.WaitGroup) {
 	stableExec := prepareStableExec(tmpDir)
 	jobs := make(chan execJob, numWorkers*2)
 	var wg sync.WaitGroup
@@ -1106,7 +1107,7 @@ func startWorkerPool(opts *models.Options, numWorkers int, report *models.Report
 				if job.ctx != nil && job.ctx.Err() != nil {
 					continue
 				}
-				runExecJob(withStableExec(job, paths), report, mu)
+				runExecJob(withStableExec(job, paths), results, outMu)
 			}
 		}(stableExecPaths{wrapper: stableExec, bin: stableBinForWorker(tmpDir, stableExec, i)})
 	}
@@ -1203,7 +1204,7 @@ func isTerminal() bool {
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
-func startProgressMonitor(opts *models.Options, report *models.Report, mu *sync.Mutex, stderr io.Writer) (chan struct{}, *sync.WaitGroup) {
+func startProgressMonitor(results *completedResults, stderr io.Writer) (chan struct{}, *sync.WaitGroup) {
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -1214,11 +1215,10 @@ func startProgressMonitor(opts *models.Options, report *models.Report, mu *sync.
 		for {
 			select {
 			case <-ticker.C:
-				mu.Lock()
-				total := report.Stats.KilledCount + report.Stats.EscapedCount + report.Stats.ErrorCount + report.Stats.SkippedCount + report.Stats.NotCoveredCount
+				stats := results.stats()
+				total := stats.KilledCount + stats.EscapedCount + stats.ErrorCount + stats.SkippedCount + stats.NotCoveredCount
 				fmt.Fprintf(stderr, "\rProcessed %d mutants (%d killed, %d escaped, %d not covered, %d errored)",
-					total, report.Stats.KilledCount, report.Stats.EscapedCount, report.Stats.NotCoveredCount, report.Stats.ErrorCount)
-				mu.Unlock()
+					total, stats.KilledCount, stats.EscapedCount, stats.NotCoveredCount, stats.ErrorCount)
 			case <-stop:
 				fmt.Fprint(stderr, "\r\x1b[K") // clear the line
 				return
@@ -1610,16 +1610,18 @@ func isPackageLevelDecl(file ast.Node, pos token.Pos) bool {
 	return false
 }
 
-func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex) {
+// runExecJob tests one mutant and records its outcome in results. outMu
+// serializes each outcome's console output with other workers.
+func runExecJob(job execJob, results *completedResults, outMu *sync.Mutex) {
 	opts := job.opts
 	mutant := job.mutant
 
 	startLine := mutant.Mutator.CoverageLocation().Line
 	notCovered := !job.covScope.packageLevelDecl && job.covScope.profile != nil && startLine > 0 && !mutationCovered(job)
 	if notCovered {
-		mu.Lock()
-		defer mu.Unlock()
-		recordNotCovered(opts, stats, mutant, mutantLocation(opts, mutant))
+		outMu.Lock()
+		defer outMu.Unlock()
+		recordNotCovered(opts, results, mutant, mutantLocation(opts, mutant))
 		return
 	}
 
@@ -1631,19 +1633,16 @@ func runExecJob(job execJob, stats *models.Report, mu *sync.Mutex) {
 		out := fmt.Sprintf("INTERNAL ERROR %s\n", err.Error())
 		fmt.Fprint(job.out.stdout, out)
 		mutant.ProcessOutput = out
-		mu.Lock()
-		stats.Errored = append(stats.Errored, mutant)
-		stats.Stats.ErrorCount++
-		mu.Unlock()
+		results.addErrored(mutant)
 		return
 	}
 
 	execExitCode := mutateExec(job, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)
 
-	mu.Lock()
-	defer mu.Unlock()
-	recordMutantResult(job.out.stdout, opts, stats, mutant, execExitCode, mutantLocation(opts, mutant))
+	outMu.Lock()
+	defer outMu.Unlock()
+	recordMutantResult(job.out.stdout, opts, results, mutant, execExitCode, mutantLocation(opts, mutant))
 }
 
 func mutantLocation(opts *models.Options, mutant models.Mutant) string {
@@ -1892,30 +1891,29 @@ func statusVisible(opts *models.Options, letter byte) bool {
 	return true
 }
 
-func recordMutantResult(stdout io.Writer, opts *models.Options, stats *models.Report, mutant models.Mutant, execExitCode int, msg string) {
+func recordMutantResult(stdout io.Writer, opts *models.Options, results *completedResults, mutant models.Mutant, execExitCode int, msg string) {
 	switch execExitCode {
 	case 0:
-		recordKilled(opts, stats, mutant, msg)
+		recordKilled(opts, results, mutant, msg)
 	case 1:
-		recordEscaped(opts, stats, mutant, msg)
+		recordEscaped(opts, results, mutant, msg)
 	case 2:
-		recordSkipped(stdout, opts, stats, mutant, msg)
+		recordSkipped(stdout, opts, results, mutant, msg)
 	default:
-		recordErrored(opts, stats, mutant, msg)
+		recordErrored(opts, results, mutant, msg)
 	}
 }
 
-func recordNotCovered(opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+func recordNotCovered(opts *models.Options, results *completedResults, mutant models.Mutant, msg string) {
 	out := fmt.Sprintf("NOT COVERED %s\n", msg)
 	if statusVisible(opts, 'n') {
 		console.PrintSkip(out)
 	}
 	mutant.ProcessOutput = out
-	stats.NotCovered = append(stats.NotCovered, mutant)
-	stats.Stats.NotCoveredCount++
+	results.addNotCovered(mutant)
 }
 
-func recordKilled(opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+func recordKilled(opts *models.Options, results *completedResults, mutant models.Mutant, msg string) {
 	out := fmt.Sprintf("%s %s\n", console.KILLED, msg)
 	if statusVisible(opts, 'k') {
 		console.PrintKilled(out)
@@ -1924,11 +1922,10 @@ func recordKilled(opts *models.Options, stats *models.Report, mutant models.Muta
 		console.PrintDiff([]byte(mutant.Diff))
 	}
 	mutant.ProcessOutput = out
-	stats.Killed = append(stats.Killed, mutant)
-	stats.Stats.KilledCount++
+	results.addKilled(mutant)
 }
 
-func recordEscaped(opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+func recordEscaped(opts *models.Options, results *completedResults, mutant models.Mutant, msg string) {
 	out := fmt.Sprintf("%s %s\n", console.ESCAPED, msg)
 	if statusVisible(opts, 'e') {
 		console.PrintEscaped(out)
@@ -1937,11 +1934,10 @@ func recordEscaped(opts *models.Options, stats *models.Report, mutant models.Mut
 		console.PrintDiff([]byte(mutant.Diff))
 	}
 	mutant.ProcessOutput = out
-	stats.Escaped = append(stats.Escaped, mutant)
-	stats.Stats.EscapedCount++
+	results.addEscaped(mutant)
 }
 
-func recordSkipped(stdout io.Writer, opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+func recordSkipped(stdout io.Writer, opts *models.Options, results *completedResults, mutant models.Mutant, msg string) {
 	out := fmt.Sprintf("SKIP %s\n", msg)
 	if statusVisible(opts, 's') {
 		console.PrintSkip(out)
@@ -1953,11 +1949,10 @@ func recordSkipped(stdout io.Writer, opts *models.Options, stats *models.Report,
 		console.PrintDiff([]byte(mutant.Diff))
 	}
 	mutant.ProcessOutput = out
-	stats.Skipped = append(stats.Skipped, mutant)
-	stats.Stats.SkippedCount++
+	results.addSkipped(mutant)
 }
 
-func recordErrored(opts *models.Options, stats *models.Report, mutant models.Mutant, msg string) {
+func recordErrored(opts *models.Options, results *completedResults, mutant models.Mutant, msg string) {
 	out := fmt.Sprintf("UNKNOWN exit code for %s\n", msg)
 	if statusVisible(opts, 'x') {
 		console.PrintUnknown(out)
@@ -1966,8 +1961,7 @@ func recordErrored(opts *models.Options, stats *models.Report, mutant models.Mut
 		}
 	}
 	mutant.ProcessOutput = out
-	stats.Errored = append(stats.Errored, mutant)
-	stats.Stats.ErrorCount++
+	results.addErrored(mutant)
 }
 
 func loadBlacklist(files []string) (map[string]struct{}, error) {
