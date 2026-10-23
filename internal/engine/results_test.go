@@ -219,3 +219,36 @@ func TestUncoveredMutantIsRecordedAsNotCovered(t *testing.T) {
 		t.Fatalf("not-covered mutants must not enter per-mutator totals: %+v", report.MutatorStats)
 	}
 }
+
+func TestExecutedOutcomesAreRecordedByExitCode(t *testing.T) {
+	opts := &models.Options{}
+	opts.Config.SilentMode = true
+	results := &completedResults{}
+	for code, id := range map[int]string{0: "killed", 1: "escaped", 2: "skipped", 3: "errored"} {
+		recordMutantResult(io.Discard, opts, results, resultMutant(id, "a"), code, "file.go:1 (a)")
+	}
+
+	report := &models.Report{}
+	results.fill(report)
+	for name, got := range map[string][]models.Mutant{
+		"killed": report.Killed, "escaped": report.Escaped, "skipped": report.Skipped, "errored": report.Errored,
+	} {
+		if len(got) != 1 || got[0].ID != name {
+			t.Fatalf("%s collection = %+v", name, got)
+		}
+	}
+	wantOutput := map[string]string{
+		"killed":  "KILLED file.go:1 (a)\n",
+		"escaped": "ESCAPED file.go:1 (a)\n",
+		"skipped": "SKIP file.go:1 (a)\n",
+		"errored": "UNKNOWN exit code for file.go:1 (a)\n",
+	}
+	for _, m := range [][]models.Mutant{report.Killed, report.Escaped, report.Skipped, report.Errored} {
+		if m[0].ProcessOutput != wantOutput[m[0].ID] {
+			t.Fatalf("%s process output = %q, want %q", m[0].ID, m[0].ProcessOutput, wantOutput[m[0].ID])
+		}
+	}
+	if s := report.Stats; s.KilledCount != 1 || s.EscapedCount != 1 || s.SkippedCount != 1 || s.ErrorCount != 1 {
+		t.Fatalf("stats = %+v", s)
+	}
+}
