@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.38] — 2026-10-23
+
 ### Changed
 - Completed mutant results now have one owner inside the engine. Each outcome's count comes from its list, so the summary, quality gates, and per-mutator breakdown always describe the same mutants. Output and scores are unchanged (#337).
 
@@ -750,7 +752,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.37...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.38...HEAD
+[v2.10.38]: https://github.com/quality-gates/mutago/compare/v2.10.37...v2.10.38
 [v2.10.37]: https://github.com/quality-gates/mutago/compare/v2.10.36...v2.10.37
 [v2.10.36]: https://github.com/quality-gates/mutago/compare/v2.10.35...v2.10.36
 [v2.10.35]: https://github.com/quality-gates/mutago/compare/v2.10.34...v2.10.35
