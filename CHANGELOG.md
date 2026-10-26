@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.40] — 2026-10-26
+
 ### Fixed
 - Resolve the mutant runner once per run. Custom `--exec --coverage` now keeps `--test-flags`; unsupported `--per-test`, adaptive timeout, and unused test flags warn on stderr instead of disappearing silently (#341).
 
@@ -760,7 +762,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.39...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.40...HEAD
+[v2.10.40]: https://github.com/quality-gates/mutago/compare/v2.10.39...v2.10.40
 [v2.10.39]: https://github.com/quality-gates/mutago/compare/v2.10.38...v2.10.39
 [v2.10.38]: https://github.com/quality-gates/mutago/compare/v2.10.37...v2.10.38
 [v2.10.37]: https://github.com/quality-gates/mutago/compare/v2.10.36...v2.10.37
