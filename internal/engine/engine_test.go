@@ -49,11 +49,11 @@ func TestRunCustomExecHonorsCancelledContext(t *testing.T) {
 	opts.Exec.Timeout = 30
 	var stderr bytes.Buffer
 	job := execJob{
-		ctx:   ctx,
-		opts:  opts,
-		pkg:   types.NewPackage("sample", "sample"),
-		execs: []string{"sh", "-c", "sleep 10"},
-		out:   jobOutput{stderr: &stderr},
+		ctx:    ctx,
+		opts:   opts,
+		pkg:    types.NewPackage("sample", "sample"),
+		runner: runnerPolicy{command: []string{"sh", "-c", "sleep 10"}},
+		out:    jobOutput{stderr: &stderr},
 		source: mutationSource{
 			originalFile: original,
 			mutationFile: mutated,

@@ -1002,6 +1002,46 @@ func TestMainTestFlagsPassthrough(t *testing.T) {
 	)
 }
 
+func TestMainCustomExecWarnsForUnsupportedOptions(t *testing.T) {
+	root, _ := adaptiveTimeoutFixture(t, "example.com/customwarnings")
+	script := filepath.Join(root, "ok.sh")
+	log := filepath.Join(root, "script.log")
+	writeFixtureFile(t, script, "#!/bin/sh\nprintf '%s:%s\\n' \"$MUTATE_TIMEOUT\" \"$*\" >> \""+log+"\"\n")
+	require.NoError(t, os.Chmod(script, 0755))
+	out := testMain(t, root, []string{"--workers=1", "--exec-timeout=10", "--per-test", "--timeout-coefficient=3", "--test-flags=-count=1", "--exec=" + script, "--config=mutago.yml", "add.go"}, returnOk, "mutation score")
+	for _, flag := range []string{"--per-test", "--timeout-coefficient", "--test-flags"} {
+		assert.Contains(t, out, "Warning: "+flag)
+		assert.Equal(t, 1, strings.Count(out, "Warning: "+flag))
+	}
+	assert.NotContains(t, out, "Adaptive timeout:")
+	assert.NotContains(t, out, "Building per-test")
+	calls, err := os.ReadFile(log)
+	require.NoError(t, err)
+	for _, call := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
+		assert.Equal(t, "10:", call)
+	}
+}
+
+func TestMainCustomCoveragePreservesTaggedTests(t *testing.T) {
+	root, _ := adaptiveTimeoutFixture(t, "example.com/customtags")
+	root, err := filepath.EvalSymlinks(root)
+	require.NoError(t, err)
+	tests, err := os.ReadFile(filepath.Join(root, "add_test.go"))
+	require.NoError(t, err)
+	writeFixtureFile(t, filepath.Join(root, "integ_test.go"), "//go:build integ\n\n"+string(tests))
+	writeFixtureFile(t, filepath.Join(root, "add_test.go"), "package adaptive\nimport \"testing\"\nfunc TestPlain(t *testing.T) {}\n")
+	log := filepath.Join(root, "script.log")
+	script := filepath.Join(root, "ok.sh")
+	writeFixtureFile(t, script, "#!/bin/sh\nprintf '%s:%s\\n' \"$MUTATE_TIMEOUT\" \"$*\" >> \""+log+"\"\n")
+	require.NoError(t, os.Chmod(script, 0755))
+	out := testMain(t, root, []string{"--workers=1", "--exec-timeout=20", "--coverage", "--test-flags=-tags=integ", "--exec=" + script, "--config=mutago.yml", "add.go"}, returnOk, "mutation score")
+	assert.NotContains(t, out, "Warning: --test-flags")
+	assert.Contains(t, out, "0 not covered")
+	calls, err := os.ReadFile(log)
+	require.NoError(t, err, "covered mutants must invoke the custom script")
+	assert.Contains(t, string(calls), "20:\n", "script receives the timeout but no Go test arguments")
+}
+
 func TestMainCoverageUsesSingleBaselineForAdaptiveTimeout(t *testing.T) {
 	root, goLog := adaptiveTimeoutFixture(t, "example.com/adaptive")
 

@@ -191,7 +191,8 @@ func TestBaselineChecksReportCancellationBeforeResolving(t *testing.T) {
 	opts := &models.Options{}
 	opts.Exec.Timeout = 60
 	pkgs := []importing.Package{{Files: []string{"gotest.go"}}}
-	ec := execConfig{mode: modeExecute, importPaths: newImportPaths(ctx, "", nil)}
+	runner, _ := resolveRunner(opts, modeExecute)
+	ec := execConfig{mode: modeExecute, runner: runner, importPaths: newImportPaths(ctx, "", nil)}
 	var stderr bytes.Buffer
 
 	code := runBaselineChecks(ctx, &stderr, opts, pkgs, ec)

@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Resolve the mutant runner once per run. Custom `--exec --coverage` now keeps `--test-flags`; unsupported `--per-test`, adaptive timeout, and unused test flags warn on stderr instead of disappearing silently (#341).
+
 ## [v2.10.39] — 2026-10-26
 
 ### Changed
