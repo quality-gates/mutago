@@ -81,8 +81,9 @@ func (s *executeSink) admit(fc *fileContext, mutation mutago.PositionedMutation,
 
 func (s *executeSink) flush(*fileContext) {}
 
+// finish reports the results. Run cleanup has already filled and calculated
+// the report.
 func (s *executeSink) finish(run *mutationRun, bl *baseline.File) int {
-	run.report.Calculate()
 	return finalizeResults(run.stdout, run.stderr, run.opts, run.report, bl, run.roots, run.runMutantIDFound.Load())
 }
 

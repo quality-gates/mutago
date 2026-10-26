@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"math"
@@ -20,12 +19,12 @@ func resultMutant(id, mutatorName string) models.Mutant {
 
 func TestCompletedResultsReportMatchesRecordedOutcomes(t *testing.T) {
 	results := &completedResults{}
-	results.addKilled(resultMutant("k1", "a"))
-	results.addKilled(resultMutant("k2", "b"))
-	results.addEscaped(resultMutant("e1", "a"))
-	results.addSkipped(resultMutant("s1", "b"))
-	results.addErrored(resultMutant("x1", "a"))
-	results.addNotCovered(resultMutant("n1", "a"))
+	results.add(models.OutcomeKilled, resultMutant("k1", "a"))
+	results.add(models.OutcomeKilled, resultMutant("k2", "b"))
+	results.add(models.OutcomeEscaped, resultMutant("e1", "a"))
+	results.add(models.OutcomeSkipped, resultMutant("s1", "b"))
+	results.add(models.OutcomeErrored, resultMutant("x1", "a"))
+	results.add(models.OutcomeNotCovered, resultMutant("n1", "a"))
 
 	report := &models.Report{HasCoverage: true}
 	results.fill(report)
@@ -69,7 +68,7 @@ func TestCompletedResultsReportMatchesRecordedOutcomes(t *testing.T) {
 
 func TestCompletedResultsSnapshotIsIsolated(t *testing.T) {
 	results := &completedResults{}
-	results.addEscaped(resultMutant("e1", "a"))
+	results.add(models.OutcomeEscaped, resultMutant("e1", "a"))
 
 	first := &models.Report{}
 	results.fill(first)
@@ -106,15 +105,15 @@ func TestCompletedResultsConcurrentRecordingAndSnapshots(t *testing.T) {
 				m := resultMutant("", "a")
 				switch i % 5 {
 				case 0:
-					results.addKilled(m)
+					results.add(models.OutcomeKilled, m)
 				case 1:
-					results.addEscaped(m)
+					results.add(models.OutcomeEscaped, m)
 				case 2:
-					results.addSkipped(m)
+					results.add(models.OutcomeSkipped, m)
 				case 3:
-					results.addErrored(m)
+					results.add(models.OutcomeErrored, m)
 				default:
-					results.addNotCovered(m)
+					results.add(models.OutcomeNotCovered, m)
 				}
 				if s := results.stats(); s.KilledCount+s.EscapedCount+s.SkippedCount+s.ErrorCount+s.NotCoveredCount == 0 {
 					t.Errorf("stats snapshot missed this producer's own result")
@@ -149,9 +148,9 @@ func TestCompletedResultsConcurrentRecordingAndSnapshots(t *testing.T) {
 }
 
 func TestCaptureFailureIsRecordedAsErrored(t *testing.T) {
-	var stdout bytes.Buffer
-	results := &completedResults{}
-	r := &mutationRun{exec: execConfig{mode: modeExecute}, stdout: &stdout, results: results}
+	listener := &recordingListener{}
+	results := &completedResults{listener: listener}
+	r := &mutationRun{exec: execConfig{mode: modeExecute}, results: results}
 
 	recordCaptureFailure(r, resultMutant("c1", "a"), errors.New("no stable ID"))
 
@@ -163,22 +162,21 @@ func TestCaptureFailureIsRecordedAsErrored(t *testing.T) {
 	if got := report.Errored[0].ProcessOutput; got != "INTERNAL ERROR no stable ID\n" {
 		t.Fatalf("process output = %q", got)
 	}
-	if !strings.Contains(stdout.String(), "INTERNAL ERROR no stable ID") {
-		t.Fatalf("stdout = %q, want the internal error", stdout.String())
+	if len(listener.completed) != 1 || listener.completed[0].Outcome != models.OutcomeErrored {
+		t.Fatalf("listener events = %+v, want one errored event", listener.completed)
 	}
 }
 
 func TestMaterializationFailureIsRecordedAsErrored(t *testing.T) {
-	var stdout bytes.Buffer
-	results := &completedResults{}
+	results := &completedResults{listener: &recordingListener{}}
 	job := execJob{
 		opts:   &models.Options{},
 		mutant: resultMutant("m1", "a"),
-		out:    jobOutput{stdout: &stdout, stderr: io.Discard},
+		out:    jobOutput{stdout: io.Discard, stderr: io.Discard},
 		source: mutationSource{edit: mutationEdit{start: 5, end: 6}},
 	}
 
-	runExecJob(job, results, &sync.Mutex{})
+	runExecJob(job, results)
 
 	report := &models.Report{}
 	results.fill(report)
@@ -191,7 +189,7 @@ func TestMaterializationFailureIsRecordedAsErrored(t *testing.T) {
 }
 
 func TestUncoveredMutantIsRecordedAsNotCovered(t *testing.T) {
-	results := &completedResults{}
+	results := &completedResults{listener: &recordingListener{}}
 	mutant := resultMutant("u1", "a")
 	mutant.Mutator.OriginalFilePath = "uncovered.go"
 	mutant.Mutator.OriginalStartLine = 3
@@ -204,7 +202,7 @@ func TestUncoveredMutantIsRecordedAsNotCovered(t *testing.T) {
 		out:      jobOutput{stdout: io.Discard, stderr: io.Discard},
 	}
 
-	runExecJob(job, results, &sync.Mutex{})
+	runExecJob(job, results)
 
 	report := &models.Report{HasCoverage: true}
 	results.fill(report)
@@ -221,11 +219,9 @@ func TestUncoveredMutantIsRecordedAsNotCovered(t *testing.T) {
 }
 
 func TestExecutedOutcomesAreRecordedByExitCode(t *testing.T) {
-	opts := &models.Options{}
-	opts.Config.SilentMode = true
-	results := &completedResults{}
+	results := &completedResults{listener: &recordingListener{}}
 	for code, id := range map[int]string{0: "killed", 1: "escaped", 2: "skipped", 3: "errored"} {
-		recordMutantResult(io.Discard, opts, results, resultMutant(id, "a"), code, "file.go:1 (a)")
+		recordMutantResult(results, resultMutant(id, "a"), code, "file.go:1 (a)")
 	}
 
 	report := &models.Report{}

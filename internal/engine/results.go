@@ -8,8 +8,12 @@ import (
 
 // completedResults owns the run's completed mutants. Each outcome is one
 // collection, and its count is that collection's length, so the report's
-// counts and collections cannot disagree. It is safe for concurrent use.
+// counts and collections cannot disagree. It tells listener about each
+// recorded mutant, the progress, and the final report. It is safe for
+// concurrent use.
 type completedResults struct {
+	listener models.RunListener
+
 	mu         sync.Mutex
 	killed     []models.Mutant
 	escaped    []models.Mutant
@@ -18,17 +22,47 @@ type completedResults struct {
 	notCovered []models.Mutant
 }
 
-func (c *completedResults) add(list *[]models.Mutant, mutant models.Mutant) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	*list = append(*list, mutant)
+// record stores mutant under outcome, then tells the listener.
+func (c *completedResults) record(outcome models.MutantOutcome, mutant models.Mutant) {
+	stats := c.add(outcome, mutant)
+	c.listener.OnMutantCompleted(models.MutationEvent{Mutant: mutant, Outcome: outcome, Stats: stats})
 }
 
-func (c *completedResults) addKilled(mutant models.Mutant)     { c.add(&c.killed, mutant) }
-func (c *completedResults) addEscaped(mutant models.Mutant)    { c.add(&c.escaped, mutant) }
-func (c *completedResults) addSkipped(mutant models.Mutant)    { c.add(&c.skipped, mutant) }
-func (c *completedResults) addErrored(mutant models.Mutant)    { c.add(&c.errored, mutant) }
-func (c *completedResults) addNotCovered(mutant models.Mutant) { c.add(&c.notCovered, mutant) }
+// reportProgress sends the listener the counts recorded so far.
+func (c *completedResults) reportProgress() {
+	c.listener.OnProgress(c.stats())
+}
+
+// summarize fills and calculates report, then sends it to the listener.
+func (c *completedResults) summarize(report *models.Report) {
+	c.fill(report)
+	report.Calculate()
+	c.listener.OnSummary(report)
+}
+
+// add records mutant under outcome and returns the counts including it.
+func (c *completedResults) add(outcome models.MutantOutcome, mutant models.Mutant) models.Stats {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	list := c.list(outcome)
+	*list = append(*list, mutant)
+	return c.countsLocked()
+}
+
+func (c *completedResults) list(outcome models.MutantOutcome) *[]models.Mutant {
+	switch outcome {
+	case models.OutcomeKilled:
+		return &c.killed
+	case models.OutcomeEscaped:
+		return &c.escaped
+	case models.OutcomeSkipped:
+		return &c.skipped
+	case models.OutcomeNotCovered:
+		return &c.notCovered
+	default:
+		return &c.errored
+	}
+}
 
 // stats returns the outcome counts recorded so far.
 func (c *completedResults) stats() models.Stats {
