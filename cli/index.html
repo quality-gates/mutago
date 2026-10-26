@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -884,7 +884,7 @@
 <tr>
 <td style="text-align: left;"><code>--exec</code></td>
 <td style="text-align: left;">(built-in)</td>
-<td style="text-align: left;">Custom exec command for testing each mutation</td>
+<td style="text-align: left;">Custom exec command for testing each mutation; limited to one worker. Empty/whitespace-only commands use the built-in runner.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>--exec-timeout</code></td>
@@ -894,7 +894,7 @@
 <tr>
 <td style="text-align: left;"><code>--timeout-coefficient</code></td>
 <td style="text-align: left;"><code>0</code> (disabled)</td>
-<td style="text-align: left;">Scale per-mutation timeout as a multiple of an uncached baseline test-suite run (e.g. <code>3</code> = 3× the clean run). The clean pre-flight/coverage run uses a generous cap so a suite slower than <code>--exec-timeout</code> can still be measured. Overrides <code>--exec-timeout</code> when set.</td>
+<td style="text-align: left;">Scale per-mutation timeout as a multiple of an uncached baseline test-suite run (e.g. <code>3</code> = 3× the clean run). The clean pre-flight/coverage run uses a generous cap so a suite slower than <code>--exec-timeout</code> can still be measured. Overrides <code>--exec-timeout</code> when set for the built-in runner. With <code>--exec</code>, warns and is ignored; the script keeps <code>--exec-timeout</code>.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>--workers</code></td>
@@ -1022,14 +1022,15 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>--per-test</code></td>
-<td style="text-align: left;">Build a per-test coverage map and run only the tests that cover each mutation. Best for packages with slow tests. Pairs well with <code>--coverage</code>. With <code>--test-recursive</code>, the map also covers subpackage tests. If any test's coverage profile is missing or unreadable, mutago runs the full suite instead.</td>
+<td style="text-align: left;">Build a per-test coverage map and run only the tests that cover each mutation. Best for packages with slow tests. Pairs well with <code>--coverage</code>. With <code>--test-recursive</code>, the map also covers subpackage tests. If any test's coverage profile is missing or unreadable, mutago runs the full suite instead. With <code>--exec</code>, warns and is ignored.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>--test-flags</code></td>
-<td style="text-align: left;">Extra flags passed to every <code>go test</code> call (e.g. <code>--test-flags=-short</code>). Use the <code>=</code> form for values starting with a dash. Adaptive timeout preserves a positive <code>-count=N</code>, adds <code>-count=1</code> when absent, and rejects <code>-count=0</code>. Ignored when <code>--exec</code> is set.</td>
+<td style="text-align: left;">Extra flags passed to every <code>go test</code> call (e.g. <code>--test-flags=-short</code>). Use the <code>=</code> form for values starting with a dash. Adaptive timeout preserves a positive <code>-count=N</code>, adds <code>-count=1</code> when absent, and rejects <code>-count=0</code>. With <code>--exec --coverage</code>, flags still apply to coverage preparation, never to custom command arguments. Without coverage, unused flags produce a warning.</td>
 </tr>
 </tbody>
 </table>
+<p>Custom-runner option warnings go to stderr once per run, even without <code>--verbose</code>, and do not alter structured reports. <code>--dry-run</code> and <code>--no-exec</code> do not prepare coverage, run scripts, or emit these execution-option warnings.</p>
 <h3 id="clause-condition-coverage">Clause condition coverage<a class="headerlink" href="#clause-condition-coverage" title="Permanent link">&para;</a></h3>
 <p>Go's statement coverage profiles do not record separate coverage counters for expression conditions in <code>switch</code>, type switch, or <code>select</code> case clauses (<code>*ast.CaseClause.List</code> or <code>*ast.CommClause.Comm</code>). A condition evaluated solely as false would therefore appear as uncovered in raw profiles. Under <code>--coverage</code>, mutations in a clause head (from its <code>case</code> or <code>default</code> keyword to its colon, which includes <code>select/case-remove</code> and <code>select/default-remove</code>) are treated as covered if their enclosing <code>switch</code>, type switch, or <code>select</code> statement header is covered. The clause heads are read before any mutation is applied. Clause bodies continue to use their own line coverage (an unselected clause body remains <code>NOT COVERED</code>).</p>
 <p><em>Limitation:</em> A header hit indicates that the switch statement ran, but cannot prove that an earlier clause did not always match first and shadow subsequent clauses. If an earlier clause always matches, mutants in subsequent conditions will be tested and reported as <code>ESCAPED</code> (a visible diagnostic) rather than <code>NOT COVERED</code>.</p>
@@ -1167,10 +1168,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>
