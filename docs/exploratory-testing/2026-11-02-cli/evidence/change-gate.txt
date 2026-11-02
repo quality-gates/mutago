@@ -1,0 +1,4 @@
+$ GOMAXPROCS=1 ./scripts/check-change.sh
+The mutation score is 0.00% (0 killed, 0 escaped, 0 errored, 0 not covered, 0 skipped, 0 total)
+The covered-code mutation score is 0.00%
+exit=0
