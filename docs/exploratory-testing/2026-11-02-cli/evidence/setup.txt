@@ -1,0 +1,3 @@
+build=mutago dev
+go=go version go1.26.8 linux/amd64
+commit=3f240bf14f0d3c7608b55a64c625276d518ed88a

@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- Record the 2026-11-02 CLI exploratory testing pass.
+
 ## [v2.10.40] — 2026-10-26
 
 ### Fixed

@@ -1,0 +1,92 @@
+{
+  "generated_at": "2026-11-02T09:33:26Z",
+  "msi": 0.3333333333333333,
+  "escaped_count": 4,
+  "reminder": "A mutant is an example of how this code could be wrong — it's not a script for the test. Don't assert on the mutant directly. Instead ask: if this code were buggy, what would a caller of the public API observe go wrong? Write a test for that.",
+  "mutants": [
+    {
+      "id": "8559a3a8d3c4941c349de2ad57036d20",
+      "checksum": "7d3f56de8aec853e4e8f73ef03dc0c7a",
+      "file": "calc.go",
+      "line": 5,
+      "mutator": "arithmetic/base",
+      "description": "Changes: `func Untested(a int) int { return a * 2 }` → `func Untested(a int) int { return a / 2 }`",
+      "kill_hint": "Write a test with specific numeric inputs and assert the exact output — boundary values expose operator swaps best",
+      "diff": "--- Original\n+++ New\n@@ -2,4 +2,4 @@\n \n func Add(a, b int) int { return a + b }\n \n-func Untested(a int) int { return a * 2 }\n+func Untested(a int) int { return a / 2 }\n",
+      "context_start_line": 2,
+      "context_lines": [
+        "",
+        "func Add(a, b int) int { return a + b }",
+        "",
+        "func Untested(a int) int { return a * 2 }",
+        ""
+      ],
+      "test_files": [
+        "calc_test.go"
+      ]
+    },
+    {
+      "id": "0ef1bddb1a2870812a21269d6fe00418",
+      "checksum": "ec6becf96fa607f62e76095868742ff7",
+      "file": "calc.go",
+      "line": 5,
+      "mutator": "numbers/decrementer",
+      "description": "Changes: `func Untested(a int) int { return a * 2 }` → `func Untested(a int) int { return a * 1 }`",
+      "kill_hint": "Write a test that asserts the exact numeric value",
+      "diff": "--- Original\n+++ New\n@@ -2,4 +2,4 @@\n \n func Add(a, b int) int { return a + b }\n \n-func Untested(a int) int { return a * 2 }\n+func Untested(a int) int { return a * 1 }\n",
+      "context_start_line": 2,
+      "context_lines": [
+        "",
+        "func Add(a, b int) int { return a + b }",
+        "",
+        "func Untested(a int) int { return a * 2 }",
+        ""
+      ],
+      "test_files": [
+        "calc_test.go"
+      ]
+    },
+    {
+      "id": "da1ece0d5962d8159527cd30fd102e3e",
+      "checksum": "d585e16bca2f67a0bd36fa1a117e2674",
+      "file": "calc.go",
+      "line": 5,
+      "mutator": "numbers/incrementer",
+      "description": "Changes: `func Untested(a int) int { return a * 2 }` → `func Untested(a int) int { return a * 3 }`",
+      "kill_hint": "Write a test that asserts the exact numeric value — off-by-one mutations are killed by precise equality assertions",
+      "diff": "--- Original\n+++ New\n@@ -2,4 +2,4 @@\n \n func Add(a, b int) int { return a + b }\n \n-func Untested(a int) int { return a * 2 }\n+func Untested(a int) int { return a * 3 }\n",
+      "context_start_line": 2,
+      "context_lines": [
+        "",
+        "func Add(a, b int) int { return a + b }",
+        "",
+        "func Untested(a int) int { return a * 2 }",
+        ""
+      ],
+      "test_files": [
+        "calc_test.go"
+      ]
+    },
+    {
+      "id": "c8f84039bade8a7f93b1e6e0a6e3a14f",
+      "checksum": "0e5b9b882e9a5dad2fb77b6e3974ed9b",
+      "file": "calc.go",
+      "line": 5,
+      "mutator": "statement/return",
+      "description": "Replaces a return value with its zero value",
+      "kill_hint": "Write a test that asserts the exact return value — zero-value substitutions are caught by equality assertions",
+      "diff": "--- Original\n+++ New\n@@ -2,4 +2,6 @@\n \n func Add(a, b int) int { return a + b }\n \n-func Untested(a int) int { return a * 2 }\n+func Untested(a int) int {\n+\treturn 0\n+}\n",
+      "context_start_line": 2,
+      "context_lines": [
+        "",
+        "func Add(a, b int) int { return a + b }",
+        "",
+        "func Untested(a int) int { return a * 2 }",
+        ""
+      ],
+      "test_files": [
+        "calc_test.go"
+      ]
+    }
+  ]
+}

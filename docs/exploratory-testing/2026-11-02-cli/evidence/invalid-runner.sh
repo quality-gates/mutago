@@ -1,0 +1,3 @@
+#!/bin/sh
+printf '%s\n' "$MUTATE_TIMEOUT" >> runner-calls.txt
+go test -vet=off ./...

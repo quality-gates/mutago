@@ -1,0 +1,30 @@
+$ mutago --exec=./runner.sh --per-test --timeout-coefficient=3 --no-diffs ./...
+Warning: --per-test is ignored with --exec
+Warning: --timeout-coefficient is ignored with --exec; --exec-timeout remains the script timeout
+ok  	example.com/explore	(cached)
+KILLED calc.go:3 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ok  	example.com/explore	(cached)
+KILLED calc.go:5 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ok  	example.com/explore	(cached)
+KILLED calc.go:5 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ok  	example.com/explore	(cached)
+KILLED calc.go:5 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ok  	example.com/explore	(cached)
+KILLED calc.go:3 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ok  	example.com/explore	(cached)
+KILLED calc.go:5 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 100.00% (6 killed, 0 escaped, 0 errored, 0 not covered, 0 skipped, 6 total)
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   2 / 2    (100%)
+  numbers/decrementer                  killed   1 / 1    (100%)
+  numbers/incrementer                  killed   1 / 1    (100%)
+  statement/return                     killed   2 / 2    (100%)
+
+exit=0

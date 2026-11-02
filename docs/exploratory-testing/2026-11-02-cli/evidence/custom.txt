@@ -1,0 +1,56 @@
+$ mutago --workers=1 --exec-timeout=20 --exec=./runner.sh --no-diffs ./...
+KILLED calc.go:3 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- calc.go	2026-11-02 09:32:52.778692728 +0000
++++ /home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-2716950304/calc.go.1	2026-11-02 09:33:55.239459365 +0000
+@@ -2,4 +2,4 @@
+ 
+ func Add(a, b int) int { return a + b }
+ 
+-func Untested(a int) int { return a * 2 }
++func Untested(a int) int { return a / 2 }
+ESCAPED calc.go:5 (arithmetic/base)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- calc.go	2026-11-02 09:32:52.778692728 +0000
++++ /home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-2716950304/calc.go.2	2026-11-02 09:33:55.745457474 +0000
+@@ -2,4 +2,4 @@
+ 
+ func Add(a, b int) int { return a + b }
+ 
+-func Untested(a int) int { return a * 2 }
++func Untested(a int) int { return a * 1 }
+ESCAPED calc.go:5 (numbers/decrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- calc.go	2026-11-02 09:32:52.778692728 +0000
++++ /home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-2716950304/calc.go.3	2026-11-02 09:33:56.323455315 +0000
+@@ -2,4 +2,4 @@
+ 
+ func Add(a, b int) int { return a + b }
+ 
+-func Untested(a int) int { return a * 2 }
++func Untested(a int) int { return a * 3 }
+ESCAPED calc.go:5 (numbers/incrementer)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+KILLED calc.go:3 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+--- calc.go	2026-11-02 09:32:52.778692728 +0000
++++ /home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-2716950304/calc.go.5	2026-11-02 09:33:57.414451239 +0000
+@@ -2,4 +2,6 @@
+ 
+ func Add(a, b int) int { return a + b }
+ 
+-func Untested(a int) int { return a * 2 }
++func Untested(a int) int {
++	return 0
++}
+ESCAPED calc.go:5 (statement/return)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+The mutation score is 33.33% (2 killed, 4 escaped, 0 errored, 0 not covered, 0 skipped, 6 total)
+
+Per-mutator breakdown:
+  arithmetic/base                      killed   1 / 2    (50%)
+  numbers/decrementer                  killed   0 / 1    (0%)
+  numbers/incrementer                  killed   0 / 1    (0%)
+  statement/return                     killed   1 / 2    (50%)
+
+exit=0
