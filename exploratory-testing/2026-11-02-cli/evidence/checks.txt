@@ -1,0 +1,127 @@
+$ go build ./...
+exit=0
+$ go test ./...
+ok  	github.com/quality-gates/mutago/v2	0.008s
+ok  	github.com/quality-gates/mutago/v2/astutil	0.698s
+--- FAIL: TestMainTargetOutsideAnyModuleIsToolError (1.98s)
+    main_test.go:2043: 
+        	Error Trace:	/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/cmd/mutago/main_test.go:2043
+        	            				/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/cmd/mutago/main_test.go:2204
+        	Error:      	Not equal: 
+        	            	expected: 3
+        	            	actual  : 4
+        	Test:       	TestMainTargetOutsideAnyModuleIsToolError
+    main_test.go:2044: 
+        	Error Trace:	/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/cmd/mutago/main_test.go:2044
+        	            				/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/cmd/mutago/main_test.go:2204
+        	Error:      	"KILLED mod/add.go:3 (arithmetic/base)\n------------------------------------------------------------------------------------------------------------------------------------------------------\nESCAPED mod/add.go:5 (arithmetic/base)\n------------------------------------------------------------------------------------------------------------------------------------------------------\n--- Original\n+++ New\n@@ -2,4 +2,4 @@\n \n func Add(a, b int) int { return a + b }\n \n-func Sub(a, b int) int { return a - b }\n+func Sub(a, b int) int { return a + b }\n\nThe mutation score is 50.00% (1 killed, 1 escaped, 0 errored, 0 not covered, 0 skipped, 2 total)\n\nPer-mutator breakdown:\n  arithmetic/base                      killed   1 / 2    (50%)\nMSI 50.00% is below minimum required 80.00%\n" does not contain "not inside a Go module"
+        	Test:       	TestMainTargetOutsideAnyModuleIsToolError
+    main_test.go:2205: 
+        	Error Trace:	/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/cmd/mutago/main_test.go:2205
+        	Error:      	"KILLED mod/add.go:3 (arithmetic/base)\n------------------------------------------------------------------------------------------------------------------------------------------------------\nESCAPED mod/add.go:5 (arithmetic/base)\n------------------------------------------------------------------------------------------------------------------------------------------------------\n--- Original\n+++ New\n@@ -2,4 +2,4 @@\n \n func Add(a, b int) int { return a + b }\n \n-func Sub(a, b int) int { return a - b }\n+func Sub(a, b int) int { return a + b }\n\nThe mutation score is 50.00% (1 killed, 1 escaped, 0 errored, 0 not covered, 0 skipped, 2 total)\n\nPer-mutator breakdown:\n  arithmetic/base                      killed   1 / 2    (50%)\nMSI 50.00% is below minimum required 80.00%\n" should not contain "mutation score"
+        	Test:       	TestMainTargetOutsideAnyModuleIsToolError
+FAIL
+FAIL	github.com/quality-gates/mutago/v2/cmd/mutago	360.779s
+ok  	github.com/quality-gates/mutago/v2/example	0.008s
+ok  	github.com/quality-gates/mutago/v2/example/sub	0.008s
+ok  	github.com/quality-gates/mutago/v2/internal/annotation	0.030s
+ok  	github.com/quality-gates/mutago/v2/internal/baseline	0.011s
+ok  	github.com/quality-gates/mutago/v2/internal/console	0.006s
+ok  	github.com/quality-gates/mutago/v2/internal/coverage	19.396s
+Running with 2 parallel worker(s)
+Save mutations into "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-1447873713"
+Enable mutator "arithmetic/assign_invert"
+Enable mutator "arithmetic/assignment"
+Enable mutator "arithmetic/base"
+Enable mutator "arithmetic/bitwise"
+Enable mutator "arithmetic/negate"
+Baseline check passed — all packages green before mutation
+Mutate "testdata/parallel-writers-2823727636/pkg.go"
+Save original into "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-1447873713/testdata/parallel-writers-2823727636/pkg.go.original"
+Mutator arithmetic/assign_invert
+Mutator arithmetic/assignment
+Mutator arithmetic/base
+Mutator arithmetic/bitwise
+Mutator arithmetic/negate
+Execute built-in exec command for mutation
+Execute built-in exec command for mutation
+Exited with 0
+Exited with 0
+Remove "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-1447873713"
+Running with 2 parallel worker(s)
+Save mutations into "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-582540141"
+Enable mutator "arithmetic/assign_invert"
+Enable mutator "arithmetic/assignment"
+Enable mutator "arithmetic/base"
+Enable mutator "arithmetic/bitwise"
+Enable mutator "arithmetic/negate"
+Baseline check passed — all packages green before mutation
+Mutate "testdata/parallel-writers-3939019035/pkg.go"
+Save original into "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-582540141/testdata/parallel-writers-3939019035/pkg.go.original"
+Mutator arithmetic/assign_invert
+Mutator arithmetic/assignment
+Mutator arithmetic/base
+Mutator arithmetic/bitwise
+Mutator arithmetic/negate
+Execute built-in exec command for mutation
+Execute built-in exec command for mutation
+Exited with 0
+Exited with 0
+Remove "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-582540141"
+Running with 4 parallel worker(s)
+Save mutations into "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-3015023654"
+Enable mutator "arithmetic/assign_invert"
+Enable mutator "arithmetic/assignment"
+Enable mutator "arithmetic/base"
+Enable mutator "arithmetic/bitwise"
+Enable mutator "arithmetic/negate"
+Baseline check passed — all packages green before mutation
+Mutate "testdata/escaping-3306128515/pkg.go"
+Save original into "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-3015023654/testdata/escaping-3306128515/pkg.go.original"
+Mutator arithmetic/assign_invert
+Mutator arithmetic/assignment
+Mutator arithmetic/base
+Mutator arithmetic/bitwise
+Mutator arithmetic/negate
+Execute built-in exec command for mutation
+Exited with 1
+Remove "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-3015023654"
+Running with 1 parallel worker(s)
+Save mutations into "/home/ubuntu/Code/pstack/quality-gates/mutago-explore-20261102/.pass/tmp/mutago-4249203692"
+Enable mutator "arithmetic/assign_invert"
+Enable mutator "arithmetic/assignment"
+Enable mutator "arithmetic/base"
+Enable mutator "arithmetic/bitwise"
+Enable mutator "arithmetic/negate"
+Mutate "testdata/escaping-2661953317/pkg.go"
+--- FAIL: TestGoWorkDir (0.00s)
+    --- FAIL: TestGoWorkDir/target_in_no_module (0.00s)
+        gotest_test.go:297: goWorkDir() error = <nil>, wantErr true
+FAIL
+FAIL	github.com/quality-gates/mutago/v2/internal/engine	35.197s
+ok  	github.com/quality-gates/mutago/v2/internal/filter	0.012s
+ok  	github.com/quality-gates/mutago/v2/internal/gitdiff	0.102s
+ok  	github.com/quality-gates/mutago/v2/internal/importing	1.414s
+ok  	github.com/quality-gates/mutago/v2/internal/importing/cgofixture	0.004s
+ok  	github.com/quality-gates/mutago/v2/internal/importing/filepathfixtures	0.005s [no tests to run]
+?   	github.com/quality-gates/mutago/v2/internal/importing/filepathfixtures/secondfixturespackage	[no test files]
+ok  	github.com/quality-gates/mutago/v2/internal/models	0.006s
+ok  	github.com/quality-gates/mutago/v2/internal/parser	0.483s
+ok  	github.com/quality-gates/mutago/v2/internal/reportmaker	0.009s
+?   	github.com/quality-gates/mutago/v2/internal/version	[no test files]
+ok  	github.com/quality-gates/mutago/v2/mutator	0.009s
+ok  	github.com/quality-gates/mutago/v2/mutator/arithmetic	0.237s
+ok  	github.com/quality-gates/mutago/v2/mutator/branch	0.818s
+ok  	github.com/quality-gates/mutago/v2/mutator/composite	0.493s
+ok  	github.com/quality-gates/mutago/v2/mutator/concurrency	0.157s
+ok  	github.com/quality-gates/mutago/v2/mutator/conditional	0.162s
+ok  	github.com/quality-gates/mutago/v2/mutator/expression	0.664s
+ok  	github.com/quality-gates/mutago/v2/mutator/loop	0.541s
+ok  	github.com/quality-gates/mutago/v2/mutator/numbers	0.243s
+ok  	github.com/quality-gates/mutago/v2/mutator/select	0.310s
+ok  	github.com/quality-gates/mutago/v2/mutator/statement	1.751s
+ok  	github.com/quality-gates/mutago/v2/scripts	56.614s
+ok  	github.com/quality-gates/mutago/v2/scripts/exec	3.243s
+?   	github.com/quality-gates/mutago/v2/test	[no test files]
+FAIL
+exit=1
