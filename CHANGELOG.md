@@ -10,6 +10,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Record the 2026-11-02 CLI exploratory testing pass.
 - Add a formal verification skill for source restoration by the bundled custom exec scripts.
 
+### Changed
+- Remove obsolete engine mutation materialization helpers (#225).
+
 ### Fixed
 - Keep source files unchanged when bundled custom exec scripts time out or are cancelled (#360).
 - Count only killed mutants as kills, fail on execution errors, and preserve baselines on incomplete runs (#361).

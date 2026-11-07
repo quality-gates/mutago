@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/printer"
 	"go/token"
 	"go/types"
@@ -1445,23 +1444,6 @@ func checkCoveredMsiGate(stderr io.Writer, report *models.Report, minCoveredMsi 
 	return false
 }
 
-func saveAST(mutationBlackList map[string]struct{}, file string, fset *token.FileSet, node ast.Node, fmtOriginal []byte) (string, bool, error) {
-	var buf bytes.Buffer
-	if err := printer.Fprint(&buf, fset, node); err != nil {
-		return "", false, err
-	}
-	mutatedSrc, err := format.Source(buf.Bytes())
-	if err != nil {
-		return "", false, err
-	}
-	checksum := stableMutationKey(fmtOriginal, mutatedSrc)
-	if _, ok := mutationBlackList[checksum]; ok {
-		return checksum, true, nil
-	}
-	mutationBlackList[checksum] = struct{}{}
-	return checksum, false, os.WriteFile(file, mutatedSrc, 0666)
-}
-
 type mutationEdit struct {
 	start       int
 	end         int
@@ -1503,29 +1485,6 @@ func stableMutationEditKey(file string, original []byte, edit mutationEdit) stri
 	h.Write(original[edit.start:edit.end])
 	h.Write([]byte{0})
 	h.Write(edit.replacement)
-	return fmt.Sprintf("%x", h.Sum(nil))
-}
-
-func stableMutationKey(original, mutated []byte) string {
-	h := md5.New()
-	oLines := strings.Split(string(original), "\n")
-	mLines := strings.Split(string(mutated), "\n")
-	n := len(oLines)
-	if len(mLines) > n {
-		n = len(mLines)
-	}
-	for i := 0; i < n; i++ {
-		o, m := "", ""
-		if i < len(oLines) {
-			o = oLines[i]
-		}
-		if i < len(mLines) {
-			m = mLines[i]
-		}
-		if o != m {
-			fmt.Fprintf(h, "-%s\n+%s\n", o, m)
-		}
-	}
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
