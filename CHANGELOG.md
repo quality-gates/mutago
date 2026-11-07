@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.41] — 2026-11-07
+
 ### Added
 - Record the 2026-11-02 CLI exploratory testing pass.
 - Add a formal verification skill for source restoration by the bundled custom exec scripts.
@@ -773,7 +775,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.40...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.41...HEAD
+[v2.10.41]: https://github.com/quality-gates/mutago/compare/v2.10.40...v2.10.41
 [v2.10.40]: https://github.com/quality-gates/mutago/compare/v2.10.39...v2.10.40
 [v2.10.39]: https://github.com/quality-gates/mutago/compare/v2.10.38...v2.10.39
 [v2.10.38]: https://github.com/quality-gates/mutago/compare/v2.10.37...v2.10.38
