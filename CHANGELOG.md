@@ -17,7 +17,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Fixed
 - Keep source files unchanged when bundled custom exec scripts time out or are cancelled (#360).
-- Count only killed mutants as kills, fail on execution errors, and preserve baselines on incomplete runs (#361).
+- Count only killed mutants as kills, fail on execution errors, and preserve baselines on incomplete runs (#361). Scores may fall, and per-mutator JSON includes an `errored` count.
 
 ## [v2.10.40] — 2026-10-26
 
