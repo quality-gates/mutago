@@ -43,7 +43,7 @@ failed=0
 echo "Checking ordinary completion in the model"
 if (cd "$scratch" && java -XX:+UseParallelGC -Xmx256m -cp "$jar" tlc2.TLC \
     -workers 1 -metadir "$scratch/normal-states" -config normal.cfg CustomExec.tla) >"$scratch/normal.log" 2>&1; then
-  echo "PASS: ordinary completion restores the source in the model"
+  echo "PASS: ordinary completion preserves the source in the model"
 else
   cat "$scratch/normal.log"
   failed=1
@@ -52,7 +52,7 @@ fi
 echo "Checking cancellation and timeout in the model"
 if (cd "$scratch" && java -XX:+UseParallelGC -Xmx256m -cp "$jar" tlc2.TLC \
     -workers 1 -metadir "$scratch/cancel-states" -config CustomExec.cfg CustomExec.tla) >"$scratch/cancel.log" 2>&1; then
-  echo "PASS: the model restores the source on every explored path"
+  echo "PASS: the model preserves the source on every explored path"
 else
   cat "$scratch/cancel.log"
   failed=1
@@ -62,7 +62,7 @@ echo "Checking the real custom executor and both bundled scripts"
 if (cd "$repo_root" && MUTAGO_VERIFY_ROOT="$repo_root" GOMAXPROCS=1 \
     go test -count=1 -overlay "$scratch/overlay.json" \
       -run '^TestCustomExecRestoresSource$' -v ./internal/engine); then
-  echo "PASS: the real scripts restored the source in every probe"
+  echo "PASS: the real scripts preserved the source in every probe"
 else
   failed=1
 fi

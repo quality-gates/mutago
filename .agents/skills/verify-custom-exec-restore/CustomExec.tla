@@ -1,67 +1,61 @@
 --------------------------- MODULE CustomExec ---------------------------
 EXTENDS TLC
 
-CONSTANTS AllowCancel, RestoreNormally
+CONSTANTS AllowCancel, ReplaceSource
 
-VARIABLES shell, testProcess, contextState, source, backup, engine
-vars == <<shell, testProcess, contextState, source, backup, engine>>
+VARIABLES shell, testProcess, contextState, source, overlay, engine
+vars == <<shell, testProcess, contextState, source, overlay, engine>>
 
-\* Start after the bundled script's mv and cp succeeded, when its go test
-\* child is running. The real-code probe checks this starting condition.
 Init ==
-  /\ shell = "testing"
-  /\ testProcess = "running"
+  /\ shell = "preparing"
+  /\ testProcess = "absent"
   /\ contextState = "live"
-  /\ source = "mutant"
-  /\ backup = "original"
+  /\ source = "original"
+  /\ overlay = "absent"
   /\ engine = "waiting"
 
-\* Go's context can expire or be cancelled by the caller.
+StartTest ==
+  /\ shell = "preparing"
+  /\ shell' = "testing"
+  /\ testProcess' = "running"
+  /\ overlay' = "mutant"
+  /\ source' = IF ReplaceSource THEN "mutant" ELSE source
+  /\ UNCHANGED <<contextState, engine>>
+
 CancelContext ==
   /\ AllowCancel /\ contextState = "live" /\ engine = "waiting"
   /\ contextState' = "cancelled"
-  /\ UNCHANGED <<shell, testProcess, source, backup, engine>>
+  /\ UNCHANGED <<shell, testProcess, source, overlay, engine>>
 
-\* exec.CommandContext's default cancellation kills the script process.
+\* exec.CommandContext kills the script; its test child can outlive it.
 KillScript ==
   /\ contextState = "cancelled"
-  /\ shell \in {"testing", "readyToRestore", "restored"}
+  /\ shell \in {"preparing", "testing", "testDone"}
   /\ shell' = "killed"
-  /\ UNCHANGED <<testProcess, contextState, source, backup, engine>>
+  /\ UNCHANGED <<testProcess, contextState, source, overlay, engine>>
 
-\* The child can finish before or after the parent is killed or reaped.
 FinishTest ==
   /\ testProcess = "running"
   /\ testProcess' = "done"
-  /\ shell' = IF shell = "testing" THEN "readyToRestore" ELSE shell
-  /\ UNCHANGED <<contextState, source, backup, engine>>
-
-\* clean_up moves source.go.tmp over source.go. RestoreNormally = FALSE is
-\* only the deliberate broken variant with the normal clean_up call removed.
-RestoreSource ==
-  /\ shell = "readyToRestore"
-  /\ shell' = "restored"
-  /\ source' = IF RestoreNormally THEN "original" ELSE source
-  /\ backup' = IF RestoreNormally THEN "none" ELSE backup
-  /\ UNCHANGED <<testProcess, contextState, engine>>
+  /\ shell' = IF shell = "testing" THEN "testDone" ELSE shell
+  /\ UNCHANGED <<contextState, source, overlay, engine>>
 
 ExitScript ==
-  /\ shell = "restored"
+  /\ shell = "testDone"
   /\ shell' = "exited"
-  /\ UNCHANGED <<testProcess, contextState, source, backup, engine>>
+  /\ UNCHANGED <<testProcess, contextState, source, overlay, engine>>
 
-\* Wait can return after the script exits. Descendants may still be running.
+\* Wait may return while a descendant is still running.
 ReturnFromExec ==
   /\ engine = "waiting" /\ shell \in {"exited", "killed"}
   /\ engine' = "returned"
-  /\ UNCHANGED <<shell, testProcess, contextState, source, backup>>
+  /\ UNCHANGED <<shell, testProcess, contextState, source, overlay>>
 
 Done == /\ engine = "returned" /\ UNCHANGED vars
 
-Next == CancelContext \/ KillScript \/ FinishTest \/ RestoreSource \/
+Next == StartTest \/ CancelContext \/ KillScript \/ FinishTest \/
         ExitScript \/ ReturnFromExec \/ Done
 Spec == Init /\ [][Next]_vars
 
-\* A caller returning from the custom exec must see its original source.
-SourceRestored == engine # "returned" \/ source = "original"
+SourcePreserved == source = "original"
 =============================================================================
