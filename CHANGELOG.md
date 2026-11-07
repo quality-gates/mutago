@@ -8,6 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Added
 - Record the 2026-11-02 CLI exploratory testing pass.
+- Add a formal verification skill for source restoration by the bundled custom exec scripts.
 
 ## [v2.10.40] — 2026-10-26
 
