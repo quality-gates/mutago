@@ -967,7 +967,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>--run-mutant-id</code></td>
-<td style="text-align: left;">Run only the mutant with this stable ID (copy the <code>id</code> field from <code>mutago-agentic.json</code>). Other mutants are not classified or counted. <code>--dry-run</code> counts only this mutant. Exits 3 if no matching mutant is found. Valid-ID runs suppress the summary and quality gates.</td>
+<td style="text-align: left;">Run only the mutant with this stable ID (copy the <code>id</code> field from <code>mutago-agentic.json</code>). Other mutants are not classified or counted. <code>--dry-run</code> counts only this mutant. Exits 3 if no matching mutant is found or execution errors. Valid-ID runs suppress the summary and quality gates.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>--version</code>, <code>-v</code></td>
@@ -1007,6 +1007,7 @@
 </tr>
 </tbody>
 </table>
+<p>MSI is killed mutants divided by all mutants. Skipped and errored mutants count in the total but not as kills. Covered MSI excludes not-covered mutants from the total.</p>
 <h2 id="coverage">Coverage<a class="headerlink" href="#coverage" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1084,7 +1085,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>--update-baseline</code></td>
-<td style="text-align: left;">Record current survivors and exit 0</td>
+<td style="text-align: left;">Record current survivors and exit 0; leave the baseline unchanged and exit 3 if any mutant errors</td>
 </tr>
 </tbody>
 </table>
@@ -1103,7 +1104,7 @@
 </tr>
 <tr>
 <td style="text-align: left;">3</td>
-<td style="text-align: left;">Invalid input or tool failure, including a failed clean coverage run</td>
+<td style="text-align: left;">Invalid input or tool failure, including a failed clean coverage run or any errored mutant</td>
 </tr>
 <tr>
 <td style="text-align: left;">4</td>
