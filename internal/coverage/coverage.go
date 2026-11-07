@@ -365,14 +365,20 @@ func BuildPerTestProfileForTests(tc Toolchain, pkgPath, modulePath, tmpDir strin
 // pkgPath lines they cover. If any test's profile is missing or unreadable it
 // returns nil and an error naming each such test, so the caller falls back to
 // the full suite rather than trusting a partial map. A test that fails still
-// counts when it wrote a valid profile.
+// counts when it wrote a valid profile. tmpDir must be an existing directory.
 func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPackage, modulePath, tmpDir string, workers int) (*PerTestProfile, error) {
 	if len(pkgs) == 0 {
 		return nil, nil
 	}
+	buildDir, err := os.MkdirTemp(tmpDir, "per-test-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(buildDir)
 	var jobs []perTestJob
-	for _, pkg := range pkgs {
-		binaryPath, err := compileCoverageTestBinary(tc, pkg.ImportPath, pkgPath, tmpDir)
+	for i, pkg := range pkgs {
+		binaryDir := filepath.Join(buildDir, strconv.Itoa(i))
+		binaryPath, err := compileCoverageTestBinary(tc, pkg.ImportPath, pkgPath, binaryDir)
 		if err != nil {
 			return nil, err
 		}
@@ -414,8 +420,7 @@ type perTestResult struct {
 	err  error
 }
 
-func compileCoverageTestBinary(tc Toolchain, pkgPath, coverPkg, tmpDir string) (string, error) {
-	binaryDir := filepath.Join(tmpDir, "per-test", strings.NewReplacer("/", "_", "\\", "_").Replace(pkgPath))
+func compileCoverageTestBinary(tc Toolchain, pkgPath, coverPkg, binaryDir string) (string, error) {
 	if err := os.MkdirAll(binaryDir, 0755); err != nil {
 		return "", err
 	}

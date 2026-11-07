@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.42] — 2026-11-07
+
+### Fixed
+- Keep covering tests eligible when recursive per-test package paths would otherwise share a temporary binary (#365).
+
 ## [v2.10.41] — 2026-11-07
 
 ### Added
@@ -775,7 +780,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.41...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.42...HEAD
+[v2.10.42]: https://github.com/quality-gates/mutago/compare/v2.10.41...v2.10.42
 [v2.10.41]: https://github.com/quality-gates/mutago/compare/v2.10.40...v2.10.41
 [v2.10.40]: https://github.com/quality-gates/mutago/compare/v2.10.39...v2.10.40
 [v2.10.39]: https://github.com/quality-gates/mutago/compare/v2.10.38...v2.10.39
