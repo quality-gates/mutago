@@ -489,16 +489,21 @@ func TestBuildPerTestProfile_WorkersZero(t *testing.T) {
 }
 
 func TestBuildPerTestProfileForTests_InvalidTempDir(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "not-a-directory")
+	workingDir := t.TempDir()
+	t.Chdir(workingDir)
+	t.Setenv("TMPDIR", workingDir)
+	tmpFile := filepath.Join(workingDir, "not-a-directory")
 	require.NoError(t, os.WriteFile(tmpFile, []byte("occupied"), 0o600))
 
+	var calls []string
 	prof, err := BuildPerTestProfileForTests(
-		goToolchain{},
+		goToolchain{calls: &calls},
 		"github.com/quality-gates/mutago/v2/internal/coverage/testdata/entrypoints",
 		"github.com/quality-gates/mutago/v2", tmpFile, 1, []string{"TestAlpha"},
 	)
 	assert.Error(t, err)
 	assert.Nil(t, prof)
+	assert.Empty(t, calls, "an invalid temporary directory must not start compilation")
 }
 
 func TestBuildPerTestProfileForTests_CompileFailure(t *testing.T) {
@@ -664,16 +669,43 @@ func TestListTestPackages(t *testing.T) {
 
 func TestBuildPerTestProfileForPackages_AttributesSubpackageTests(t *testing.T) {
 	writeRecursiveModule(t)
+	for dir, testName := range map[string]string{"rec/a/b_c": "TestKiller", "rec/a_b/c": "TestObserver"} {
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		test := "package child\nimport (\"testing\"; \"example.com/m/rec\")\nfunc " + testName + "(t *testing.T) { _ = rec.Double(3) }\n"
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "child_test.go"), []byte(test), 0o600))
+	}
 	pkgs := []TestPackage{
 		{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}},
 		{ImportPath: "example.com/m/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
+		{ImportPath: "example.com/m/rec/a/b_c", Tests: []string{"TestKiller"}},
+		{ImportPath: "example.com/m/rec/a_b/c", Tests: []string{"TestObserver"}},
 	}
 
-	prof, err := BuildPerTestProfileForPackages(goToolchain{}, "example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 1)
+	tmp := t.TempDir()
+	otherBuild := filepath.Join(tmp, "per-test", "other-build")
+	require.NoError(t, os.MkdirAll(otherBuild, 0o755))
+	otherFile := filepath.Join(otherBuild, "keep")
+	require.NoError(t, os.WriteFile(otherFile, []byte("other"), 0o600))
+	savedMutation := filepath.Join(tmp, "mutation.go")
+	require.NoError(t, os.WriteFile(savedMutation, []byte("saved"), 0o600))
+	prof, err := BuildPerTestProfileForPackages(goToolchain{}, "example.com/m/rec", pkgs, "example.com/m", tmp, 1)
 	require.NoError(t, err)
 	require.NotNil(t, prof)
-	assert.Equal(t, []string{"TestDouble", "TestTouch"}, prof.CoveringTestsRelative("rec/rec.go", 4),
+	assert.Equal(t, []string{"TestDouble", "TestKiller", "TestObserver", "TestTouch"}, prof.CoveringTestsRelative("rec/rec.go", 4),
 		"subpackage tests cover the target, and a name shared across packages is listed once")
+	entries, err := os.ReadDir(filepath.Join(tmp, "per-test"))
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "other-build", entries[0].Name())
+	entries, err = os.ReadDir(tmp)
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	contents, err := os.ReadFile(otherFile)
+	require.NoError(t, err)
+	assert.Equal(t, "other", string(contents))
+	contents, err = os.ReadFile(savedMutation)
+	require.NoError(t, err)
+	assert.Equal(t, "saved", string(contents))
 }
 
 func TestBuildPerTestProfile_NoTests(t *testing.T) {
@@ -818,13 +850,15 @@ func TestBuildPerTestProfile_CancellationStopsProfiling(t *testing.T) {
 	pkgs := []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch", "TestCheck", "TestThird"}}}
 	cancelOnMarker(ctx, cancel, started)
 
-	prof, err := buildWithin(t, 10*time.Second, tc, pkgs)
+	tmp := t.TempDir()
+	prof, err := buildWithin(t, 10*time.Second, tc, pkgs, tmp)
 
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.NotContains(t, err.Error(), "coverage.out", "cancellation is not a lost profile")
 	assert.Nil(t, prof)
 	assert.NoFileExists(t, second, "no test starts after cancellation")
 	assert.Equal(t, int32(1), testRuns.Load(), "no test is admitted after cancellation")
+	assertProfileBuildsCleaned(t, tmp)
 }
 
 // A compile the run's cancellation kills reports the cancellation, while any
@@ -835,13 +869,15 @@ func TestBuildPerTestProfile_CompileErrors(t *testing.T) {
 	t.Run("failed", func(t *testing.T) {
 		tc := scriptedToolchain{compile: "echo boom; exit 3"}
 
-		prof, err := buildWithin(t, 10*time.Second, tc, pkgs)
+		tmp := t.TempDir()
+		prof, err := buildWithin(t, 10*time.Second, tc, pkgs, tmp)
 
 		var exitErr *exec.ExitError
 		assert.ErrorAs(t, err, &exitErr)
 		assert.NotErrorIs(t, err, context.Canceled)
 		assert.ErrorContains(t, err, "boom")
 		assert.Nil(t, prof)
+		assertProfileBuildsCleaned(t, tmp)
 	})
 
 	t.Run("cancelled", func(t *testing.T) {
@@ -851,11 +887,20 @@ func TestBuildPerTestProfile_CompileErrors(t *testing.T) {
 		tc := scriptedToolchain{ctx: ctx, compile: `: > "` + started + `"; exec sleep 30`}
 		cancelOnMarker(ctx, cancel, started)
 
-		prof, err := buildWithin(t, 10*time.Second, tc, pkgs)
+		tmp := t.TempDir()
+		prof, err := buildWithin(t, 10*time.Second, tc, pkgs, tmp)
 
 		assert.ErrorIs(t, err, context.Canceled)
 		assert.Nil(t, prof)
+		assertProfileBuildsCleaned(t, tmp)
 	})
+}
+
+func assertProfileBuildsCleaned(t *testing.T, tmp string) {
+	t.Helper()
+	entries, err := os.ReadDir(tmp)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
 }
 
 // cancelOnMarker cancels the run once the marker file exists.
@@ -873,7 +918,7 @@ func cancelOnMarker(ctx context.Context, cancel context.CancelFunc, marker strin
 
 // buildWithin builds the per-test profile with one worker, failing the test
 // if it has not returned within limit.
-func buildWithin(t *testing.T, limit time.Duration, tc Toolchain, pkgs []TestPackage) (*PerTestProfile, error) {
+func buildWithin(t *testing.T, limit time.Duration, tc Toolchain, pkgs []TestPackage, tmp string) (*PerTestProfile, error) {
 	t.Helper()
 	type built struct {
 		prof *PerTestProfile
@@ -881,7 +926,7 @@ func buildWithin(t *testing.T, limit time.Duration, tc Toolchain, pkgs []TestPac
 	}
 	done := make(chan built, 1)
 	go func() {
-		prof, err := BuildPerTestProfileForPackages(tc, "example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 1)
+		prof, err := BuildPerTestProfileForPackages(tc, "example.com/m/rec", pkgs, "example.com/m", tmp, 1)
 		done <- built{prof, err}
 	}()
 	select {

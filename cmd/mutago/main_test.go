@@ -1552,6 +1552,47 @@ func TestMainPerTestRecursiveKeepsSubpackageTests(t *testing.T) {
 	assert.NotContains(t, out, "ESCAPED")
 }
 
+func TestMainPerTestRecursiveKeepsTestsForCollidingPackagePaths(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"a/b_c", "a_b/c"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(root, dir), 0o755))
+	}
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/collision\n\ngo 1.22\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "enable_mutators:\n  - statement/return\n")
+	writeFixtureFile(t, filepath.Join(root, "value.go"), "package collision\n\nfunc Value() int {\n\treturn 1\n}\n")
+	writeFixtureFile(t, filepath.Join(root, "value_test.go"), "package collision\n\nimport \"testing\"\n\nfunc TestRoot(t *testing.T) {}\n")
+	writeFixtureFile(t, filepath.Join(root, "a", "b_c", "package.go"), "package bc\n")
+	writeFixtureFile(t, filepath.Join(root, "a", "b_c", "package_test.go"), `package bc
+import (
+	"testing"
+	"example.com/collision"
+)
+func TestKiller(t *testing.T) {
+	if collision.Value() != 1 { t.Fatal("Value changed") }
+}
+`)
+	writeFixtureFile(t, filepath.Join(root, "a_b", "c", "package.go"), "package c\n")
+	writeFixtureFile(t, filepath.Join(root, "a_b", "c", "package_test.go"), `package c
+import (
+	"testing"
+	"example.com/collision"
+)
+func TestObserver(t *testing.T) { _ = collision.Value() }
+`)
+
+	for _, perTest := range []bool{false, true} {
+		t.Run(fmt.Sprintf("per-test=%t", perTest), func(t *testing.T) {
+			args := []string{"--workers", "1", "--exec-timeout", "30", "--coverage", "--test-recursive", "--min-msi", "100", "--config", "mutago.yml"}
+			if perTest {
+				args = append(args, "--per-test")
+			}
+			out := testMain(t, root, append(args, "."), returnOk, "mutation score")
+			assert.Contains(t, out, "KILLED")
+			assert.NotContains(t, out, "ESCAPED")
+		})
+	}
+}
+
 func TestMainPerTestLostProfileFallsBackToFullSuite(t *testing.T) {
 	// Only TestCheck checks Double, and it exits before writing a profile when
 	// profiled alone. Its lost profile must not read as "covers nothing", or
