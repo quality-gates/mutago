@@ -42,6 +42,73 @@ func TestMainRejectsTargetTypeErrors(t *testing.T) {
 	assert.NotContains(t, out, "mutation score")
 }
 
+func TestMainErroredMutantsFailRunsAndLeaveBaselineIntact(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/errors\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "json_output: true\nenable_mutators:\n  - arithmetic/base\n")
+	writeFixtureFile(t, filepath.Join(root, "calc.go"), `package errors
+func Add(a, b int) int { return a + b }
+func Sub(a, b int) int { return a - b }
+func Mul(a, b int) int { return a * b }
+`)
+	writeFixtureFile(t, filepath.Join(root, "calc_test.go"), "package errors\n")
+	allErrors := filepath.Join(root, "errors.sh")
+	require.NoError(t, os.WriteFile(allErrors, []byte("#!/bin/sh\nexit 3\n"), 0o755))
+
+	reportPath := filepath.Join(root, "report.json")
+	previousReportPath := models.ReportFileName
+	models.ReportFileName = reportPath
+	t.Cleanup(func() { models.ReportFileName = previousReportPath })
+	common := []string{"--workers", "1", "--exec-timeout", "5", "--config", "mutago.yml"}
+
+	out := testMain(t, root, append([]string{"--exec", allErrors, "--min-msi", "90"}, append(common, ".")...), returnError, "mutation score")
+	assert.Contains(t, out, "The mutation score is 0.00%")
+	data, err := os.ReadFile(reportPath)
+	require.NoError(t, err)
+	var report struct {
+		Stats        models.Stats    `json:"stats"`
+		Errored      []models.Mutant `json:"errored"`
+		MutatorStats []struct {
+			Killed  int64 `json:"killed"`
+			Errored int64 `json:"errored"`
+			Total   int64 `json:"total"`
+		} `json:"mutatorStats"`
+	}
+	require.NoError(t, json.Unmarshal(data, &report))
+	require.NotEmpty(t, report.Errored)
+	require.NotEmpty(t, report.MutatorStats)
+	assert.Equal(t, 0.0, report.Stats.Msi)
+	for _, stats := range report.MutatorStats {
+		assert.Zero(t, stats.Killed)
+		assert.Equal(t, stats.Total, stats.Errored)
+	}
+
+	baselinePath := filepath.Join(root, "baseline.json")
+	originalBaseline := "{\"version\":1,\"mutants\":[{\"id\":\"keep\"}]}\n"
+	writeFixtureFile(t, baselinePath, originalBaseline)
+	require.NoError(t, os.Remove(reportPath))
+	testMain(t, root, append([]string{"--exec", allErrors, "--update-baseline", "--baseline", baselinePath}, append(common, ".")...), returnError, "mutation score")
+	assert.FileExists(t, reportPath)
+	baselineData, err := os.ReadFile(baselinePath)
+	require.NoError(t, err)
+	assert.Equal(t, originalBaseline, string(baselineData))
+
+	assert.NotEmpty(t, report.Errored[0].ID)
+	single := testMain(t, root, append([]string{"--exec", allErrors, "--run-mutant-id", report.Errored[0].ID}, append(common, ".")...), returnError, "UNKNOWN exit code")
+	assert.NotContains(t, single, "mutation score")
+
+	marker := filepath.Join(root, "first-run")
+	mixed := filepath.Join(root, "mixed.sh")
+	require.NoError(t, os.WriteFile(mixed, []byte(fmt.Sprintf("#!/bin/sh\nif [ -e %q ]; then exit 0; fi\ntouch %q\nexit 3\n", marker, marker)), 0o755))
+	testMain(t, root, append([]string{"--exec", mixed, "--min-msi", "50"}, append(common, ".")...), returnError, "mutation score")
+	data, err = os.ReadFile(reportPath)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, &report))
+	assert.Positive(t, report.Stats.KilledCount)
+	assert.Equal(t, int64(1), report.Stats.ErrorCount)
+	assert.GreaterOrEqual(t, report.Stats.Msi, 0.5)
+}
+
 func TestMainSimple(t *testing.T) {
 	testMain(
 		t,
@@ -313,7 +380,7 @@ func TestMainCleansUpTemporarySourceFiles(t *testing.T) {
 			t,
 			fixtureDir,
 			[]string{"--exec", execScript, "--exec-timeout", "5", "--min-msi", "101", "."},
-			returnMsiThresholdNotMet,
+			returnError,
 			"mutation score",
 		)
 
