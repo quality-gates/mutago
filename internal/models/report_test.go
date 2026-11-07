@@ -61,6 +61,26 @@ func TestMsiScore_Mixed(t *testing.T) {
 	assert.InDelta(t, 0.75, r.Stats.Msi, 0.001)
 }
 
+func TestScoresAndMutatorBreakdownExcludeErrorsAndSkipsFromKills(t *testing.T) {
+	r := &Report{
+		HasCoverage: true,
+		Stats: Stats{
+			KilledCount: 1, EscapedCount: 1, ErrorCount: 1, SkippedCount: 1, NotCoveredCount: 1,
+		},
+		Killed:  []Mutant{killed("arithmetic/base")},
+		Escaped: []Mutant{escaped("arithmetic/base")},
+		Skipped: []Mutant{killed("arithmetic/base")},
+		Errored: []Mutant{killed("arithmetic/base")},
+	}
+	r.Calculate()
+
+	assert.InDelta(t, 1.0/5.0, r.Stats.Msi, 0.001)
+	assert.InDelta(t, 1.0/4.0, r.Stats.CoveredCodeMsi, 0.001)
+	encoded, err := json.Marshal(r.MutatorStats)
+	assert.NoError(t, err)
+	assert.JSONEq(t, `[{"name":"arithmetic/base","killed":1,"escaped":1,"skipped":1,"errored":1,"total":4}]`, string(encoded))
+}
+
 func TestCoveredMsiScore_ExcludesNotCovered(t *testing.T) {
 	r := &Report{
 		HasCoverage: true,

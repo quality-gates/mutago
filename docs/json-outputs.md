@@ -12,6 +12,10 @@ Each mutant also includes a `checksum` field containing the 32-character
 lowercase checksum accepted by `--blacklist`, and an `id` field containing the
 stable ID used by `--baseline` and `--run-mutant-id`.
 
+Each `mutatorStats` entry counts `killed`, `escaped`, `skipped`, and `errored`
+mutants separately. Its `total` is the sum of those outcomes and excludes
+not-covered mutants.
+
 The legacy `mutator.originalSourceCode` and `mutator.mutatedSourceCode` fields
 remain accepted by the Go model for compatibility, but new reports omit them.
 
@@ -52,7 +56,7 @@ Writes `mutago-summary.json`. Useful for CI badges, dashboards, and downstream s
   "timeOutCount": 0,
   "msi": 0.8333,
   "mutationCodeCoverage": 0,
-  "coveredCodeMsi": 0.9211
+  "coveredCodeMsi": 0.8333
 }
 ```
 
@@ -61,15 +65,15 @@ Writes `mutago-summary.json`. Useful for CI badges, dashboards, and downstream s
 | `totalMutantsCount` | int | Total mutations generated |
 | `killedCount` | int | Mutations caught by tests |
 | `escapedCount` | int | Mutations not caught (test gaps) |
-| `errorCount` | int | Mutations that caused a build or test error |
-| `skippedCount` | int | Mutations skipped (blacklisted or annotated) |
+| `errorCount` | int | Mutations that could not be classified because execution failed |
+| `skippedCount` | int | Mutations skipped, including uncompilable mutants |
 | `notCoveredCount` | int | Mutations on lines with no coverage (requires `--coverage`) |
 | `timeOutCount` | int | Mutations that timed out during testing |
 | `msi` | float | Mutation Score Indicator: killed / total, range 0–1 |
 | `mutationCodeCoverage` | int | Lines covered by the coverage profile |
 | `coveredCodeMsi` | float | MSI restricted to covered lines only, range 0–1 |
 
-`msi` and `coveredCodeMsi` are in the **0–1 range** (not 0–100). Both the summary JSON report and the agentic JSON report (`--logger-agentic-json`) use a **0–1 ratio** for `msi`.
+`msi` and `coveredCodeMsi` are in the **0–1 range** (not 0–100). Both the summary JSON report and the agentic JSON report (`--logger-agentic-json`) use a **0–1 ratio** for `msi`. Skipped and errored mutants count in the total, not as kills. Covered MSI excludes not-covered mutants from the total.
 
 ## `--logger-agentic-json`
 

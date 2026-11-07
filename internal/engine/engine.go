@@ -1223,14 +1223,21 @@ func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *mod
 		return code
 	}
 
-	if handled, code := handleBaselineUpdate(stdout, stderr, opts, report, roots.module); handled {
-		return code
+	if report.Stats.ErrorCount == 0 {
+		if handled, code := handleBaselineUpdate(stdout, stderr, opts, report, roots.module); handled {
+			return code
+		}
 	}
 
 	printResultsIfNeeded(stdout, opts, report, roots)
 
 	if code := writeAllReports(stderr, opts, report, roots); code != returnOk {
 		return code
+	}
+
+	if report.Stats.ErrorCount > 0 {
+		fmt.Fprintf(stderr, "mutago: %d mutant(s) could not be tested\n", report.Stats.ErrorCount)
+		return returnError
 	}
 
 	if opts.Exec.RunMutantID != "" {

@@ -62,7 +62,7 @@ type Options struct {
 	// When the baseline file does not exist, the check is skipped (opt-in).
 	Baseline struct {
 		File   string `long:"baseline" description:"Path to baseline file of known-surviving mutants" default:"mutago-baseline.json"`
-		Update bool   `long:"update-baseline" description:"Write current escaped mutants to the baseline file then exit 0"`
+		Update bool   `long:"update-baseline" description:"Write current escaped mutants to the baseline file and exit 0; leave the baseline unchanged if any mutant errors"`
 	} `group:"Baseline options"`
 
 	Test struct {

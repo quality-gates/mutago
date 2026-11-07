@@ -43,17 +43,17 @@ func TestCompletedResultsReportMatchesRecordedOutcomes(t *testing.T) {
 	if report.Escaped[0].ID != "e1" || report.NotCovered[0].ID != "n1" {
 		t.Fatalf("recorded mutants landed in the wrong collection: %+v", report)
 	}
-	if math.Abs(report.Stats.Msi-4.0/6.0) > 1e-9 {
-		t.Fatalf("msi = %v, want 4/6", report.Stats.Msi)
+	if math.Abs(report.Stats.Msi-2.0/6.0) > 1e-9 {
+		t.Fatalf("msi = %v, want 2/6", report.Stats.Msi)
 	}
-	if math.Abs(report.Stats.CoveredCodeMsi-0.8) > 1e-9 {
-		t.Fatalf("covered msi = %v, want 0.8", report.Stats.CoveredCodeMsi)
+	if math.Abs(report.Stats.CoveredCodeMsi-0.4) > 1e-9 {
+		t.Fatalf("covered msi = %v, want 0.4", report.Stats.CoveredCodeMsi)
 	}
 
 	perMutator := append([]models.MutatorStats(nil), report.MutatorStats...)
 	sort.Slice(perMutator, func(i, j int) bool { return perMutator[i].Name < perMutator[j].Name })
 	wantPerMutator := []models.MutatorStats{
-		{Name: "a", Killed: 2, Escaped: 1, Total: 3},
+		{Name: "a", Killed: 1, Escaped: 1, Errored: 1, Total: 3},
 		{Name: "b", Killed: 1, Skipped: 1, Total: 2},
 	}
 	if len(perMutator) != len(wantPerMutator) {

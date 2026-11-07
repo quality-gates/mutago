@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"go/types"
 	"io"
 	"os"
@@ -15,9 +16,6 @@ import (
 	"github.com/quality-gates/mutago/v2/internal/models"
 )
 
-// TestCustomExecRestoresSource is compiled into the real engine package through
-// go test -overlay. Its fake go command pauses only after the script has copied
-// the mutant into the source file; runCustomExec and the scripts are real.
 func TestCustomExecRestoresSource(t *testing.T) {
 	root := os.Getenv("MUTAGO_VERIFY_ROOT")
 	if root == "" {
@@ -47,8 +45,15 @@ func probeCustomExec(t *testing.T, root, script, scenario string) {
 	started := filepath.Join(dir, "started")
 	release := filepath.Join(dir, "release")
 	finished := filepath.Join(dir, "finished")
+	overlayFile := filepath.Join(dir, "overlay.json")
 	shellPID := filepath.Join(dir, "shell-pid")
-	fakeGo := "#!/bin/sh\n: > \"$MUTAGO_PROBE_STARTED\"\n" +
+	fakeGo := "#!/bin/sh\n" +
+		"found=\nwhile [ $# -gt 0 ]; do\n" +
+		"  if [ \"$1\" = -overlay ]; then\n" +
+		"    shift; cat \"$1\" > \"$MUTAGO_PROBE_OVERLAY\" || exit 3; found=yes; break\n" +
+		"  fi\n  shift\ndone\n" +
+		"[ \"$found\" = yes ] || exit 3\n" +
+		": > \"$MUTAGO_PROBE_STARTED\"\n" +
 		"while [ ! -e \"$MUTAGO_PROBE_RELEASE\" ]; do sleep 0.02; done\n" +
 		": > \"$MUTAGO_PROBE_FINISHED\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "go"), []byte(fakeGo), 0700); err != nil {
@@ -58,6 +63,7 @@ func probeCustomExec(t *testing.T, root, script, scenario string) {
 	t.Setenv("MUTAGO_PROBE_STARTED", started)
 	t.Setenv("MUTAGO_PROBE_RELEASE", release)
 	t.Setenv("MUTAGO_PROBE_FINISHED", finished)
+	t.Setenv("MUTAGO_PROBE_OVERLAY", overlayFile)
 	t.Setenv("MUTAGO_PROBE_SHELL_PID", shellPID)
 	t.Cleanup(func() { _ = os.WriteFile(release, nil, 0600) })
 
@@ -78,8 +84,30 @@ func probeCustomExec(t *testing.T, root, script, scenario string) {
 	done := make(chan int, 1)
 	go func() { done <- runCustomExec(job, &models.Mutant{}) }()
 	waitForProbeFile(t, started)
-	assertProbeFile(t, original, changed, "precondition: the script installed the mutant")
-	assertProbeFile(t, original+".tmp", want, "precondition: the original is in the backup")
+	assertProbeFile(t, original, want, "source changed while the test was running")
+	var overlay struct {
+		Replace map[string]string
+	}
+	data, err := os.ReadFile(overlayFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &overlay); err != nil {
+		t.Fatalf("the test did not receive a valid overlay: %v", err)
+	}
+	physicalDir, err := filepath.EvalSymlinks(filepath.Dir(original))
+	if err != nil {
+		t.Fatal(err)
+	}
+	physicalSource := filepath.Join(physicalDir, filepath.Base(original))
+	if overlay.Replace[physicalSource] != mutant {
+		t.Fatalf("the test did not receive the mutant overlay: %v", overlay.Replace)
+	}
+	for path, replacement := range overlay.Replace {
+		if replacement != mutant {
+			t.Errorf("overlay replacement for %q is %q; want %q", path, replacement, mutant)
+		}
+	}
 
 	if scenario == "cancel" {
 		cancel()
@@ -109,7 +137,7 @@ func probeCustomExec(t *testing.T, root, script, scenario string) {
 		t.Fatal(err)
 	}
 	waitForProbeFile(t, finished)
-	assertProbeFile(t, original, want, "source was not restored after "+scenario)
+	assertProbeFile(t, original, want, "source changed after "+scenario)
 }
 
 func waitForProbeFile(t *testing.T, path string) {
