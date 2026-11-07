@@ -36,7 +36,7 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | `--logger-gitlab` | Write `mutago-gitlab.json` in GitLab Code Quality format |
 | `--logger-summary-json` | Write compact stats to `mutago-summary.json` |
 | `--logger-agentic-json` | Write LLM-ready report to `mutago-agentic.json` |
-| `--run-mutant-id` | Run only the mutant with this stable ID (copy the `id` field from `mutago-agentic.json`). Other mutants are not classified or counted. `--dry-run` counts only this mutant. Exits 3 if no matching mutant is found. Valid-ID runs suppress the summary and quality gates. |
+| `--run-mutant-id` | Run only the mutant with this stable ID (copy the `id` field from `mutago-agentic.json`). Other mutants are not classified or counted. `--dry-run` counts only this mutant. Exits 3 if no matching mutant is found or execution errors. Valid-ID runs suppress the summary and quality gates. |
 | `--version`, `-v` | Print version and exit 0 |
 
 ## Quality gates
@@ -47,6 +47,8 @@ Targets can be Go source files, directories, or import paths. The `...` wildcard
 | `--min-covered-msi` | `-1` (disabled) | Fail (exit 4) if covered-code MSI is below this value |
 | `--fail-on-escaped` | `false` | Fail (exit 4) if any mutant survives, without requiring `--min-msi` |
 | `--ignore-msi-with-no-mutations` | `false` | Exit 0 when no mutations are generated (useful in PR mode) |
+
+MSI is killed mutants divided by all mutants. Skipped and errored mutants count in the total but not as kills. Covered MSI excludes not-covered mutants from the total.
 
 ## Coverage
 
@@ -94,14 +96,14 @@ If a generated mutant does not compile, it is skipped rather than counted as kil
 | Flag | Description |
 | :--- | :---------- |
 | `--baseline <file>` | Known-survivors file; only fail on new escapes |
-| `--update-baseline` | Record current survivors and exit 0 |
+| `--update-baseline` | Record current survivors and exit 0; leave the baseline unchanged and exit 3 if any mutant errors |
 
 ## Exit codes
 
 | Code | Meaning |
 | :--- | :------ |
 | 0 | All mutations tested; all quality gates passed |
-| 3 | Invalid input or tool failure, including a failed clean coverage run |
+| 3 | Invalid input or tool failure, including a failed clean coverage run or any errored mutant |
 | 4 | A quality gate was not met (`--min-msi`, `--min-covered-msi`, or `--fail-on-escaped`) |
 
 ## Exploratory testing

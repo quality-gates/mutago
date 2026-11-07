@@ -44,13 +44,14 @@ type Stats struct {
 	DuplicatedCount   int64   `json:"-"`
 }
 
-// MutatorStats holds per-mutator kill/escape counts for tested mutants only.
+// MutatorStats holds per-mutator outcome counts for tested mutants only.
 // Not-covered mutants are excluded from all counts here.
 type MutatorStats struct {
 	Name    string `json:"name"`
 	Killed  int64  `json:"killed"`
 	Escaped int64  `json:"escaped"`
 	Skipped int64  `json:"skipped"`
+	Errored int64  `json:"errored"`
 	Total   int64  `json:"total"`
 }
 
@@ -111,13 +112,13 @@ func (report *Report) Calculate() {
 	report.MutatorStats = report.computeMutatorStats()
 }
 
-// MsiScore returns killed / total (skipped and errors count as killed).
+// MsiScore returns killed / total.
 func (report *Report) MsiScore() float64 {
 	total := report.TotalCount()
 	if total == 0 {
 		return 0.0
 	}
-	return float64(report.Stats.KilledCount+report.Stats.ErrorCount+report.Stats.SkippedCount) / float64(total)
+	return float64(report.Stats.KilledCount) / float64(total)
 }
 
 // CoveredMsiScore returns killed / (total - notCovered).
@@ -132,7 +133,7 @@ func (report *Report) CoveredMsiScore() float64 {
 	if covered <= 0 {
 		return 0.0
 	}
-	return float64(report.Stats.KilledCount+report.Stats.ErrorCount+report.Stats.SkippedCount) / float64(covered)
+	return float64(report.Stats.KilledCount) / float64(covered)
 }
 
 // TotalCount returns all mutants: killed, escaped, errored, skipped, and not-covered.
@@ -161,7 +162,7 @@ func (report *Report) computeMutatorStats() []MutatorStats {
 	add(report.Killed, func(s *MutatorStats) { s.Killed++ })
 	add(report.Escaped, func(s *MutatorStats) { s.Escaped++ })
 	add(report.Skipped, func(s *MutatorStats) { s.Skipped++ })
-	add(report.Errored, func(s *MutatorStats) { s.Killed++ }) // errors count as kills
+	add(report.Errored, func(s *MutatorStats) { s.Errored++ })
 
 	result := make([]MutatorStats, 0, len(counts))
 	for _, s := range counts {
