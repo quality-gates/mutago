@@ -11,7 +11,7 @@ description: Verify source preservation when a bundled custom exec finishes, is 
 
 ## Coverage and sync
 
-Last matched against commit `74ae7fd17fbcd57a484cfa1c0b0dae7008093cc1`:
+Last matched against the code in PR #362:
 
 | Code | What to match to the model |
 | --- | --- |
@@ -21,10 +21,15 @@ Last matched against commit `74ae7fd17fbcd57a484cfa1c0b0dae7008093cc1`:
 | `cmd/mutago/main.go`: `main` | Interrupt and termination cancel the engine's context. |
 | `scripts/exec/test-mutated-package.sh`, `scripts/exec/test-current-directory.sh`, `scripts/exec/overlay.sh` | Passing an overlay to `go test` without modifying the original source. |
 
-From the repo root, inspect the diff since that commit for these files, including uncommitted changes:
+From the repo root, find the PR's squash commit and inspect the diff since it, including uncommitted changes. Before the PR merges, use its product commit as the baseline:
 
 ```sh
-git diff 74ae7fd17fbcd57a484cfa1c0b0dae7008093cc1 -- internal/engine/engine.go internal/engine/mode.go internal/engine/runner.go cmd/mutago/main.go scripts/exec/test-mutated-package.sh scripts/exec/test-current-directory.sh scripts/exec/overlay.sh
+baseline=$(git log --all --format=%H --extended-regexp \
+  --grep='^fix: preserve source and reject errored mutant runs \(#362\)$' -1)
+if [ -z "$baseline" ]; then
+  baseline=74ae7fd17fbcd57a484cfa1c0b0dae7008093cc1
+fi
+git diff "$baseline" -- internal/engine/engine.go internal/engine/mode.go internal/engine/runner.go cmd/mutago/main.go scripts/exec/test-mutated-package.sh scripts/exec/test-current-directory.sh scripts/exec/overlay.sh
 ```
 
 Read every changed covered function and compare its actual operations and ordering with `CustomExec.tla`, its configurations, and `probe_test.go`. If the scripts differ, check a model for each implementation. Update the model and probe for intended changes, including intermediate states where the real code can be interrupted. Move the sync commit forward only after confirming the verification describes the covered code at the new commit; keep checking the working-tree diff too. If the old commit is unavailable, inspect all covered code instead.
