@@ -40,4 +40,5 @@ for package in baseline console; do
     cat "$tmp/$package.log" >&2; echo "ERROR: unrelated failure in $package" >&2; exit 1
   fi
   echo "Detected deliberately broken $package implementation"
+  GOMAXPROCS=1 go test -count=1 -overlay "$tmp/$package.json" -run '^TestVerification' "./internal/$package"
 done

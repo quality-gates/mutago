@@ -37,3 +37,4 @@ if ! grep -Eq 'close of closed channel|summary count' "$tmp/broken.log"; then
   cat "$tmp/broken.log" >&2; echo 'ERROR: unrelated failure' >&2; exit 1
 fi
 echo 'Detected deliberately non-idempotent shutdown'
+GOMAXPROCS=1 go test -count=1 -timeout 30s -race -overlay "$tmp/normal.json" -run '^TestShutdownVerification$' ./internal/engine
