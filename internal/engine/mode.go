@@ -55,7 +55,7 @@ type mutantSink interface {
 	// flush ends one discovery pass over fc.
 	flush(fc *fileContext)
 	// finish runs the post-run steps that apply and returns the exit code.
-	finish(run *mutationRun, bl *baseline.File) int
+	finish(run *mutationRun, bl baseline.Snapshot) int
 }
 
 func newMutantSink(r *mutationRun, jobs chan<- execJob) mutantSink {
@@ -83,7 +83,7 @@ func (s *executeSink) flush(*fileContext) {}
 
 // finish reports the results. Run cleanup has already filled and calculated
 // the report.
-func (s *executeSink) finish(run *mutationRun, bl *baseline.File) int {
+func (s *executeSink) finish(run *mutationRun, bl baseline.Snapshot) int {
 	return finalizeResults(run.stdout, run.stderr, run.opts, run.report, bl, run.roots, run.runMutantIDFound.Load())
 }
 
@@ -116,7 +116,7 @@ func (s *dryRunSink) flush(fc *fileContext) {
 	s.pending = make(map[string]int)
 }
 
-func (s *dryRunSink) finish(run *mutationRun, _ *baseline.File) int {
+func (s *dryRunSink) finish(run *mutationRun, _ baseline.Snapshot) int {
 	var total int
 	for _, count := range s.totals {
 		total += count
@@ -147,7 +147,7 @@ func (s *generateSink) admit(fc *fileContext, _ mutago.PositionedMutation, mutat
 
 func (s *generateSink) flush(*fileContext) {}
 
-func (s *generateSink) finish(run *mutationRun, _ *baseline.File) int {
+func (s *generateSink) finish(run *mutationRun, _ baseline.Snapshot) int {
 	if code := checkRunMutantIDFound(run.stderr, run.opts, run.runMutantIDFound.Load()); code != returnOk {
 		return code
 	}

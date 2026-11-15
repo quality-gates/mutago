@@ -184,6 +184,25 @@ func TestTerminalReporterProgress(t *testing.T) {
 	}
 }
 
+func TestTerminalReporterProgressCanResumeAfterSummary(t *testing.T) {
+	var stderr bytes.Buffer
+	r := NewTerminalReporter(&models.Options{}, &bytes.Buffer{}, &stderr, true)
+	r.OnSummary(&models.Report{})
+	r.OnProgress(models.Stats{KilledCount: 1})
+	r.OnProgress(models.Stats{KilledCount: 2})
+	r.OnSummary(&models.Report{})
+	r.OnProgress(models.Stats{EscapedCount: 1})
+	r.OnSummary(&models.Report{})
+	want := "\rProcessed 1 mutants (1 killed, 0 escaped, 0 not covered, 0 errored)" +
+		"\rProcessed 2 mutants (2 killed, 0 escaped, 0 not covered, 0 errored)" +
+		"\r\x1b[K" +
+		"\rProcessed 1 mutants (0 killed, 1 escaped, 0 not covered, 0 errored)" +
+		"\r\x1b[K"
+	if got := stderr.String(); got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+}
+
 func TestTerminalReporterHidesProgress(t *testing.T) {
 	verbose := &models.Options{}
 	verbose.General.Verbose = true

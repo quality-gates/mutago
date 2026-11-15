@@ -188,6 +188,7 @@ func (e *Engine) Run(ctx context.Context, opts *models.Options, bl *baseline.Fil
 // RunResolved executes a mutation run using targets discovered by the caller.
 func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *baseline.File, targets importing.ResolvedTargets) (Result, error) {
 	e.initDefaults()
+	baselineSnapshot := baseline.Capture(bl)
 	stdout, stderr := synchronizedWriters(e.Stdout, e.Stderr)
 	listener := e.Listener
 	if listener == nil {
@@ -228,7 +229,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 		return Result{Report: report, ExitCode: returnError}, err
 	}
 
-	return Result{Report: report, ExitCode: run.sink.finish(run, bl)}, nil
+	return Result{Report: report, ExitCode: run.sink.finish(run, baselineSnapshot)}, nil
 }
 
 // newRunCleanup returns a function that stops the workers and progress
@@ -1203,7 +1204,7 @@ func removeTmpDir(stderr io.Writer, opts *models.Options, tmpDir string) {
 	console.Debug(opts, "Remove %q", tmpDir)
 }
 
-func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File, roots sourceRoots, runMutantIDFound bool) int {
+func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *models.Report, bl baseline.Snapshot, roots sourceRoots, runMutantIDFound bool) int {
 	if code := checkRunMutantIDFound(stderr, opts, runMutantIDFound); code != returnOk {
 		return code
 	}
@@ -1362,7 +1363,7 @@ func printGitHubAnnotations(stdout io.Writer, report *models.Report, roots sourc
 	}
 }
 
-func checkQualityGates(stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File) int {
+func checkQualityGates(stderr io.Writer, opts *models.Options, report *models.Report, bl baseline.Snapshot) int {
 	if opts.Score.IgnoreMsiWithNoMutations && report.Stats.TotalMutantsCount == 0 {
 		return returnOk
 	}
@@ -1387,19 +1388,19 @@ func resolveThreshold(cliValue, configValue float64) float64 {
 	return cliValue
 }
 
-func checkEscapedGate(stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File) bool {
+func checkEscapedGate(stderr io.Writer, opts *models.Options, report *models.Report, bl baseline.Snapshot) bool {
 	if !opts.Score.FailOnEscaped {
 		return false
 	}
-	newEscapes := bl.NewEscapes(report.Escaped)
-	if len(newEscapes) == 0 {
+	escapes := bl.Compare(report.Escaped)
+	if len(escapes.Mutants) == 0 {
 		return false
 	}
 	qualifier := ""
-	if bl != nil {
+	if escapes.BaselinePresent {
 		qualifier = "new "
 	}
-	fmt.Fprintf(stderr, "%d %smutant(s) escaped — kill them or run --update-baseline to accept\n", len(newEscapes), qualifier)
+	fmt.Fprintf(stderr, "%d %smutant(s) escaped — kill them or run --update-baseline to accept\n", len(escapes.Mutants), qualifier)
 	return true
 }
 

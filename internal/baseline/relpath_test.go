@@ -39,9 +39,57 @@ func TestNewEscapes_MatchesOnlyRecordedIDs(t *testing.T) {
 	second.ID = MutantIDAt("internal/store/store.go", "arithmetic/base", storeDiff, 1)
 	accepted := &File{Version: 1, Mutants: []Entry{{ID: first.ID, File: "internal/store/store.go"}}}
 
-	got := accepted.NewEscapes([]models.Mutant{first, second})
+	got := Capture(accepted).Compare([]models.Mutant{first, second}).Mutants
 	if len(got) != 1 || got[0].ID != second.ID {
 		t.Fatalf("want only the second same-text mutant as a new escape, got %+v", got)
+	}
+}
+
+func TestBaselineAcrossRuns(t *testing.T) {
+	root := newModule(t)
+	path := filepath.Join(root, "baseline.json")
+	first := storeMutant(filepath.Join(root, "internal/store/store.go"))
+	first.ID = "first"
+	second := first
+	second.ID = "second"
+	escaped := []models.Mutant{first, second}
+
+	baseline, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Capture(baseline).Compare(escaped); got.BaselinePresent || len(got.Mutants) != 2 {
+		t.Fatalf("missing baseline should accept no escapes, got %+v", got)
+	}
+	if err := Write(path, nil, root); err != nil {
+		t.Fatal(err)
+	}
+	baseline, err = Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Capture(baseline).Compare(escaped); !got.BaselinePresent || len(got.Mutants) != 2 {
+		t.Fatalf("empty baseline should mark both escapes as new, got %+v", got)
+	}
+	if err := Write(path, []models.Mutant{first}, root); err != nil {
+		t.Fatal(err)
+	}
+	baseline, err = Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Capture(baseline).Compare(escaped); !got.BaselinePresent || len(got.Mutants) != 1 || got.Mutants[0].ID != second.ID {
+		t.Fatalf("loaded baseline should accept only first, got %+v", got)
+	}
+	if err := Write(path, []models.Mutant{second}, root); err != nil {
+		t.Fatal(err)
+	}
+	baseline, err = Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Capture(baseline).Compare(escaped); !got.BaselinePresent || len(got.Mutants) != 1 || got.Mutants[0].ID != first.ID {
+		t.Fatalf("updated baseline should replace accepted escapes, got %+v", got)
 	}
 }
 

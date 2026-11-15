@@ -56,9 +56,9 @@ func FuzzLoad(f *testing.F) {
 			return
 		}
 		if fl != nil {
-			// IDSet and NewEscapes must not panic on the parsed file.
+			// IDSet and comparison must not panic on the parsed file.
 			_ = fl.IDSet()
-			_ = fl.NewEscapes(nil)
+			_ = Capture(fl).Compare(nil)
 		}
 	})
 }

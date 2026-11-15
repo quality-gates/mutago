@@ -34,6 +34,48 @@ type Entry struct {
 	Line    int64  `json:"line"`
 }
 
+type snapshotState uint8
+
+const (
+	missingBaseline snapshotState = iota
+	loadedBaseline
+)
+
+// Snapshot is the accepted escape set for one run. Its zero value represents
+// an absent baseline, which differs from a present baseline with no entries.
+type Snapshot struct {
+	state snapshotState
+	ids   map[string]struct{}
+}
+
+// Capture converts the optional loaded file into a run's baseline state.
+func Capture(file *File) Snapshot {
+	if file == nil {
+		return Snapshot{}
+	}
+	return Snapshot{state: loadedBaseline, ids: file.IDSet()}
+}
+
+// Escapes is the outcome of comparing a run's survivors with its baseline.
+type Escapes struct {
+	Mutants         []models.Mutant
+	BaselinePresent bool
+}
+
+// Compare identifies escapes that are not in the snapshot.
+func (s Snapshot) Compare(escaped []models.Mutant) Escapes {
+	if s.state == missingBaseline {
+		return Escapes{Mutants: escaped}
+	}
+	result := Escapes{BaselinePresent: true}
+	for _, m := range escaped {
+		if _, known := s.ids[m.ID]; !known {
+			result.Mutants = append(result.Mutants, m)
+		}
+	}
+	return result
+}
+
 // MutantID returns a stable identifier for a mutant.
 // It hashes the relative file path, mutator name, and the actual changed
 // lines from the diff — deliberately excluding line numbers so the ID
@@ -94,22 +136,6 @@ func (f *File) IDSet() map[string]struct{} {
 		s[m.ID] = struct{}{}
 	}
 	return s
-}
-
-// NewEscapes returns mutants from escaped whose ID is not recorded in this
-// baseline. When f is nil (no baseline loaded), all mutants are considered new.
-func (f *File) NewEscapes(escaped []models.Mutant) []models.Mutant {
-	if f == nil {
-		return escaped
-	}
-	knownIDs := f.IDSet()
-	var result []models.Mutant
-	for _, m := range escaped {
-		if _, known := knownIDs[m.ID]; !known {
-			result = append(result, m)
-		}
-	}
-	return result
 }
 
 // Write serialises the escaped mutants to the baseline file.
