@@ -27,6 +27,11 @@ overlay = {str(root / 'internal/engine/verification_overlay_test.go'): str(skill
 (tmp / 'normal.json').write_text(json.dumps({'Replace': overlay}))
 overlay[str(p)] = str(tmp / 'broken.go')
 (tmp / 'broken.json').write_text(json.dumps({'Replace': overlay}))
+original = p.read_text()
+needle = '\tdefer setup.close()'
+if original.count(needle) != 1: raise SystemExit('Cannot construct early-exit cleanup mutation')
+(tmp / 'early.go').write_text(original.replace(needle, ''))
+(tmp / 'early.json').write_text(json.dumps({'Replace': {str(p): str(tmp / 'early.go')}}))
 PY
 cd "$root"
 GOMAXPROCS=1 go test -count=1 -timeout 30s -race -overlay "$tmp/normal.json" -run '^TestShutdownVerification$' ./internal/engine
@@ -38,3 +43,13 @@ if ! grep -Eq 'close of closed channel|summary count' "$tmp/broken.log"; then
 fi
 echo 'Detected deliberately non-idempotent shutdown'
 GOMAXPROCS=1 go test -count=1 -timeout 30s -race -overlay "$tmp/normal.json" -run '^TestShutdownVerification$' ./internal/engine
+
+GOMAXPROCS=1 go test -count=1 -timeout 120s -run '^TestEngineCancelDuringPreparation/baseline$' ./internal/engine
+if GOMAXPROCS=1 go test -count=1 -timeout 120s -overlay "$tmp/early.json" -run '^TestEngineCancelDuringPreparation/baseline$' ./internal/engine >"$tmp/early.log" 2>&1; then
+  echo 'ERROR: early cleanup omission passed' >&2; exit 1
+fi
+if ! grep -q 'run tmp dirs' "$tmp/early.log"; then
+  cat "$tmp/early.log" >&2; echo 'ERROR: unrelated failure' >&2; exit 1
+fi
+echo 'Detected missing cleanup after baseline cancellation'
+GOMAXPROCS=1 go test -count=1 -timeout 120s -run '^TestEngineCancelDuringPreparation/baseline$' ./internal/engine

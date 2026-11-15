@@ -199,16 +199,20 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	if err != nil {
 		return Result{ExitCode: returnError}, err
 	}
-	run, pkgs := setup.run, setup.pkgs
-	if run == nil {
-		// initRun returns a nil run with a non-nil result for early exits.
+	if setup.run == nil {
 		return Result{ExitCode: returnError}, nil
 	}
+	return setup.execute(baselineSnapshot)
+}
 
+// execute owns the initialized run from baseline checks through finalization.
+// Every exit closes the setup, including failures before discovery starts.
+func (setup *runSetup) execute(baselineSnapshot baseline.Snapshot) (Result, error) {
 	defer setup.close()
-
+	run, pkgs := setup.run, setup.pkgs
+	ctx, opts := run.ctx, run.opts
 	report := run.report
-	if exitCode := runBaselineChecks(ctx, runEngine.Stderr, opts, pkgs, run.exec); exitCode != 0 {
+	if exitCode := runBaselineChecks(ctx, run.stderr, opts, pkgs, run.exec); exitCode != 0 {
 		return Result{Report: report, ExitCode: exitCode}, ctx.Err()
 	}
 
