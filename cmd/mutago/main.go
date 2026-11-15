@@ -254,28 +254,41 @@ func exitError(format string, args ...interface{}) int {
 	return returnError
 }
 
-func mainCmd(args []string) int {
+type invocation struct {
+	opts     *models.Options
+	targets  importing.ResolvedTargets
+	baseline *baseline.File
+}
+
+func prepareInvocation(args []string) (*invocation, int) {
 	opts := models.NewOptions()
-
-	if exit, exitCode := checkArguments(args, opts); exit {
-		return exitCode
+	if exit, code := checkArguments(args, opts); exit {
+		return nil, code
 	}
-
 	targets := importing.ResolveTargets(opts.Remaining.Targets, opts)
 	if len(targets.Files) == 0 {
-		return exitError("Could not find any suitable Go source files")
+		return nil, exitError("Could not find any suitable Go source files")
 	}
-
 	bl, err := baseline.Load(opts.Baseline.File)
 	if err != nil {
-		return exitError("Cannot load baseline: %v", err)
+		return nil, exitError("Cannot load baseline: %v", err)
 	}
+	return &invocation{opts: opts, targets: targets, baseline: bl}, returnOk
+}
 
-	if handled, code := handleInfoFlags(opts, targets.Files); handled {
+func (i *invocation) run() int {
+	if handled, code := handleInfoFlags(i.opts, i.targets.Files); handled {
 		return code
 	}
+	return runMutationTesting(i.opts, i.baseline, i.targets)
+}
 
-	return runMutationTesting(opts, bl, targets)
+func mainCmd(args []string) int {
+	i, code := prepareInvocation(args)
+	if i == nil {
+		return code
+	}
+	return i.run()
 }
 
 func handleInfoFlags(opts *models.Options, files []string) (bool, int) {
@@ -300,19 +313,44 @@ func handleInfoFlags(opts *models.Options, files []string) (bool, int) {
 	return false, 0
 }
 
+type runInterrupts struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+func newRunInterrupts() *runInterrupts {
+	ctx, cancel := context.WithCancel(context.Background())
+	i := &runInterrupts{ctx: ctx, cancel: cancel, done: make(chan struct{})}
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		defer close(i.done)
+		select {
+		case <-signals:
+			signal.Stop(signals)
+			cancel()
+		case <-ctx.Done():
+			signal.Stop(signals)
+		}
+	}()
+	return i
+}
+
+func (i *runInterrupts) close() {
+	i.cancel()
+	<-i.done
+}
+
 func runMutationTesting(opts *models.Options, bl *baseline.File, targets importing.ResolvedTargets) int {
 	e := &engine.Engine{
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	go func() {
-		<-ctx.Done()
-		stop()
-	}()
+	interrupts := newRunInterrupts()
+	defer interrupts.close()
 
-	res, err := e.RunResolved(ctx, opts, bl, targets)
+	res, err := e.RunResolved(interrupts.ctx, opts, bl, targets)
 	if err != nil {
 		return exitError(err.Error())
 	}
