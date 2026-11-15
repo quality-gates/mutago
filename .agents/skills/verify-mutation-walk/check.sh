@@ -27,6 +27,12 @@ if source.count(needle) != 1:
 (tmp / 'broken.go').write_text(source.replace(needle, 'defer func() {}()', 1))
 base[str(root / 'walk.go')] = str(tmp / 'broken.go')
 (tmp / 'broken-overlay.json').write_text(json.dumps({'Replace': base}))
+needle = 'h.phase = waitingForReset'
+if source.count(needle) != 1:
+    raise SystemExit('expected exactly one applied-to-reset transition')
+(tmp / 'broken-phase.go').write_text(source.replace(needle, 'h.phase = waitingForApplied', 1))
+base[str(root / 'walk.go')] = str(tmp / 'broken-phase.go')
+(tmp / 'broken-phase-overlay.json').write_text(json.dumps({'Replace': base}))
 PY
 cd "$root"
 go test -count=1 -timeout 30s -overlay "$tmp/overlay.json" -run '^TestWalk(Restoration|Handshake)Probe$' .
@@ -38,4 +44,12 @@ if ! grep -q 'source not restored' "$tmp/broken.log"; then
   echo 'ERROR: broken implementation failed for an unrelated reason' >&2; exit 1
 fi
 echo 'Missing-reset implementation failed the restoration probe as expected.'
+if go test -count=1 -timeout 30s -overlay "$tmp/broken-phase-overlay.json" -run '^TestWalkHandshakeProbe$' . >"$tmp/broken-phase.log" 2>&1; then
+  echo 'ERROR: wrong handshake phase passed' >&2; exit 1
+fi
+if ! grep -q 'mutation handshake: reset out of order' "$tmp/broken-phase.log"; then
+  cat "$tmp/broken-phase.log" >&2
+  echo 'ERROR: wrong-phase implementation failed for an unrelated reason' >&2; exit 1
+fi
+echo 'Wrong-phase implementation failed the handshake probe as expected.'
 go test -count=1 -timeout 30s -overlay "$tmp/overlay.json" -run '^TestWalk(Restoration|Handshake)Probe$' .
