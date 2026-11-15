@@ -32,6 +32,7 @@ type loadedFile struct {
 
 type packageCache struct {
 	mu       sync.Mutex
+	version  uint64
 	packages map[string]*pkgCacheEntry
 	files    map[string]loadedFile
 }
@@ -44,13 +45,23 @@ var cachedPackages = packageCache{
 func (c *packageCache) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.version++
 	c.packages = make(map[string]*pkgCacheEntry)
 	c.files = make(map[string]loadedFile)
 }
 
-func (c *packageCache) prepare(files map[string]loadedFile, dirs map[string]struct{}, entry *pkgCacheEntry) {
+func (c *packageCache) currentVersion() uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.version
+}
+
+func (c *packageCache) prepare(version uint64, files map[string]loadedFile, dirs map[string]struct{}, entry *pkgCacheEntry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if version != c.version {
+		return
+	}
 	c.files = files
 	for dir := range dirs {
 		c.packages[dir] = entry
@@ -64,16 +75,19 @@ func (c *packageCache) prepared(file string) (loadedFile, bool) {
 	return result, ok
 }
 
-func (c *packageCache) packageFor(dir string) (*pkgCacheEntry, bool) {
+func (c *packageCache) packageFor(dir string) (*pkgCacheEntry, bool, uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	entry, ok := c.packages[dir]
-	return entry, ok
+	return entry, ok, c.version
 }
 
-func (c *packageCache) publish(dir string, entry *pkgCacheEntry) *pkgCacheEntry {
+func (c *packageCache) publish(version uint64, dir string, entry *pkgCacheEntry) *pkgCacheEntry {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if version != c.version {
+		return entry
+	}
 	if existing, ok := c.packages[dir]; ok {
 		return existing
 	}
@@ -99,6 +113,7 @@ func PreparePackages(files []string, dir string) error {
 		return nil
 	}
 
+	version := cachedPackages.currentVersion()
 	fset := token.NewFileSet()
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
@@ -131,7 +146,7 @@ func PreparePackages(files []string, dir string) error {
 			index[abs] = loadedFile{pkg: pkg, file: file, fset: fset}
 		}
 	}
-	cachedPackages.prepare(index, seenDirs, &pkgCacheEntry{pkgs: pkgs, fset: fset})
+	cachedPackages.prepare(version, index, seenDirs, &pkgCacheEntry{pkgs: pkgs, fset: fset})
 	return nil
 }
 
@@ -171,7 +186,8 @@ func packagePatterns(files []string) ([]string, map[string]struct{}, error) {
 // access. Subsequent calls for the same directory return the cached value without
 // re-invoking the type-checker. Safe for concurrent use.
 func loadPkgForDir(dir string) *pkgCacheEntry {
-	if entry, ok := cachedPackages.packageFor(dir); ok {
+	entry, ok, version := cachedPackages.packageFor(dir)
+	if ok {
 		return entry
 	}
 
@@ -190,9 +206,9 @@ func loadPkgForDir(dir string) *pkgCacheEntry {
 		},
 	}
 	pkgs, loadErr := packages.Load(cfg, ".")
-	entry := &pkgCacheEntry{pkgs: pkgs, fset: fset, err: loadErr}
+	entry = &pkgCacheEntry{pkgs: pkgs, fset: fset, err: loadErr}
 
-	return cachedPackages.publish(dir, entry)
+	return cachedPackages.publish(version, dir, entry)
 }
 
 // ParseFile parses the content of the given file and returns the corresponding ast.File node and its file set for positional information.
