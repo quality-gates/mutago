@@ -6,7 +6,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cp -R "$root/scripts/exec" "$tmp/scripts"
 "$skill/probe.sh" "$tmp/scripts"
-python3 - "$tmp/scripts/outcome.sh" <<'PY'
+python3 - "$tmp/scripts/overlay.sh" <<'PY'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1])
 s = p.read_text()

@@ -157,7 +157,7 @@ func TestExecScriptsHandleRelativeMutant(t *testing.T) {
 func TestExecScriptsRunFromDirectoryEndingInNewline(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "scripts\n")
 	require.NoError(t, os.Mkdir(dir, 0o755))
-	for _, name := range append([]string{"overlay.sh", "outcome.sh"}, execScripts...) {
+	for _, name := range append([]string{"overlay.sh"}, execScripts...) {
 		content, err := os.ReadFile(name)
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), content, 0o755))

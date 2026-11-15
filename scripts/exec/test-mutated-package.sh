@@ -11,7 +11,6 @@ script_dir=${script_path%/*}
 if [ "$script_dir" = "$script_path" ]; then script_dir=.; fi
 if [ -z "$script_dir" ]; then script_dir=/; fi
 source "$script_dir/overlay.sh" || exit 3
-source "$script_dir/outcome.sh" || exit 3
 
 GOMUTESTING_DIFF=$(diff -u -- "$MUTATE_ORIGINAL" "$MUTATE_CHANGED")
 DIFF_RESULT=$?
