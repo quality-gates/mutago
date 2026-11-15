@@ -375,7 +375,7 @@ func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPac
 		return nil, err
 	}
 	defer os.RemoveAll(buildDir)
-	var jobs []perTestJob
+	var batch profileBatch
 	for i, pkg := range pkgs {
 		binaryDir := filepath.Join(buildDir, strconv.Itoa(i))
 		binaryPath, err := compileCoverageTestBinary(tc, pkg.ImportPath, pkgPath, binaryDir)
@@ -383,14 +383,13 @@ func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPac
 			return nil, err
 		}
 		for _, name := range pkg.Tests {
-			jobs = append(jobs, perTestJob{name: name, binaryPath: binaryPath})
+			batch.jobs = append(batch.jobs, perTestJob{name: name, binaryPath: binaryPath})
 		}
 	}
 	if workers <= 0 {
 		workers = 1
 	}
-	results := profileTests(tc, jobs, workers, modulePath)
-	prof, err := mergePerTestProfiles(results, len(jobs))
+	prof, err := batch.collect(tc, workers, modulePath)
 	if ctxErr := tc.Context().Err(); ctxErr != nil {
 		return nil, ctxErr
 	}
@@ -412,12 +411,29 @@ type perTestJob struct {
 	binaryPath string
 }
 
-// perTestResult carries the coverage profile produced by one worker, or the
-// error that kept it from reading one.
-type perTestResult struct {
+// A result is either a readable profile or a failure to obtain one.
+type perTestResult interface {
+	mergeInto(*PerTestProfile) error
+}
+
+type profileSuccess struct {
 	name string
 	prof *Profile
-	err  error
+}
+
+func (r profileSuccess) mergeInto(p *PerTestProfile) error {
+	applyPerTestResult(p, r)
+	return nil
+}
+
+type profileFailure struct{ err error }
+
+func (r profileFailure) mergeInto(*PerTestProfile) error { return r.err }
+
+// profileBatch owns the jobs whose results must all be accounted for before
+// their combined profile can be used.
+type profileBatch struct {
+	jobs []perTestJob
 }
 
 func compileCoverageTestBinary(tc Toolchain, pkgPath, coverPkg, binaryDir string) (string, error) {
@@ -431,32 +447,23 @@ func compileCoverageTestBinary(tc Toolchain, pkgPath, coverPkg, binaryDir string
 	return binaryPath, nil
 }
 
-func profileTests(tc Toolchain, jobList []perTestJob, workers int, modulePath string) <-chan perTestResult {
-	jobs := make(chan perTestJob, len(jobList))
-	results := make(chan perTestResult, len(jobList))
+func (b profileBatch) collect(tc Toolchain, workers int, modulePath string) (*PerTestProfile, error) {
+	jobs := make(chan perTestJob, len(b.jobs))
+	results := make(chan perTestResult, len(b.jobs))
 	for i := 0; i < workers; i++ {
 		go runPerTestWorker(tc, jobs, results, modulePath)
 	}
-	for _, job := range jobList {
+	for _, job := range b.jobs {
 		jobs <- job
 	}
 	close(jobs)
-	return results
-}
 
-// mergePerTestProfiles returns an error instead of a map when any test's
-// profile was lost: a partial map would read as "this test covers nothing" and
-// let the -run filter exclude it.
-func mergePerTestProfiles(results <-chan perTestResult, count int) (*PerTestProfile, error) {
 	p := &PerTestProfile{data: make(map[string]map[int][]string)}
 	var errs []error
-	for i := 0; i < count; i++ {
-		r := <-results
-		if r.err != nil {
-			errs = append(errs, r.err)
-			continue
+	for range b.jobs {
+		if err := (<-results).mergeInto(p); err != nil {
+			errs = append(errs, err)
 		}
-		applyPerTestResult(p, r)
 	}
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
@@ -477,7 +484,7 @@ func mergePerTestProfiles(results <-chan perTestResult, count int) (*PerTestProf
 func runPerTestWorker(tc Toolchain, jobs <-chan perTestJob, results chan<- perTestResult, modulePath string) {
 	for job := range jobs {
 		if err := tc.Context().Err(); err != nil {
-			results <- perTestResult{err: err}
+			results <- profileFailure{err: err}
 			continue
 		}
 		profDir := filepath.Join(filepath.Dir(job.binaryPath), job.name)
@@ -488,9 +495,10 @@ func runPerTestWorker(tc Toolchain, jobs <-chan perTestJob, results chan<- perTe
 
 		prof, err := parsePerTestProfile(profPath, modulePath)
 		if err != nil {
-			err = fmt.Errorf("per-test profile for %s (%s): %w", job.name, profPath, err)
+			results <- profileFailure{err: fmt.Errorf("per-test profile for %s (%s): %w", job.name, profPath, err)}
+			continue
 		}
-		results <- perTestResult{name: job.name, prof: prof, err: err}
+		results <- profileSuccess{name: job.name, prof: prof}
 	}
 }
 
@@ -508,7 +516,7 @@ func parsePerTestProfile(path, modulePath string) (*Profile, error) {
 	return ParseProfile(path, modulePath)
 }
 
-func applyPerTestResult(p *PerTestProfile, r perTestResult) {
+func applyPerTestResult(p *PerTestProfile, r profileSuccess) {
 	for relPath, lines := range r.prof.coveredLines {
 		if p.data[relPath] == nil {
 			p.data[relPath] = make(map[int][]string)
