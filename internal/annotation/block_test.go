@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBlockExclusionsReplacePreviousCollection(t *testing.T) {
+func TestBlockExclusionsRetainPreviousCollection(t *testing.T) {
 	parse := func(src string) (*ast.File, *token.FileSet) {
 		fset := token.NewFileSet()
 		file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
@@ -26,7 +26,7 @@ func TestBlockExclusionsReplacePreviousCollection(t *testing.T) {
 	require.True(t, HandleBlockStmt(statement))
 	second, secondSet := parse("package p\nfunc f() {\nreturn\n}\n")
 	NewProcessor().Collect(second, secondSet, "test.go")
-	require.False(t, HandleBlockStmt(statement))
+	require.True(t, HandleBlockStmt(statement))
 }
 
 func TestBlockExclusionsCanBeReadWhileCollected(t *testing.T) {

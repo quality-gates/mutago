@@ -42,6 +42,7 @@ func BenchmarkProcessorBroadRegex(b *testing.B) {
 					}
 					return true
 				})
+				processor.Close()
 			}
 		})
 	}

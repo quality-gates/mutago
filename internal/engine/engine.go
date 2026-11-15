@@ -544,6 +544,7 @@ func processFile(r *mutationRun, file string, testPkg string, coverProfile *cove
 	console.Verbose(r.opts, "Mutate %q", file)
 
 	annotationProcessor := annotation.NewProcessor()
+	defer annotationProcessor.Close()
 	skipFilterProcessor := filter.NewSkipMakeArgsFilter()
 	nonNegativeDecrementFilter := filter.NewNonNegativeDecrementFilter()
 	sourceLineFilter := filter.NewSourceLineRegexFilter(r.opts.Config.IgnoreSourceLines)

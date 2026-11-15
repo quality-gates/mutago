@@ -24,6 +24,7 @@ func Mutator(t *testing.T, m mutator.Mutator, testFile string, count int) {
 	assert.NotNil(t, m)
 
 	annotationProcessor := annotation.NewProcessor()
+	defer annotationProcessor.Close()
 	skipFilterProcessor := filter.NewSkipMakeArgsFilter()
 
 	collectors := []filter.NodeCollector{

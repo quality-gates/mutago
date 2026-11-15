@@ -22,9 +22,10 @@ type Processor struct {
 	FunctionAnnotation FunctionAnnotation
 	RegexAnnotation    RegexAnnotation
 	LineAnnotation     LineAnnotation
+	blockStatements    []ast.Stmt
 }
 
-// NewProcessor creates and returns a new initialized Processor.
+// NewProcessor creates an initialized Processor. Call Close after mutation completes.
 func NewProcessor() *Processor {
 	return &Processor{
 		FunctionAnnotation: FunctionAnnotation{
@@ -74,7 +75,7 @@ func (p *Processor) Collect(file *ast.File, fset *token.FileSet, fileAbs string)
 		}
 	}
 
-	p.collectNodesForBlockStmt()
+	p.collectNodesForBlockStmt(file)
 }
 
 // ShouldSkip determines if a given node should be excluded from mutation.
@@ -206,13 +207,6 @@ func indexNodesByLine(file *ast.File, fileSet *token.FileSet) map[int][]ast.Node
 		return true
 	})
 	return nodesByLine
-}
-
-func (p *Processor) collectNodesForBlockStmt() {
-	currentBlockExclusions.Store(&blockExclusions{
-		regex: copyBlockExclusions(p.RegexAnnotation.Exclusions),
-		line:  copyBlockExclusions(p.LineAnnotation.Exclusions),
-	})
 }
 
 func namesOrAll(names []string) []string {
