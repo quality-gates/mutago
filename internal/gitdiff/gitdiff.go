@@ -51,42 +51,48 @@ var (
 	hunkHeaderRe = regexp.MustCompile(`^@@ -\S+ \+(\d+)(?:,(\d+))? @@`)
 )
 
-func parse(output string) ChangedLines {
-	cl := make(ChangedLines)
-	var cur string
+type changedLinesParser struct {
+	currentFile string
+	lines       ChangedLines
+}
 
+func (p *changedLinesParser) consume(line string) {
+	if m := newFileRe.FindStringSubmatch(line); m != nil {
+		p.currentFile = filepath.ToSlash(m[1])
+		return
+	}
+	if p.currentFile == "" {
+		return
+	}
+	m := hunkHeaderRe.FindStringSubmatch(line)
+	if m == nil {
+		return
+	}
+	start, err := strconv.Atoi(m[1])
+	if err != nil {
+		return
+	}
+	count := 1
+	if m[2] != "" {
+		count, err = strconv.Atoi(m[2])
+		if err != nil {
+			return
+		}
+	}
+	if count == 0 {
+		return
+	}
+	p.lines[p.currentFile] = append(p.lines[p.currentFile], LineRange{Start: start, End: start + count - 1})
+}
+
+func parse(output string) ChangedLines {
+	state := changedLinesParser{lines: make(ChangedLines)}
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
-		line := scanner.Text()
-		if m := newFileRe.FindStringSubmatch(line); m != nil {
-			cur = filepath.ToSlash(m[1])
-			continue
-		}
-		if cur == "" {
-			continue
-		}
-		m := hunkHeaderRe.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
-		start, err := strconv.Atoi(m[1])
-		if err != nil {
-			continue // malformed or out-of-range line number — skip the hunk
-		}
-		count := 1
-		if m[2] != "" {
-			count, err = strconv.Atoi(m[2])
-			if err != nil {
-				continue // malformed or out-of-range count — skip the hunk
-			}
-		}
-		if count == 0 {
-			continue // pure deletion — nothing to mutate on a removed line
-		}
-		cl[cur] = append(cl[cur], LineRange{Start: start, End: start + count - 1})
+		state.consume(scanner.Text())
 	}
-	cl.Coalesce()
-	return cl
+	state.lines.Coalesce()
+	return state.lines
 }
 
 // Coalesce sorts and merges overlapping or adjacent ranges for each file.

@@ -92,45 +92,54 @@ func parseHunkRange(startText, countText string) (int64, int64, bool) {
 	return start, count, true
 }
 
+type hunkState struct {
+	header           hunkHeader
+	originalConsumed int64
+	newConsumed      int64
+	firstChange      int64
+}
+
+func (s hunkState) complete() bool {
+	return s.originalConsumed == s.header.originalCount && s.newConsumed == s.header.newCount
+}
+
+func (s *hunkState) consume(rawLine string) bool {
+	action, ok := classifyBodyLine(rawLine, s.header, s.originalConsumed, s.newConsumed)
+	if !ok {
+		return false
+	}
+	if s.firstChange == 0 && action.changedLine > 0 {
+		s.firstChange = action.changedLine
+	}
+	s.originalConsumed += action.origDelta
+	s.newConsumed += action.newDelta
+	return true
+}
+
+func (s hunkState) result() (int64, bool) {
+	if !s.complete() || s.firstChange == 0 {
+		return 0, false
+	}
+	return s.firstChange, true
+}
+
 // firstChangedLine validates the first hunk body against its declared ranges and
 // returns its first changed original-file line.
 func firstChangedLine(body []string, header hunkHeader) (int64, bool) {
-	var originalConsumed, newConsumed int64
-	var firstChange int64
-
+	state := hunkState{header: header}
 	for _, rawLine := range body {
-		if originalConsumed == header.originalCount && newConsumed == header.newCount {
+		if state.complete() {
 			break
 		}
-
-		action, ok := classifyBodyLine(rawLine, header, originalConsumed, newConsumed)
-		if !ok {
+		if !state.consume(rawLine) {
 			return 0, false
 		}
-		if action.skip {
-			continue
-		}
-
-		if firstChange == 0 && action.changedLine > 0 {
-			firstChange = action.changedLine
-		}
-		originalConsumed += action.origDelta
-		newConsumed += action.newDelta
 	}
-
-	return validateHunkCounts(header, originalConsumed, newConsumed, firstChange)
-}
-
-func validateHunkCounts(header hunkHeader, originalConsumed, newConsumed, firstChange int64) (int64, bool) {
-	if originalConsumed != header.originalCount || newConsumed != header.newCount {
-		return 0, false
-	}
-	return firstChange, firstChange > 0
+	return state.result()
 }
 
 // lineAction describes how a single body line affects the hunk counters.
 type lineAction struct {
-	skip        bool  // true for lines like "\ No newline at end of file"
 	origDelta   int64 // how much to advance originalConsumed
 	newDelta    int64 // how much to advance newConsumed
 	changedLine int64 // non-zero when this line is the first change
@@ -139,7 +148,7 @@ type lineAction struct {
 func classifyBodyLine(rawLine string, header hunkHeader, origConsumed, newConsumed int64) (lineAction, bool) {
 	line := strings.TrimSuffix(rawLine, "\r")
 	if line == `\ No newline at end of file` {
-		return lineAction{skip: true}, true
+		return lineAction{}, true
 	}
 	if line == "" {
 		return lineAction{}, false
