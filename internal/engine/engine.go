@@ -188,6 +188,7 @@ func (e *Engine) Run(ctx context.Context, opts *models.Options, bl *baseline.Fil
 // RunResolved executes a mutation run using targets discovered by the caller.
 func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *baseline.File, targets importing.ResolvedTargets) (Result, error) {
 	e.initDefaults()
+	baselineSnapshot := baseline.Capture(bl)
 	stdout, stderr := synchronizedWriters(e.Stdout, e.Stderr)
 	listener := e.Listener
 	if listener == nil {
@@ -198,17 +199,20 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	if err != nil {
 		return Result{ExitCode: returnError}, err
 	}
-	run, pkgs := setup.run, setup.pkgs
-	if run == nil {
-		// initRun returns a nil run with a non-nil result for early exits.
+	if setup.run == nil {
 		return Result{ExitCode: returnError}, nil
 	}
+	return setup.execute(baselineSnapshot)
+}
 
-	cleanup := newRunCleanup(setup)
-	defer cleanup()
-
+// execute owns the initialized run from baseline checks through finalization.
+// Every exit closes the setup, including failures before discovery starts.
+func (setup *runSetup) execute(baselineSnapshot baseline.Snapshot) (Result, error) {
+	defer setup.close()
+	run, pkgs := setup.run, setup.pkgs
+	ctx, opts := run.ctx, run.opts
 	report := run.report
-	if exitCode := runBaselineChecks(ctx, runEngine.Stderr, opts, pkgs, run.exec); exitCode != 0 {
+	if exitCode := runBaselineChecks(ctx, run.stderr, opts, pkgs, run.exec); exitCode != 0 {
 		return Result{Report: report, ExitCode: exitCode}, ctx.Err()
 	}
 
@@ -219,7 +223,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 
 	loopCode := mutateAll(run, pkgs, coverageProfiles)
 
-	cleanup()
+	setup.close()
 
 	if loopCode != returnOk {
 		return Result{Report: report, ExitCode: loopCode}, ctx.Err()
@@ -228,29 +232,21 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 		return Result{Report: report, ExitCode: returnError}, err
 	}
 
-	return Result{Report: report, ExitCode: run.sink.finish(run, bl)}, nil
+	return Result{Report: report, ExitCode: run.sink.finish(run, baselineSnapshot)}, nil
 }
 
-// newRunCleanup returns a function that stops the workers and progress
-// monitor, sends the listener the final report, and removes the temp dir.
-// Only its first call does anything.
-func newRunCleanup(setup *runSetup) func() {
-	run := setup.run
-	if !run.exec.mode.materializes() {
-		return func() {}
-	}
-	var cleanedUp bool
-	return func() {
-		if cleanedUp {
+func (setup *runSetup) close() {
+	setup.closed.Do(func() {
+		run := setup.run
+		if !run.exec.mode.materializes() {
 			return
 		}
-		cleanedUp = true
-		stopExecution(setup.jobs, setup.jobWg, setup.stopProgress, setup.progressWg)
-		if run.exec.mode.executes() {
+		if setup.execution != nil {
+			setup.execution.stop()
 			run.results.summarize(run.report)
 		}
 		removeTmpDir(run.stderr, run.opts, run.tmpDir)
-	}
+	})
 }
 
 func (e *Engine) initDefaults() {
@@ -262,15 +258,11 @@ func (e *Engine) initDefaults() {
 	}
 }
 
-// runSetup is the initialised run plus the worker and progress handles that
-// cleanup must shut down.
 type runSetup struct {
-	run          *mutationRun
-	pkgs         []importing.Package
-	jobs         chan execJob
-	jobWg        *sync.WaitGroup
-	stopProgress chan struct{}
-	progressWg   *sync.WaitGroup
+	run       *mutationRun
+	pkgs      []importing.Package
+	execution *executionPool
+	closed    sync.Once
 }
 
 func (e *Engine) validateAndInitRun(ctx context.Context, opts *models.Options, targets importing.ResolvedTargets) (*runSetup, error) {
@@ -323,17 +315,10 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, mode runMode
 		return nil, err
 	}
 
-	var jobs chan execJob
-	var jobWg *sync.WaitGroup
+	var execution *executionPool
 	runMutantIDFound := &atomic.Bool{}
 	if mode.executes() {
-		jobs, jobWg = startWorkerPool(opts, numWorkers, results, tmpDir)
-	}
-
-	var stopProgress chan struct{}
-	var progressWg *sync.WaitGroup
-	if mode.executes() {
-		stopProgress, progressWg = startProgressMonitor(results)
+		execution = startExecutionPool(numWorkers, results, tmpDir)
 	}
 
 	run := &mutationRun{
@@ -359,15 +344,12 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, mode runMode
 		stderr:           e.Stderr,
 		runMutantIDFound: runMutantIDFound,
 	}
-	run.sink = newMutantSink(run, jobs)
+	run.sink = newMutantSink(run, execution)
 
 	return &runSetup{
-		run:          run,
-		pkgs:         pkgs,
-		jobs:         jobs,
-		jobWg:        jobWg,
-		stopProgress: stopProgress,
-		progressWg:   progressWg,
+		run:       run,
+		pkgs:      pkgs,
+		execution: execution,
 	}, nil
 }
 
@@ -566,6 +548,7 @@ func processFile(r *mutationRun, file string, testPkg string, coverProfile *cove
 	console.Verbose(r.opts, "Mutate %q", file)
 
 	annotationProcessor := annotation.NewProcessor()
+	defer annotationProcessor.Close()
 	skipFilterProcessor := filter.NewSkipMakeArgsFilter()
 	nonNegativeDecrementFilter := filter.NewNonNegativeDecrementFilter()
 	sourceLineFilter := filter.NewSourceLineRegexFilter(r.opts.Config.IgnoreSourceLines)
@@ -658,25 +641,11 @@ func applyMutator(r *mutationRun, m mutatorItem, fc *fileContext, node ast.Node,
 
 	prepareMutantIdentities(r, fc, m)
 	mutatorAnnotated := annotation.DecoratorFilter(m.Mutator, m.Name, fc.filters...)
-	changed := mutago.MutateWalkWithPositions(fc.pkg, fc.info, node, mutatorAnnotated)
-
-	for {
-		if r.ctx.Err() != nil {
-			break
-		}
-		mutation, ok := <-changed
-		if !ok {
-			break
-		}
-
+	_ = mutago.VisitMutations(r.ctx, fc.pkg, fc.info, node, mutatorAnnotated, func(mutation mutago.PositionedMutation) error {
 		recordOneMutation(r, m, fc, mutation, mutationID)
-
-		changed <- mutago.PositionedMutation{}
-		<-changed
-		changed <- mutago.PositionedMutation{}
-
 		mutationID++
-	}
+		return nil
+	})
 	return mutationID
 }
 
@@ -692,8 +661,7 @@ func recordOneMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation 
 	if !ok {
 		return
 	}
-	admit, reason := r.scope.Admit(prepared.candidate)
-	if !admit {
+	if reason := r.scope.Admit(prepared.candidate); reason != admitReason {
 		noteRejectedMutation(r, prepared.candidate, reason)
 		return
 	}
@@ -784,7 +752,7 @@ func recordCaptureFailure(r *mutationRun, mutant models.Mutant, err error) {
 	recordInternalError(r.results, mutant, err)
 }
 
-func noteRejectedMutation(r *mutationRun, c scopeCandidate, reason skipReason) {
+func noteRejectedMutation(r *mutationRun, c scopeCandidate, reason admissionDecision) {
 	switch reason {
 	case skipGitDiff:
 		console.Debug(r.opts, "Skip %s:%d (not in git diff)", c.repoFile, c.line)
@@ -821,7 +789,7 @@ func buildJobCoverageScope(r *mutationRun, fc *fileContext, mutation mutago.Posi
 	}
 }
 
-func queueMutation(r *mutationRun, jobs chan<- execJob, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalSourceCode []byte, prepared preparedMutation) {
+func queueMutation(r *mutationRun, pool *executionPool, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalSourceCode []byte, prepared preparedMutation) {
 	job := execJob{
 		ctx:            r.ctx,
 		opts:           r.opts,
@@ -844,11 +812,7 @@ func queueMutation(r *mutationRun, jobs chan<- execJob, fc *fileContext, mutatio
 			edit:         prepared.edit,
 		},
 	}
-	select {
-	case <-r.ctx.Done():
-		return
-	case jobs <- job:
-	}
+	pool.submit(r.ctx, job)
 }
 
 // mutationFilePath is where mutant mutationID of fc's file is written.
@@ -1074,15 +1038,21 @@ func perTestUnavailable(ctx context.Context, opts *models.Options, pkgPath strin
 	return nil, nil
 }
 
-func startWorkerPool(opts *models.Options, numWorkers int, results *completedResults, tmpDir string) (chan execJob, *sync.WaitGroup) {
+type executionPool struct {
+	jobs         chan execJob
+	workers      sync.WaitGroup
+	stopProgress chan struct{}
+	progress     sync.WaitGroup
+}
+
+func startExecutionPool(numWorkers int, results *completedResults, tmpDir string) *executionPool {
 	stableExec := prepareStableExec(tmpDir)
-	jobs := make(chan execJob, numWorkers*2)
-	var wg sync.WaitGroup
+	pool := &executionPool{jobs: make(chan execJob, numWorkers*2), stopProgress: make(chan struct{})}
 	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
+		pool.workers.Add(1)
 		go func(paths stableExecPaths) {
-			defer wg.Done()
-			for job := range jobs {
+			defer pool.workers.Done()
+			for job := range pool.jobs {
 				if job.ctx != nil && job.ctx.Err() != nil {
 					continue
 				}
@@ -1090,7 +1060,28 @@ func startWorkerPool(opts *models.Options, numWorkers int, results *completedRes
 			}
 		}(stableExecPaths{wrapper: stableExec, bin: stableBinForWorker(tmpDir, stableExec, i)})
 	}
-	return jobs, &wg
+	pool.progress.Add(1)
+	go func() {
+		defer pool.progress.Done()
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				results.reportProgress()
+			case <-pool.stopProgress:
+				return
+			}
+		}
+	}()
+	return pool
+}
+
+func (pool *executionPool) submit(ctx context.Context, job execJob) {
+	select {
+	case <-ctx.Done():
+	case pool.jobs <- job:
+	}
 }
 
 func stableBinForWorker(tmpDir, wrapper string, id int) string {
@@ -1173,37 +1164,11 @@ func writeStableExecWrapper(dir string) (string, error) {
 	return path, nil
 }
 
-// startProgressMonitor sends the results listener the run's counts every
-// 100ms until the returned channel is closed.
-func startProgressMonitor(results *completedResults) (chan struct{}, *sync.WaitGroup) {
-	stop := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				results.reportProgress()
-			case <-stop:
-				return
-			}
-		}
-	}()
-	return stop, &wg
-}
-
-func stopExecution(jobs chan execJob, jobWg *sync.WaitGroup, stopProgress chan struct{}, progressWg *sync.WaitGroup) {
-	if jobs != nil {
-		close(jobs)
-		jobWg.Wait()
-	}
-	if stopProgress != nil {
-		close(stopProgress)
-		progressWg.Wait()
-	}
+func (pool *executionPool) stop() {
+	close(pool.jobs)
+	pool.workers.Wait()
+	close(pool.stopProgress)
+	pool.progress.Wait()
 }
 
 func removeTmpDir(stderr io.Writer, opts *models.Options, tmpDir string) {
@@ -1217,15 +1182,40 @@ func removeTmpDir(stderr io.Writer, opts *models.Options, tmpDir string) {
 	console.Debug(opts, "Remove %q", tmpDir)
 }
 
-func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File, roots sourceRoots, runMutantIDFound bool) int {
-	if code := checkRunMutantIDFound(stderr, opts, runMutantIDFound); code != returnOk {
-		return code
-	}
+type finalizationPlan uint8
 
-	if report.Stats.ErrorCount == 0 {
-		if handled, code := handleBaselineUpdate(stdout, stderr, opts, report, roots.module); handled {
-			return code
-		}
+const (
+	finalizeMissingMutant finalizationPlan = iota
+	finalizeBaseline
+	finalizeReportsThenError
+	finalizeReportsThenIndividual
+	finalizeReportsThenGates
+)
+
+func planFinalization(opts *models.Options, report *models.Report, found bool) finalizationPlan {
+	if opts.Exec.RunMutantID != "" && !found {
+		return finalizeMissingMutant
+	}
+	if opts.Baseline.Update && report.Stats.ErrorCount == 0 {
+		return finalizeBaseline
+	}
+	if report.Stats.ErrorCount > 0 {
+		return finalizeReportsThenError
+	}
+	if opts.Exec.RunMutantID != "" {
+		return finalizeReportsThenIndividual
+	}
+	return finalizeReportsThenGates
+}
+
+func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *models.Report, bl baseline.Snapshot, roots sourceRoots, runMutantIDFound bool) int {
+	plan := planFinalization(opts, report, runMutantIDFound)
+	switch plan {
+	case finalizeMissingMutant:
+		return checkRunMutantIDFound(stderr, opts, runMutantIDFound)
+	case finalizeBaseline:
+		_, code := handleBaselineUpdate(stdout, stderr, opts, report, roots.module)
+		return code
 	}
 
 	printResultsIfNeeded(stdout, opts, report, roots)
@@ -1234,15 +1224,15 @@ func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *mod
 		return code
 	}
 
-	if report.Stats.ErrorCount > 0 {
+	switch plan {
+	case finalizeReportsThenError:
 		fmt.Fprintf(stderr, "mutago: %d mutant(s) could not be tested\n", report.Stats.ErrorCount)
 		return returnError
-	}
-
-	if opts.Exec.RunMutantID != "" {
+	case finalizeReportsThenIndividual:
 		return returnOk
+	default:
+		return checkQualityGates(stderr, opts, report, bl)
 	}
-	return checkQualityGates(stderr, opts, report, bl)
 }
 
 func checkRunMutantIDFound(stderr io.Writer, opts *models.Options, found bool) int {
@@ -1376,7 +1366,7 @@ func printGitHubAnnotations(stdout io.Writer, report *models.Report, roots sourc
 	}
 }
 
-func checkQualityGates(stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File) int {
+func checkQualityGates(stderr io.Writer, opts *models.Options, report *models.Report, bl baseline.Snapshot) int {
 	if opts.Score.IgnoreMsiWithNoMutations && report.Stats.TotalMutantsCount == 0 {
 		return returnOk
 	}
@@ -1401,19 +1391,19 @@ func resolveThreshold(cliValue, configValue float64) float64 {
 	return cliValue
 }
 
-func checkEscapedGate(stderr io.Writer, opts *models.Options, report *models.Report, bl *baseline.File) bool {
+func checkEscapedGate(stderr io.Writer, opts *models.Options, report *models.Report, bl baseline.Snapshot) bool {
 	if !opts.Score.FailOnEscaped {
 		return false
 	}
-	newEscapes := bl.NewEscapes(report.Escaped)
-	if len(newEscapes) == 0 {
+	escapes := bl.Compare(report.Escaped)
+	if len(escapes.Mutants) == 0 {
 		return false
 	}
 	qualifier := ""
-	if bl != nil {
+	if escapes.BaselinePresent {
 		qualifier = "new "
 	}
-	fmt.Fprintf(stderr, "%d %smutant(s) escaped — kill them or run --update-baseline to accept\n", len(newEscapes), qualifier)
+	fmt.Fprintf(stderr, "%d %smutant(s) escaped — kill them or run --update-baseline to accept\n", len(escapes.Mutants), qualifier)
 	return true
 }
 
@@ -1568,10 +1558,10 @@ func runExecJob(job execJob, results *completedResults) {
 		return
 	}
 
-	execExitCode := mutateExec(job, &mutant)
+	outcome, execExitCode := executeRunner(job, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)
 
-	recordMutantResult(results, mutant, execExitCode, mutantLocation(opts, mutant))
+	recordMutantResult(results, mutant, outcome, mutantLocation(opts, mutant))
 }
 
 func mutantLocation(opts *models.Options, mutant models.Mutant) string {
@@ -1590,10 +1580,6 @@ func mutantLocation(opts *models.Options, mutant models.Mutant) string {
 		return fmt.Sprintf("%s (%s) [checksum: %s]", loc, mutant.Mutator.MutatorName, mutant.Checksum)
 	}
 	return fmt.Sprintf("%s (%s)", loc, mutant.Mutator.MutatorName)
-}
-
-func mutateExec(job execJob, mutant *models.Mutant) int {
-	return job.runner.run(job, mutant)
 }
 
 func runBuiltinExec(job execJob, mutant *models.Mutant) int {
@@ -1804,21 +1790,19 @@ func mapTestExitToResult(execExitCode int) int {
 	return execExitCode
 }
 
-func recordMutantResult(results *completedResults, mutant models.Mutant, execExitCode int, msg string) {
-	switch execExitCode {
-	case 0:
+func recordMutantResult(results *completedResults, mutant models.Mutant, outcome models.MutantOutcome, msg string) {
+	switch outcome {
+	case models.OutcomeKilled:
 		mutant.ProcessOutput = fmt.Sprintf("%s %s\n", console.KILLED, msg)
-		results.record(models.OutcomeKilled, mutant)
-	case 1:
+	case models.OutcomeEscaped:
 		mutant.ProcessOutput = fmt.Sprintf("%s %s\n", console.ESCAPED, msg)
-		results.record(models.OutcomeEscaped, mutant)
-	case 2:
+	case models.OutcomeSkipped:
 		mutant.ProcessOutput = fmt.Sprintf("%s %s\n", console.SKIP, msg)
-		results.record(models.OutcomeSkipped, mutant)
 	default:
 		mutant.ProcessOutput = fmt.Sprintf("%s exit code for %s\n", console.UNKNOWN, msg)
-		results.record(models.OutcomeErrored, mutant)
+		outcome = models.OutcomeErrored
 	}
+	results.record(outcome, mutant)
 }
 
 func recordNotCovered(results *completedResults, mutant models.Mutant, msg string) {

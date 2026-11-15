@@ -29,25 +29,37 @@ var (
 // TerminalReporter writes mutant results and progress for a person at a
 // terminal. It implements models.RunListener and is safe for concurrent use.
 type TerminalReporter struct {
-	opts         *models.Options
-	stdout       io.Writer
-	stderr       io.Writer
-	showProgress bool
+	opts     *models.Options
+	stdout   io.Writer
+	progress progressLine
+	mu       sync.Mutex
+}
 
-	mu            sync.Mutex
-	progressDrawn bool
+type progressState uint8
+
+const (
+	progressDisabled progressState = iota
+	progressClear
+	progressDrawn
+)
+
+type progressLine struct {
+	state progressState
+	out   io.Writer
 }
 
 // NewTerminalReporter returns a reporter that writes status lines to stdout
 // and the progress line to stderr. terminal reports whether stderr is a
 // terminal; the progress line is drawn only then.
 func NewTerminalReporter(opts *models.Options, stdout, stderr io.Writer, terminal bool) *TerminalReporter {
+	state := progressDisabled
+	if terminal && !opts.General.Verbose && !opts.General.Debug && !opts.Config.SilentMode {
+		state = progressClear
+	}
 	return &TerminalReporter{
-		opts:   opts,
-		stdout: stdout,
-		stderr: stderr,
-		showProgress: terminal && !opts.General.Verbose && !opts.General.Debug &&
-			!opts.Config.SilentMode,
+		opts:     opts,
+		stdout:   stdout,
+		progress: progressLine{state: state, out: stderr},
 	}
 }
 
@@ -148,15 +160,19 @@ func (r *TerminalReporter) statusVisible(letter byte) bool {
 
 // OnProgress redraws the progress line when stderr is a terminal.
 func (r *TerminalReporter) OnProgress(stats models.Stats) {
-	if !r.showProgress {
-		return
-	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.progress.draw(stats)
+}
+
+func (p *progressLine) draw(stats models.Stats) {
+	if p.state == progressDisabled {
+		return
+	}
 	total := stats.KilledCount + stats.EscapedCount + stats.ErrorCount + stats.SkippedCount + stats.NotCoveredCount
-	fmt.Fprintf(r.stderr, "\rProcessed %d mutants (%d killed, %d escaped, %d not covered, %d errored)",
+	fmt.Fprintf(p.out, "\rProcessed %d mutants (%d killed, %d escaped, %d not covered, %d errored)",
 		total, stats.KilledCount, stats.EscapedCount, stats.NotCoveredCount, stats.ErrorCount)
-	r.progressDrawn = true
+	p.state = progressDrawn
 }
 
 // OnSummary clears the progress line so the results that follow start on a
@@ -164,9 +180,13 @@ func (r *TerminalReporter) OnProgress(stats models.Stats) {
 func (r *TerminalReporter) OnSummary(*models.Report) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.progressDrawn {
-		fmt.Fprint(r.stderr, "\r\x1b[K")
-		r.progressDrawn = false
+	r.progress.clear()
+}
+
+func (p *progressLine) clear() {
+	if p.state == progressDrawn {
+		fmt.Fprint(p.out, "\r\x1b[K")
+		p.state = progressClear
 	}
 }
 

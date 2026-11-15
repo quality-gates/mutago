@@ -218,10 +218,10 @@ func TestUncoveredMutantIsRecordedAsNotCovered(t *testing.T) {
 	}
 }
 
-func TestExecutedOutcomesAreRecordedByExitCode(t *testing.T) {
+func TestExecutedOutcomesAreRecorded(t *testing.T) {
 	results := &completedResults{listener: &recordingListener{}}
-	for code, id := range map[int]string{0: "killed", 1: "escaped", 2: "skipped", 3: "errored"} {
-		recordMutantResult(results, resultMutant(id, "a"), code, "file.go:1 (a)")
+	for outcome, id := range map[models.MutantOutcome]string{models.OutcomeKilled: "killed", models.OutcomeEscaped: "escaped", models.OutcomeSkipped: "skipped", models.OutcomeErrored: "errored"} {
+		recordMutantResult(results, resultMutant(id, "a"), outcome, "file.go:1 (a)")
 	}
 
 	report := &models.Report{}

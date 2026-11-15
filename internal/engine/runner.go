@@ -21,6 +21,20 @@ type runnerPolicy struct {
 	run       func(execJob, *models.Mutant) int
 }
 
+func executeRunner(job execJob, mutant *models.Mutant) (models.MutantOutcome, int) {
+	code := job.runner.run(job, mutant)
+	switch code {
+	case 0:
+		return models.OutcomeKilled, code
+	case 1:
+		return models.OutcomeEscaped, code
+	case 2:
+		return models.OutcomeSkipped, code
+	default:
+		return models.OutcomeErrored, code
+	}
+}
+
 func resolveRunner(opts *models.Options, mode runMode) (runnerPolicy, []string) {
 	r := runnerPolicy{
 		command:   strings.Fields(opts.Exec.Exec),

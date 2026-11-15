@@ -6,11 +6,52 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBlockExclusionsRetainPreviousCollection(t *testing.T) {
+	parse := func(src string) (*ast.File, *token.FileSet) {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
+		require.NoError(t, err)
+		return file, fset
+	}
+	first, firstSet := parse("package p\nfunc f() {\n// mutator-disable-next-line *\nreturn\n}\n")
+	statement := first.Decls[0].(*ast.FuncDecl).Body.List[0]
+	NewProcessor().Collect(first, firstSet, "test.go")
+	require.True(t, HandleBlockStmt(statement))
+	second, secondSet := parse("package p\nfunc f() {\nreturn\n}\n")
+	NewProcessor().Collect(second, secondSet, "test.go")
+	require.True(t, HandleBlockStmt(statement))
+}
+
+func TestBlockExclusionsCanBeReadWhileCollected(t *testing.T) {
+	src := "package p\nfunc f() {\n// mutator-disable-next-line *\nreturn\n}\n"
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
+	require.NoError(t, err)
+	statement := file.Decls[0].(*ast.FuncDecl).Body.List[0]
+	var workers sync.WaitGroup
+	workers.Add(2)
+	go func() {
+		defer workers.Done()
+		for range 50 {
+			NewProcessor().Collect(file, fset, "test.go")
+		}
+	}()
+	go func() {
+		defer workers.Done()
+		for range 50 {
+			HandleBlockStmt(statement)
+		}
+	}()
+	workers.Wait()
+	require.True(t, HandleBlockStmt(statement))
+}
 
 func TestHandleBlockStmt_LineAnnotation(t *testing.T) {
 	src := `package main

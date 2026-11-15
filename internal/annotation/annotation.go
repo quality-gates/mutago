@@ -22,9 +22,10 @@ type Processor struct {
 	FunctionAnnotation FunctionAnnotation
 	RegexAnnotation    RegexAnnotation
 	LineAnnotation     LineAnnotation
+	blockStatements    []ast.Stmt
 }
 
-// NewProcessor creates and returns a new initialized Processor.
+// NewProcessor creates an initialized Processor. Call Close after mutation completes.
 func NewProcessor() *Processor {
 	return &Processor{
 		FunctionAnnotation: FunctionAnnotation{
@@ -74,7 +75,7 @@ func (p *Processor) Collect(file *ast.File, fset *token.FileSet, fileAbs string)
 		}
 	}
 
-	p.collectNodesForBlockStmt()
+	p.collectNodesForBlockStmt(file)
 }
 
 // ShouldSkip determines if a given node should be excluded from mutation.
@@ -206,16 +207,6 @@ func indexNodesByLine(file *ast.File, fileSet *token.FileSet) map[int][]ast.Node
 		return true
 	})
 	return nodesByLine
-}
-
-// collectNodesForBlockStmt is a temporary workaround specifically for handling BlockStmt nodes in AST.
-// It performs cleanup and transfers collected annotation data to statement nodes within blocks.
-// This is a tactical solution to handle edge cases where mutators only look at nodes inside block statements.
-// A more robust architectural solution should be implemented in future versions.
-func (p *Processor) collectNodesForBlockStmt() {
-	cleanupGlobalStatBlock()
-	p.RegexAnnotation.copyToStatNodesInBlock()
-	p.LineAnnotation.copyToStatNodesInBlock()
 }
 
 func namesOrAll(names []string) []string {

@@ -30,19 +30,75 @@ type loadedFile struct {
 	fset *token.FileSet
 }
 
-var (
-	pkgCacheMu    sync.Mutex
-	pkgCache      = map[string]*pkgCacheEntry{}
-	preparedFiles = map[string]loadedFile{}
-)
+type packageCache struct {
+	mu       sync.Mutex
+	version  uint64
+	packages map[string]*pkgCacheEntry
+	files    map[string]loadedFile
+}
+
+var cachedPackages = packageCache{
+	packages: make(map[string]*pkgCacheEntry),
+	files:    make(map[string]loadedFile),
+}
+
+func (c *packageCache) clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.version++
+	c.packages = make(map[string]*pkgCacheEntry)
+	c.files = make(map[string]loadedFile)
+}
+
+func (c *packageCache) currentVersion() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.version
+}
+
+func (c *packageCache) prepare(version uint64, files map[string]loadedFile, dirs map[string]struct{}, entry *pkgCacheEntry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if version != c.version {
+		return
+	}
+	c.files = files
+	for dir := range dirs {
+		c.packages[dir] = entry
+	}
+}
+
+func (c *packageCache) prepared(file string) (loadedFile, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	result, ok := c.files[file]
+	return result, ok
+}
+
+func (c *packageCache) packageFor(dir string) (*pkgCacheEntry, bool, uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.packages[dir]
+	return entry, ok, c.version
+}
+
+func (c *packageCache) publish(version uint64, dir string, entry *pkgCacheEntry) *pkgCacheEntry {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if version != c.version {
+		return entry
+	}
+	if existing, ok := c.packages[dir]; ok {
+		return existing
+	}
+	c.packages[dir] = entry
+	return entry
+}
 
 // ClearPackageCache resets the directory-level package-load cache.
 // Call this in tests that need a clean state between ParseAndTypeCheckFile invocations.
 func ClearPackageCache() {
-	pkgCacheMu.Lock()
-	pkgCache = map[string]*pkgCacheEntry{}
-	preparedFiles = map[string]loadedFile{}
-	pkgCacheMu.Unlock()
+	cachedPackages.clear()
 }
 
 // PreparePackages loads all target packages in one packages.Load call run in
@@ -57,6 +113,7 @@ func PreparePackages(files []string, dir string) error {
 		return nil
 	}
 
+	version := cachedPackages.currentVersion()
 	fset := token.NewFileSet()
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
@@ -89,13 +146,7 @@ func PreparePackages(files []string, dir string) error {
 			index[abs] = loadedFile{pkg: pkg, file: file, fset: fset}
 		}
 	}
-	pkgCacheMu.Lock()
-	preparedFiles = index
-	entry := &pkgCacheEntry{pkgs: pkgs, fset: fset}
-	for dir := range seenDirs {
-		pkgCache[dir] = entry
-	}
-	pkgCacheMu.Unlock()
+	cachedPackages.prepare(version, index, seenDirs, &pkgCacheEntry{pkgs: pkgs, fset: fset})
 	return nil
 }
 
@@ -135,12 +186,10 @@ func packagePatterns(files []string) ([]string, map[string]struct{}, error) {
 // access. Subsequent calls for the same directory return the cached value without
 // re-invoking the type-checker. Safe for concurrent use.
 func loadPkgForDir(dir string) *pkgCacheEntry {
-	pkgCacheMu.Lock()
-	if entry, ok := pkgCache[dir]; ok {
-		pkgCacheMu.Unlock()
+	entry, ok, version := cachedPackages.packageFor(dir)
+	if ok {
 		return entry
 	}
-	pkgCacheMu.Unlock()
 
 	fset := token.NewFileSet()
 	cfg := &packages.Config{
@@ -157,18 +206,9 @@ func loadPkgForDir(dir string) *pkgCacheEntry {
 		},
 	}
 	pkgs, loadErr := packages.Load(cfg, ".")
-	entry := &pkgCacheEntry{pkgs: pkgs, fset: fset, err: loadErr}
+	entry = &pkgCacheEntry{pkgs: pkgs, fset: fset, err: loadErr}
 
-	pkgCacheMu.Lock()
-	// Double-check: another goroutine may have stored first.
-	if existing, ok := pkgCache[dir]; ok {
-		pkgCacheMu.Unlock()
-		return existing
-	}
-	pkgCache[dir] = entry
-	pkgCacheMu.Unlock()
-
-	return entry
+	return cachedPackages.publish(version, dir, entry)
 }
 
 // ParseFile parses the content of the given file and returns the corresponding ast.File node and its file set for positional information.
@@ -210,9 +250,7 @@ func ParseAndTypeCheckFile(file string, collectors []filter.NodeCollector) (*Che
 	if err != nil {
 		return nil, fmt.Errorf("Could not absolute the file path of %q: %v", file, err)
 	}
-	pkgCacheMu.Lock()
-	prepared, ok := preparedFiles[fileAbs]
-	pkgCacheMu.Unlock()
+	prepared, ok := cachedPackages.prepared(fileAbs)
 	if ok {
 		applyCollectors(collectors, prepared.file, prepared.fset, fileAbs)
 		return &CheckedFile{File: prepared.file, Fset: prepared.fset, Pkg: prepared.pkg.Types, Info: prepared.pkg.TypesInfo}, nil

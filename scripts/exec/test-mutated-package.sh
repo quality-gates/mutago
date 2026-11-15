@@ -31,46 +31,4 @@ if [ "$MUTATE_DEBUG" = true ] ; then
 	echo "$GOMUTESTING_TEST"
 fi
 
-if [ "$GOMUTESTING_RESULT" -eq 1 ] && [[ "$GOMUTESTING_TEST" == "go: "* && "$GOMUTESTING_TEST" != *$'\nFAIL'* ]]; then
-	printf '%s\n' "$GOMUTESTING_TEST" >&2
-	exit 3
-fi
-
-# `go test` exits 1 for a build failure exactly as it does for a failing test,
-# so the exit code alone cannot tell a killed mutant from one that never
-# compiled. Detect the build failure in the output and report SKIP.
-if [ $GOMUTESTING_RESULT -eq 1 ] && echo "$GOMUTESTING_TEST" | grep -q '\[build failed\]\|\[setup failed\]' ; then
-	GOMUTESTING_RESULT=2
-fi
-
-case $GOMUTESTING_RESULT in
-0) # tests passed -> ESCAPED
-	echo "$GOMUTESTING_DIFF"
-
-	exit 1
-	;;
-1) # tests failed -> KILLED
-	if [ "$MUTATE_DEBUG" = true ] ; then
-		echo "$GOMUTESTING_DIFF"
-	fi
-
-	exit 0
-	;;
-2) # did not compile -> SKIP
-	if [ "$MUTATE_VERBOSE" = true ] ; then
-		echo "Mutation did not compile"
-	fi
-
-	if [ "$MUTATE_DEBUG" = true ] ; then
-		echo "$GOMUTESTING_DIFF"
-	fi
-
-	exit 2
-	;;
-*) # Unkown exit code -> SKIP
-	echo "Unknown exit code"
-	echo "$GOMUTESTING_DIFF"
-
-	exit $GOMUTESTING_RESULT
-	;;
-esac
+finish_test_run

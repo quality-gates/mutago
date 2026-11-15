@@ -1,0 +1,24 @@
+---
+title: "Mutation walk restoration"
+---
+stateDiagram-v2
+  s0: Ready for mutation
+  s1: Mutation applied
+  s2: Callback finished
+  s3: Restored
+  s4: Callback failed
+  s5: Callback panicked
+  s6: Reset notification
+  s7: Cancelled
+  s8: Complete
+  [*] --> s0
+  s0 --> s1: Apply mutation
+  s1 --> s2: Callback returns or unwinds
+  s2 --> s4: Restore syntax
+  s2 --> s6: Restore syntax
+  s2 --> s3: Restore syntax
+  s2 --> s5: Restore syntax
+  s3 --> s0: Advance or stop
+  s3 --> s7: Advance or stop
+  s6 --> s3: Acknowledge reset
+  s3 --> s8: Advance or stop

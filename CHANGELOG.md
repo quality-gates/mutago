@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Make mutation-testing lifecycles explicit and add bounded verification for their transitions.
+
+### Fixed
+- Keep mutation annotations scoped to their source file.
+- Prevent an in-flight package load from repopulating a cleared cache.
+
 ## [v2.10.42] — 2026-11-07
 
 ### Fixed

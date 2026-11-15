@@ -1,0 +1,14 @@
+---
+name: verify-cli-dispatch
+description: Verify CLI early-exit precedence and interrupt handling when changing argument dispatch or signal lifecycle.
+---
+
+# Verify CLI dispatch and interrupts
+
+Version, help and mutator-list requests must be handled in that order before parse or configuration errors when the corresponding flag has been parsed. After an interrupt is received, signal interception must stop before the run's context is cancelled, so a subsequent signal has its default effect even while cleanup is running.
+
+Run `./.agents/skills/verify-cli-dispatch/check.sh` from the repository root. It requires Bash, Python 3, Go, Java and a checksum-pinned TLC jar downloaded on first use. The Go overlay enumerates all 16 combinations of version, help, list and completion state against the real early-exit implementation and checks selected argument/error precedence cases. A process test sends each of SIGINT and SIGTERM, waits until the real interrupt owner publishes cancellation, then requires the same second signal to terminate the process. The checker explores the order of first signal receipt, unregistration and cancellation. It verifies that cancellation caused by the interrupt occurs only after unregistration. The scratch variants disable the version branch or omit signal unregistration; the corresponding checks must fail for their stated reasons, after which the unmodified code is checked again.
+
+The checked source is `cmd/mutago/main.go` at `198e580`, specifically `checkArguments`, `handleEarlyExitFlags`, `prepareInvocation`, `invocation.run`, `newRunInterrupts`, `runInterrupts.close`, and `runMutationTesting`. Before using the skill, compare those functions with the model and tests, including uncommitted changes. For an intended change update the model, expectations and scratch mutations. Advance the sync commit only after inspecting the changed code, passing the checks and detecting the deliberate faults. Read every model result with `/statechart`; replay a counterexample against the named operations.
+
+Finite enumeration checks only the parsed flag combinations and selected argument strings, not every argument order, config merge, target-resolution path or info output. The signal model abstracts signal delivery and the standard library's `signal.Stop` guarantee. It represents interrupt-caused cancellation, not normal cleanup cancellation or signal delivery before registration. The real subprocess test checks a second identical signal after observing cancellation, not every possible timing or a mixed signal pair. It does not prove engine cleanup. Existing CLI process tests cover cleanup after cancellation. A compiler error, timeout unrelated to the intended missing stop, or setup failure does not count as sensitivity evidence. For a model failure reproduce its steps against the Go code before changing the model.

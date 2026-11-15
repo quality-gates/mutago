@@ -19,7 +19,7 @@ func TestMutantScopeAdmit(t *testing.T) {
 		scope  *mutantScope
 		c      scopeCandidate
 		want   bool
-		reason skipReason
+		reason admissionDecision
 	}{
 		{
 			name:  "nil git lines admit every line",
@@ -85,9 +85,9 @@ func TestMutantScopeAdmit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, reason := tt.scope.Admit(tt.c)
-			if got != tt.want || reason != tt.reason {
-				t.Fatalf("Admit() = (%v, %v), want (%v, %v)", got, reason, tt.want, tt.reason)
+			reason := tt.scope.Admit(tt.c)
+			if (reason == admitReason) != tt.want || reason != tt.reason {
+				t.Fatalf("Admit() = %v, want %v", reason, tt.reason)
 			}
 		})
 	}
@@ -98,22 +98,22 @@ func TestMutantScopeAdmitDuplicateAndOrder(t *testing.T) {
 		"foo.go": {{Start: 2, End: 2}},
 	}, "wanted", map[string]struct{}{"blocked": {}})
 
-	if ok, reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 9, checksum: "same", id: "wanted"}); ok || reason != skipGitDiff {
-		t.Fatalf("out-of-diff mutant admitted or wrong reason: %v %v", ok, reason)
+	if reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 9, checksum: "same", id: "wanted"}); reason != skipGitDiff {
+		t.Fatalf("out-of-diff mutant admitted or wrong reason: %v", reason)
 	}
-	if ok, reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "same", id: "other"}); ok || reason != skipMutantID {
-		t.Fatalf("id miss should not be recorded as a duplicate: %v %v", ok, reason)
+	if reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "same", id: "other"}); reason != skipMutantID {
+		t.Fatalf("id miss should not be recorded as a duplicate: %v", reason)
 	}
-	if ok, reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "same", id: "wanted"}); !ok || reason != admitReason {
-		t.Fatalf("matching mutant should be admitted after earlier rejections: %v %v", ok, reason)
+	if reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "same", id: "wanted"}); reason != admitReason {
+		t.Fatalf("matching mutant should be admitted after earlier rejections: %v", reason)
 	}
-	if ok, reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "same", id: "wanted"}); ok || reason != skipDuplicate {
-		t.Fatalf("second identical edit = (%v, %v), want duplicate", ok, reason)
+	if reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "same", id: "wanted"}); reason != skipDuplicate {
+		t.Fatalf("second identical edit = %v, want duplicate", reason)
 	}
-	if ok, reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "blocked", id: "wanted"}); ok || reason != skipBlacklist {
-		t.Fatalf("blacklist = (%v, %v), want blacklist", ok, reason)
+	if reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "blocked", id: "wanted"}); reason != skipBlacklist {
+		t.Fatalf("blacklist = %v, want blacklist", reason)
 	}
-	if ok, _ := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "other", id: "wanted"}); !ok {
+	if reason := scope.Admit(scopeCandidate{repoFile: "foo.go", line: 2, checksum: "other", id: "wanted"}); reason != admitReason {
 		t.Fatal("a different checksum should still be admitted")
 	}
 }

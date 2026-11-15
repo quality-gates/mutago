@@ -1,6 +1,7 @@
 package mutago
 
 import (
+	"context"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -47,20 +48,9 @@ func (w *countWalk) Visit(node ast.Node) ast.Visitor {
 // MutateWalk mutates the given node with the given mutator returning a channel to control the mutation steps.
 // It traverses the AST of the given node and calls the method Check of the given mutator to verify that a node can be mutated by the mutator. If a node can be mutated the method Mutate of the given mutator is executed with the node and the control channel. After completion of the traversal the control channel is closed.
 func MutateWalk(pkg *types.Package, info *types.Info, node ast.Node, m mutator.Mutator) chan bool {
-	w := &mutateWalk{
-		changed: make(chan bool),
-		mutator: m,
-		pkg:     pkg,
-		info:    info,
-	}
-
-	go func() {
-		ast.Walk(w, node)
-
-		close(w.changed)
-	}()
-
-	return w.changed
+	changed := make(chan bool)
+	go walkWithHandshake(pkg, info, node, m, changed, func(PositionedMutation) bool { return true }, true)
+	return changed
 }
 
 // PositionedMutation identifies the original source position of a mutation.
@@ -76,79 +66,112 @@ type PositionedMutation struct {
 // position of each changed node. It is used by the CLI so filtering and report
 // locations come from the parsed source instead of printer-generated diffs.
 func MutateWalkWithPositions(pkg *types.Package, info *types.Info, node ast.Node, m mutator.Mutator) chan PositionedMutation {
-	w := &positionedMutateWalk{
-		changed: make(chan PositionedMutation),
-		mutator: m,
-		pkg:     pkg,
-		info:    info,
+	changed := make(chan PositionedMutation)
+	go walkWithHandshake(pkg, info, node, m, changed, func(m PositionedMutation) PositionedMutation { return m }, PositionedMutation{})
+	return changed
+}
+
+func walkWithHandshake[T any](pkg *types.Package, info *types.Info, node ast.Node, m mutator.Mutator, changed chan T, applied func(PositionedMutation) T, reset T) {
+	defer close(changed)
+	handshake := mutationHandshake[T]{changed: changed, applied: applied, reset: reset}
+	w := mutationWalk{
+		ctx: context.Background(), pkg: pkg, info: info, mutator: m,
+		onApplied: handshake.acknowledgeApplied,
+		onReset:   handshake.acknowledgeReset,
 	}
-
-	go func() {
-		ast.Walk(w, node)
-
-		close(w.changed)
-	}()
-
-	return w.changed
+	ast.Walk(&w, node)
 }
 
-type mutateWalk struct {
-	changed chan bool
-	mutator mutator.Mutator
-	pkg     *types.Package
-	info    *types.Info
+type handshakePhase uint8
+
+const (
+	waitingForApplied handshakePhase = iota
+	waitingForReset
+)
+
+type mutationHandshake[T any] struct {
+	phase   handshakePhase
+	changed chan T
+	applied func(PositionedMutation) T
+	reset   T
 }
 
-type positionedMutateWalk struct {
-	changed chan PositionedMutation
-	mutator mutator.Mutator
-	pkg     *types.Package
-	info    *types.Info
+func (h *mutationHandshake[T]) acknowledgeApplied(mutation PositionedMutation) error {
+	if h.phase != waitingForApplied {
+		panic("mutation handshake: applied out of order")
+	}
+	h.changed <- h.applied(mutation)
+	<-h.changed
+	h.phase = waitingForReset
+	return nil
 }
 
-// Visit implements the Visit method of the ast.Visitor interface
-func (w *mutateWalk) Visit(node ast.Node) ast.Visitor {
-	if node == nil {
-		return w
+func (h *mutationHandshake[T]) acknowledgeReset() {
+	if h.phase != waitingForReset {
+		panic("mutation handshake: reset out of order")
+	}
+	h.changed <- h.reset
+	<-h.changed
+	h.phase = waitingForApplied
+}
+
+// VisitMutations calls visit while each mutation is applied and restores the
+// syntax before advancing, returning when visit fails or ctx is cancelled.
+func VisitMutations(ctx context.Context, pkg *types.Package, info *types.Info, node ast.Node, m mutator.Mutator, visit func(PositionedMutation) error) error {
+	w := mutationWalk{ctx: ctx, pkg: pkg, info: info, mutator: m, onApplied: visit}
+	ast.Walk(&w, node)
+	if w.err != nil {
+		return w.err
+	}
+	return ctx.Err()
+}
+
+type mutationWalk struct {
+	ctx       context.Context
+	mutator   mutator.Mutator
+	pkg       *types.Package
+	info      *types.Info
+	onApplied func(PositionedMutation) error
+	onReset   func()
+	err       error
+}
+
+func (w *mutationWalk) Visit(node ast.Node) ast.Visitor {
+	if node == nil || w.err != nil {
+		return nil
+	}
+	if w.err = w.ctx.Err(); w.err != nil {
+		return nil
 	}
 
 	for _, m := range w.mutator(w.pkg, w.info, node) {
-		m.Change()
-		w.changed <- true
-		<-w.changed
-
-		m.Reset()
-		w.changed <- true
-		<-w.changed
-	}
-
-	return w
-}
-
-// Visit implements ast.Visitor while preserving the same two-phase handshake
-// as MutateWalk.
-func (w *positionedMutateWalk) Visit(node ast.Node) ast.Visitor {
-	if node == nil {
-		return w
-	}
-
-	for _, m := range w.mutator(w.pkg, w.info, node) {
+		if w.err = w.ctx.Err(); w.err != nil {
+			return nil
+		}
 		position := m.Position
 		if !position.IsValid() {
 			position = node.Pos()
 		}
 		start, end := node.Pos(), node.End()
 
-		m.Change()
-		w.changed <- PositionedMutation{Position: position, Node: node, Start: start, End: end}
-		<-w.changed
-
-		m.Reset()
-		w.changed <- PositionedMutation{}
-		<-w.changed
+		w.err = withMutation(m, func() error {
+			return w.onApplied(PositionedMutation{Position: position, Node: node, Start: start, End: end})
+		})
+		if w.err != nil {
+			return nil
+		}
+		if w.onReset != nil {
+			w.onReset()
+		}
 	}
 
 	return w
+}
+
+func withMutation(m mutator.Mutation, visit func() error) error {
+	defer m.Reset()
+	m.Change()
+	return visit()
 }
 
 // PrintWalk traverses the AST of the given node and prints every node to STDOUT.
