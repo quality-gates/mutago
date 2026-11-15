@@ -208,14 +208,11 @@ func indexNodesByLine(file *ast.File, fileSet *token.FileSet) map[int][]ast.Node
 	return nodesByLine
 }
 
-// collectNodesForBlockStmt is a temporary workaround specifically for handling BlockStmt nodes in AST.
-// It performs cleanup and transfers collected annotation data to statement nodes within blocks.
-// This is a tactical solution to handle edge cases where mutators only look at nodes inside block statements.
-// A more robust architectural solution should be implemented in future versions.
 func (p *Processor) collectNodesForBlockStmt() {
-	cleanupGlobalStatBlock()
-	p.RegexAnnotation.copyToStatNodesInBlock()
-	p.LineAnnotation.copyToStatNodesInBlock()
+	currentBlockExclusions.Store(&blockExclusions{
+		regex: copyBlockExclusions(p.RegexAnnotation.Exclusions),
+		line:  copyBlockExclusions(p.LineAnnotation.Exclusions),
+	})
 }
 
 func namesOrAll(names []string) []string {
