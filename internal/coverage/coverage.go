@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/quality-gates/mutago/v2/internal/sourcepath"
 )
 
 // Profile holds which source lines are covered by tests.
@@ -51,29 +53,6 @@ func ParseProfile(path, modulePath string) (*Profile, error) {
 	return p, scanner.Err()
 }
 
-// longestSuffixKey returns the key from m that is the most specific path
-// suffix of absFile and whether a key matched. An empty key can match only an
-// empty absFile; the boolean distinguishes that match from no match. A
-// non-empty key matches when it equals absFile or absFile ends in "/"+key.
-// When multiple keys match — one relPath is a path-suffix of another, e.g.
-// "foo/bar.go" and "bar.go" — the longest (most specific) key wins, so the
-// choice is deterministic regardless of map iteration order. Ties are
-// impossible because map keys are unique: two distinct strings of equal
-// length cannot both be a suffix of the same path.
-func longestSuffixKey[V any](absFile string, m map[string]V) (string, bool) {
-	var best string
-	var found bool
-	for relPath := range m {
-		if relPath == absFile || (relPath != "" && strings.HasSuffix(absFile, "/"+relPath)) {
-			if !found || len(relPath) > len(best) {
-				best = relPath
-				found = true
-			}
-		}
-	}
-	return best, found
-}
-
 type pathResolver[V any] struct {
 	resolved sync.Map
 }
@@ -84,7 +63,7 @@ func (r *pathResolver[V]) resolve(absFile string, paths map[string]V) V {
 		return cached.(V)
 	}
 	var value V
-	if relPath, found := longestSuffixKey(absFile, paths); found {
+	if relPath, found := sourcepath.LongestSuffixKey(absFile, paths); found {
 		value = paths[relPath]
 	}
 	r.resolved.Store(absFile, value)

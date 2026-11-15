@@ -43,4 +43,5 @@ printf 'json_output: false\n' > "$temporary_directory/config.yml"
 	github.com/quality-gates/mutago/v2/internal/filter \
 	github.com/quality-gates/mutago/v2/internal/coverage \
 	github.com/quality-gates/mutago/v2/internal/gitdiff \
+	github.com/quality-gates/mutago/v2/internal/sourcepath \
 	github.com/quality-gates/mutago/v2/internal/models

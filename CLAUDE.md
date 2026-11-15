@@ -82,6 +82,13 @@ Follow these steps in order when landing a change:
 
 ## Conventions
 
+| Rule | Enforcement |
+| :--- | :--- |
+| Verification guide commit references must survive squash merges. | `python3 scripts/check-verification-refs.py origin/main` and the verification guide references CI job check that each commit is on the target branch. |
+| Resolve source-path suffixes consistently across coverage and changed-line filtering. | `internal/sourcepath.LongestSuffixKey` owns the matching rule and is exercised by both packages' collision tests. |
+
+The reference check treats standalone lowercase hexadecimal tokens of 7 to 40 characters in verification guides as commit IDs. Use literal commit IDs for sync points and commands. The check does not resolve symbolic revision expressions.
+
 - Quality gates exit with code 4 (not 1) so CI can distinguish "escaped mutants" from "tool error".
 - `--min-msi` / `--min-covered-msi` CLI flags default to `-1` (sentinel for "use config or skip gate"); config zero value means no gate.
 - **Edit files one at a time using Read then Edit.** Do not use scripts or string-replacement tools to make the same change across many files at once. Small differences between files (naming conventions, existing imports, extra test functions) mean a bulk approach produces inconsistent output that must be cleaned up manually.
