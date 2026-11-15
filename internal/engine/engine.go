@@ -658,25 +658,11 @@ func applyMutator(r *mutationRun, m mutatorItem, fc *fileContext, node ast.Node,
 
 	prepareMutantIdentities(r, fc, m)
 	mutatorAnnotated := annotation.DecoratorFilter(m.Mutator, m.Name, fc.filters...)
-	changed := mutago.MutateWalkWithPositions(fc.pkg, fc.info, node, mutatorAnnotated)
-
-	for {
-		if r.ctx.Err() != nil {
-			break
-		}
-		mutation, ok := <-changed
-		if !ok {
-			break
-		}
-
+	_ = mutago.VisitMutations(r.ctx, fc.pkg, fc.info, node, mutatorAnnotated, func(mutation mutago.PositionedMutation) error {
 		recordOneMutation(r, m, fc, mutation, mutationID)
-
-		changed <- mutago.PositionedMutation{}
-		<-changed
-		changed <- mutago.PositionedMutation{}
-
 		mutationID++
-	}
+		return nil
+	})
 	return mutationID
 }
 

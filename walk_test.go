@@ -2,6 +2,8 @@ package mutago
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -103,6 +105,7 @@ func TestMutateWalkWithPositionsFallsBackToVisitedNode(t *testing.T) {
 func TestMutateWalkCompatibility(t *testing.T) {
 	src, err := parser.ParseFile(token.NewFileSet(), "fixture.go", "package fixture\nvar n = 1\n", 0)
 	require.NoError(t, err)
+	lit := src.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec).Values[0].(*ast.BasicLit)
 
 	positionless := func(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
 		lit, ok := node.(*ast.BasicLit)
@@ -120,10 +123,69 @@ func TestMutateWalkCompatibility(t *testing.T) {
 	mutation, ok := <-changed
 	require.True(t, ok)
 	assert.True(t, mutation)
+	assert.Equal(t, "2", lit.Value)
 
 	changed <- true
 	<-changed
+	assert.Equal(t, "1", lit.Value)
 	changed <- true
 	_, ok = <-changed
 	assert.False(t, ok)
+}
+
+func TestVisitMutationsRestoresSyntaxAfterCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	src, err := parser.ParseFile(token.NewFileSet(), "fixture.go", "package fixture\nvar n = 1\n", 0)
+	require.NoError(t, err)
+	lit := src.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec).Values[0].(*ast.BasicLit)
+	m := func(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+		if node != lit {
+			return nil
+		}
+		change := mutator.Mutation{Change: func() { lit.Value = "2" }, Reset: func() { lit.Value = "1" }}
+		return []mutator.Mutation{change, change}
+	}
+	visits := 0
+	err = VisitMutations(ctx, nil, nil, src, m, func(mutation PositionedMutation) error {
+		visits++
+		assert.Equal(t, "2", lit.Value)
+		assert.Equal(t, lit.Pos(), mutation.Position)
+		cancel()
+		return nil
+	})
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 1, visits)
+	assert.Equal(t, "1", lit.Value)
+}
+
+func TestVisitMutationsRestoresSyntaxAfterPanic(t *testing.T) {
+	src, err := parser.ParseFile(token.NewFileSet(), "fixture.go", "package fixture\nvar n = 1\n", 0)
+	require.NoError(t, err)
+	lit := src.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec).Values[0].(*ast.BasicLit)
+	m := func(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+		if node != lit {
+			return nil
+		}
+		return []mutator.Mutation{{Change: func() { lit.Value = "2" }, Reset: func() { lit.Value = "1" }}}
+	}
+	assert.Panics(t, func() {
+		_ = VisitMutations(context.Background(), nil, nil, src, m, func(PositionedMutation) error { panic("callback") })
+	})
+	assert.Equal(t, "1", lit.Value)
+}
+
+func TestVisitMutationsRestoresSyntaxAfterError(t *testing.T) {
+	src, err := parser.ParseFile(token.NewFileSet(), "fixture.go", "package fixture\nvar n = 1\n", 0)
+	require.NoError(t, err)
+	lit := src.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec).Values[0].(*ast.BasicLit)
+	m := func(_ *types.Package, _ *types.Info, node ast.Node) []mutator.Mutation {
+		if node != lit {
+			return nil
+		}
+		return []mutator.Mutation{{Change: func() { lit.Value = "2" }, Reset: func() { lit.Value = "1" }}}
+	}
+	want := errors.New("stop")
+	err = VisitMutations(context.Background(), nil, nil, src, m, func(PositionedMutation) error { return want })
+	assert.ErrorIs(t, err, want)
+	assert.Equal(t, "1", lit.Value)
 }
