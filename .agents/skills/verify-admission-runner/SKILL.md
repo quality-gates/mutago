@@ -9,7 +9,7 @@ A rejected candidate must not consume its edit key: otherwise an eligible candid
 
 ## Coverage and sync
 
-Last matched to `002b04a`: `mutantScope.Admit`, `recordOneMutation`, `executeRunner` (previously `runnerPolicy.execute`), `runExecJob`, `runBuiltinExec`, `classifyGoTestResult`, `mapTestExitToResult`, `runCustomExec`, and `recordMutantResult`. Inspect the diff from that commit, including uncommitted changes, whenever any covered function, runner contract, or `scopeCandidate` changes. Compare the code with this model and the named behavior tests. Update the check when intended behavior changes and advance the sync point only after a passing check and source comparison.
+Last matched to `712396f`: `mutantScope.Admit`, `recordOneMutation`, `executeRunner` (previously `runnerPolicy.execute`), `runExecJob`, `runBuiltinExec`, `classifyGoTestResult`, `mapTestExitToResult`, `runCustomExec`, and `recordMutantResult`. Inspect the diff from that commit, including uncommitted changes, whenever any covered function, runner contract, or `scopeCandidate` changes. Compare the code with this model and the named behavior tests. Update the check when intended behavior changes and advance the sync point only after a passing check and source comparison.
 
 The TLA+ model treats each candidate admission as an atomic step and explores every sequence for two edit keys. `OnlyAcceptedAreSeen` means rejection cannot poison a key; a counterexample shows a rejection that adds a key before any admission. It abstracts all reasons for rejection into one event. It does not model concurrent discovery, edit construction, program execution, cancellation, or unbounded key sets.
 
