@@ -13,7 +13,7 @@ func TestVerificationCache(t *testing.T) {
 			n /= 4
 			switch op {
 			case 0, 1:
-				got := c.publish("dir", entries[op])
+				got := c.publish(c.currentVersion(), "dir", entries[op])
 				if expected == nil {
 					expected = entries[op]
 				}
@@ -24,10 +24,10 @@ func TestVerificationCache(t *testing.T) {
 				c.clear()
 				expected = nil
 			case 3:
-				c.prepare(map[string]loadedFile{"file": {}}, map[string]struct{}{"dir": {}}, entries[1])
+				c.prepare(c.currentVersion(), map[string]loadedFile{"file": {}}, map[string]struct{}{"dir": {}}, entries[1])
 				expected = entries[1]
 			}
-			got, ok := c.packageFor("dir")
+			got, ok, _ := c.packageFor("dir")
 			if ok != (expected != nil) || got != expected {
 				t.Fatalf("cached value mismatch seq=%d step=%d", seq, i)
 			}
