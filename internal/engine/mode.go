@@ -130,8 +130,8 @@ func (s *dryRunSink) finish(run *mutationRun, _ baseline.Snapshot) int {
 // It skips the summary, baseline update, reports, and quality gates, because
 // no mutant was tested.
 type generateSink struct {
-	stderr io.Writer
-	failed bool
+	stderr   io.Writer
+	writeErr error
 }
 
 func (s *generateSink) admit(fc *fileContext, _ mutago.PositionedMutation, mutationID int, prepared preparedMutation) {
@@ -141,7 +141,7 @@ func (s *generateSink) admit(fc *fileContext, _ mutago.PositionedMutation, mutat
 	}
 	if err != nil {
 		fmt.Fprintf(s.stderr, "Cannot write mutation: %v\n", err)
-		s.failed = true
+		s.writeErr = err
 	}
 }
 
@@ -152,7 +152,7 @@ func (s *generateSink) finish(run *mutationRun, _ baseline.Snapshot) int {
 		return code
 	}
 	fmt.Fprintln(run.stdout, "Cannot do a mutation testing summary since no exec command was executed.")
-	if s.failed {
+	if s.writeErr != nil {
 		return returnError
 	}
 	return returnOk

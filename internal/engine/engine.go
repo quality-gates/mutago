@@ -1177,15 +1177,40 @@ func removeTmpDir(stderr io.Writer, opts *models.Options, tmpDir string) {
 	console.Debug(opts, "Remove %q", tmpDir)
 }
 
-func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *models.Report, bl baseline.Snapshot, roots sourceRoots, runMutantIDFound bool) int {
-	if code := checkRunMutantIDFound(stderr, opts, runMutantIDFound); code != returnOk {
-		return code
-	}
+type finalizationPlan uint8
 
-	if report.Stats.ErrorCount == 0 {
-		if handled, code := handleBaselineUpdate(stdout, stderr, opts, report, roots.module); handled {
-			return code
-		}
+const (
+	finalizeMissingMutant finalizationPlan = iota
+	finalizeBaseline
+	finalizeReportsThenError
+	finalizeReportsThenIndividual
+	finalizeReportsThenGates
+)
+
+func planFinalization(opts *models.Options, report *models.Report, found bool) finalizationPlan {
+	if opts.Exec.RunMutantID != "" && !found {
+		return finalizeMissingMutant
+	}
+	if opts.Baseline.Update && report.Stats.ErrorCount == 0 {
+		return finalizeBaseline
+	}
+	if report.Stats.ErrorCount > 0 {
+		return finalizeReportsThenError
+	}
+	if opts.Exec.RunMutantID != "" {
+		return finalizeReportsThenIndividual
+	}
+	return finalizeReportsThenGates
+}
+
+func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *models.Report, bl baseline.Snapshot, roots sourceRoots, runMutantIDFound bool) int {
+	plan := planFinalization(opts, report, runMutantIDFound)
+	switch plan {
+	case finalizeMissingMutant:
+		return checkRunMutantIDFound(stderr, opts, runMutantIDFound)
+	case finalizeBaseline:
+		_, code := handleBaselineUpdate(stdout, stderr, opts, report, roots.module)
+		return code
 	}
 
 	printResultsIfNeeded(stdout, opts, report, roots)
@@ -1194,15 +1219,15 @@ func finalizeResults(stdout, stderr io.Writer, opts *models.Options, report *mod
 		return code
 	}
 
-	if report.Stats.ErrorCount > 0 {
+	switch plan {
+	case finalizeReportsThenError:
 		fmt.Fprintf(stderr, "mutago: %d mutant(s) could not be tested\n", report.Stats.ErrorCount)
 		return returnError
-	}
-
-	if opts.Exec.RunMutantID != "" {
+	case finalizeReportsThenIndividual:
 		return returnOk
+	default:
+		return checkQualityGates(stderr, opts, report, bl)
 	}
-	return checkQualityGates(stderr, opts, report, bl)
 }
 
 func checkRunMutantIDFound(stderr io.Writer, opts *models.Options, found bool) int {

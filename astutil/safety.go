@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"sync"
 )
 
 type safetyIndex struct {
@@ -14,23 +13,16 @@ type safetyIndex struct {
 	params      map[types.Object]bool
 }
 
-var safetyIndexes sync.Map
-
 // ClearSafetyCache releases per-type-check safety indexes between runs.
 func ClearSafetyCache() {
-	safetyIndexes = sync.Map{}
+	indexes.clearSafety()
 }
 
 func getSafetyIndex(info *types.Info) *safetyIndex {
 	if info == nil {
 		return nil
 	}
-	if val, ok := safetyIndexes.Load(info); ok {
-		return val.(*safetyIndex)
-	}
-	idx := buildSafetyIndex(info)
-	safetyIndexes.Store(info, idx)
-	return idx
+	return indexes.safetyFor(info)
 }
 
 func buildSafetyIndex(info *types.Info) *safetyIndex {
