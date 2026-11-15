@@ -17,7 +17,7 @@ Last matched against commit `86be240b6266eaa1161a7de029379cac4cc49961`:
 | --- | --- |
 | `internal/engine/engine.go`: `RunResolved`, `validateAndInitRun`, `initRun`, `mutateAll`, `queueMutation`, `startExecutionPool`, `executionPool.submit`, `executionPool.stop`, `runExecJob`, `runCustomExec` | Passing the run context to each custom exec, applying its timeout, starting the process, waiting, and returning. |
 | `internal/engine/mode.go`: `newMutantSink`, `executeSink.admit` | Sending each mutation to the worker queue. |
-| `internal/engine/runner.go`: `resolveRunner`, `runnerPolicy.execute` | Selecting and invoking the custom command and limiting a run to one custom worker. |
+| `internal/engine/runner.go`: `resolveRunner`, `executeRunner` | Selecting and invoking the custom command and limiting a run to one custom worker. |
 | `cmd/mutago/main.go`: `runMutationTesting` | Interrupt and termination cancel the engine's context. |
 | `scripts/exec/test-mutated-package.sh`, `scripts/exec/test-current-directory.sh`, `scripts/exec/overlay.sh` | Passing an overlay to `go test` without modifying the original source. |
 

@@ -1558,7 +1558,7 @@ func runExecJob(job execJob, results *completedResults) {
 		return
 	}
 
-	outcome, execExitCode := job.runner.execute(job, &mutant)
+	outcome, execExitCode := executeRunner(job, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)
 
 	recordMutantResult(results, mutant, outcome, mutantLocation(opts, mutant))

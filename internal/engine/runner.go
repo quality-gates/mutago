@@ -21,8 +21,8 @@ type runnerPolicy struct {
 	run       func(execJob, *models.Mutant) int
 }
 
-func (r runnerPolicy) execute(job execJob, mutant *models.Mutant) (models.MutantOutcome, int) {
-	code := r.run(job, mutant)
+func executeRunner(job execJob, mutant *models.Mutant) (models.MutantOutcome, int) {
+	code := job.runner.run(job, mutant)
 	switch code {
 	case 0:
 		return models.OutcomeKilled, code
