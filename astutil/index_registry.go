@@ -14,7 +14,7 @@ type indexRegistry struct {
 
 var indexes indexRegistry
 
-func (r *indexRegistry) identifier(info *types.Info) *identifierIndex {
+func (r *indexRegistry) Identifier(info *types.Info) *identifierIndex {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.identifiers == nil {
@@ -28,7 +28,7 @@ func (r *indexRegistry) identifier(info *types.Info) *identifierIndex {
 	return index
 }
 
-func (r *indexRegistry) safetyFor(info *types.Info) *safetyIndex {
+func (r *indexRegistry) SafetyFor(info *types.Info) *safetyIndex {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.safety == nil {
@@ -42,14 +42,14 @@ func (r *indexRegistry) safetyFor(info *types.Info) *safetyIndex {
 	return index
 }
 
-func (r *indexRegistry) clear() {
+func (r *indexRegistry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.identifiers = nil
 	r.safety = nil
 }
 
-func (r *indexRegistry) clearSafety() {
+func (r *indexRegistry) ClearSafety() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.safety = nil

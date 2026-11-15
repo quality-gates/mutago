@@ -15,14 +15,14 @@ type safetyIndex struct {
 
 // ClearSafetyCache releases per-type-check safety indexes between runs.
 func ClearSafetyCache() {
-	indexes.clearSafety()
+	indexes.ClearSafety()
 }
 
 func getSafetyIndex(info *types.Info) *safetyIndex {
 	if info == nil {
 		return nil
 	}
-	return indexes.safetyFor(info)
+	return indexes.SafetyFor(info)
 }
 
 func buildSafetyIndex(info *types.Info) *safetyIndex {

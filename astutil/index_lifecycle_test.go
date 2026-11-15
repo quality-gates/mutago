@@ -37,3 +37,18 @@ func f(x int) int { y := x + 1; println(y); return x + y }`)
 		t.Fatalf("safety result changed after clear: %d to %d", before, after)
 	}
 }
+
+func TestSafetyIndexRebuildAfterClear(t *testing.T) {
+	_, file, _, info := parseAndTypeCheckSource(t, `package example
+func f() int { x := 1; return x }`)
+	result := file.Decls[0].(*ast.FuncDecl).Body.List[1].(*ast.ReturnStmt).Results[0].(*ast.Ident)
+	ClearSafetyCache()
+	if len(UnsafeLocalVars(info, result)) != 1 {
+		t.Fatal("expected initially unsafe local")
+	}
+	info.Uses[&ast.Ident{Name: "x"}] = info.Uses[result]
+	ClearSafetyCache()
+	if len(UnsafeLocalVars(info, result)) != 0 {
+		t.Fatal("stale safety index")
+	}
+}

@@ -15,7 +15,7 @@ func IdentifiersInStatement(pkg *types.Package, info *types.Info, stmt ast.Stmt)
 
 func identifiersInStatements(pkg *types.Package, info *types.Info, stmts []ast.Stmt) []ast.Expr {
 	_ = pkg
-	return indexes.identifier(info).query(info, stmts)
+	return indexes.Identifier(info).Query(info, stmts)
 }
 
 type identifierEvent struct {
@@ -42,10 +42,10 @@ type identifierIndex struct {
 
 // ClearIdentifierCache releases per-type-check identifier indexes between runs.
 func ClearIdentifierCache() {
-	indexes.clear()
+	indexes.Clear()
 }
 
-func (idx *identifierIndex) query(info *types.Info, stmts []ast.Stmt) []ast.Expr {
+func (idx *identifierIndex) Query(info *types.Info, stmts []ast.Stmt) []ast.Expr {
 	if len(stmts) == 0 {
 		return nil
 	}
