@@ -11,24 +11,20 @@ description: Verify source preservation when a bundled custom exec finishes, is 
 
 ## Coverage and sync
 
-Last matched against the code in PR #362:
+Last matched against commit `86be240b6266eaa1161a7de029379cac4cc49961`:
 
 | Code | What to match to the model |
 | --- | --- |
-| `internal/engine/engine.go`: `RunResolved`, `validateAndInitRun`, `initRun`, `mutateAll`, `queueMutation`, `startWorkerPool`, `runExecJob`, `mutateExec`, `runCustomExec` | Passing the run context to each custom exec, applying its timeout, starting the process, waiting, and returning. |
+| `internal/engine/engine.go`: `RunResolved`, `validateAndInitRun`, `initRun`, `mutateAll`, `queueMutation`, `startExecutionPool`, `executionPool.submit`, `executionPool.stop`, `runExecJob`, `runCustomExec` | Passing the run context to each custom exec, applying its timeout, starting the process, waiting, and returning. |
 | `internal/engine/mode.go`: `newMutantSink`, `executeSink.admit` | Sending each mutation to the worker queue. |
-| `internal/engine/runner.go`: `resolveRunner` | Selecting the custom command and limiting a run to one custom worker. |
-| `cmd/mutago/main.go`: `main` | Interrupt and termination cancel the engine's context. |
+| `internal/engine/runner.go`: `resolveRunner`, `runnerPolicy.execute` | Selecting and invoking the custom command and limiting a run to one custom worker. |
+| `cmd/mutago/main.go`: `runMutationTesting` | Interrupt and termination cancel the engine's context. |
 | `scripts/exec/test-mutated-package.sh`, `scripts/exec/test-current-directory.sh`, `scripts/exec/overlay.sh` | Passing an overlay to `go test` without modifying the original source. |
 
-From the repo root, find the PR's squash commit and inspect the diff since it, including uncommitted changes. Before the PR merges, use its product commit as the baseline:
+From the repo root, inspect changes since the sync commit, including uncommitted changes:
 
 ```sh
-baseline=$(git log --all --format=%H --extended-regexp \
-  --grep='^fix: preserve source and reject errored mutant runs \(#362\)$' -1)
-if [ -z "$baseline" ]; then
-  baseline=74ae7fd17fbcd57a484cfa1c0b0dae7008093cc1
-fi
+baseline=86be240b6266eaa1161a7de029379cac4cc49961
 git diff "$baseline" -- internal/engine/engine.go internal/engine/mode.go internal/engine/runner.go cmd/mutago/main.go scripts/exec/test-mutated-package.sh scripts/exec/test-current-directory.sh scripts/exec/overlay.sh
 ```
 
@@ -52,6 +48,6 @@ For a failure, replay the path against the covered code and inspect the named pr
 
 ## Boundaries
 
-The model starts when one bundled script is preparing its test. `resolveRunner` limits a run with a custom command to one worker. The model explores cancellation before or after starting the test, killing the script, test completion, script exit, and `runCustomExec` return. It permits the child to finish after its parent is killed. The real probe checks the source and overlay while the child is running, then lets the child finish before checking the source again.
+The model starts when one bundled script is preparing its test. `resolveRunner` limits a run with a custom command to one worker. The model explores cancellation before or after starting the test, killing the script, test completion, script exit, and `runCustomExec` return. It permits the child to finish after its parent is killed. The real probe invokes `runCustomExec` directly and checks the source and overlay while the child is running, then lets the child finish before checking the source again. Worker admission, cancellation before execution, and runner selection are checked by source review rather than this probe.
 
 The model assumes the script creates the intended overlay and that the test and its descendants do not themselves write the source. It does not cover arbitrary third-party `--exec` programs, multiple mutations or runs, path quoting, or process crashes outside this path. The model allows `Wait` to return before a descendant exits; real output pipes can delay it. No liveness claim is made.
