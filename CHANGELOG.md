@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Changed
+- Share source-path suffix matching between coverage and changed-line filtering.
 - Make mutation-testing lifecycles explicit and add bounded verification for their transitions.
 
 ### Fixed

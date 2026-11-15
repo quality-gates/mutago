@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/quality-gates/mutago/v2/internal/sourcepath"
 )
 
 // LineRange is an inclusive [Start, End] range of line numbers.
@@ -146,31 +148,9 @@ func IsLineChanged(cl ChangedLines, absFile string, line int) bool {
 		return true
 	}
 	absFile = filepath.ToSlash(absFile)
-	best, found := longestSuffixFile(absFile, cl)
+	best, found := sourcepath.LongestSuffixKey(absFile, cl)
 	if !found {
 		return false // file not in diff → unchanged → skip
 	}
 	return IsRelativeLineChanged(ChangedLines{best: cl[best]}, best, line)
-}
-
-// longestSuffixFile returns the key from cl that is the most specific path
-// suffix of absFile and whether a key matched. An empty key can match only an
-// empty absFile; the boolean distinguishes that match from no match. A
-// non-empty key matches when it equals absFile or absFile ends in "/"+key.
-// When multiple keys match — one relPath is a path-suffix of another — the
-// longest (most specific) key wins, so the choice is deterministic regardless
-// of map iteration order. Ties are impossible because map keys are unique: two
-// distinct equal-length strings cannot both be a suffix of the same path.
-func longestSuffixFile(absFile string, cl ChangedLines) (string, bool) {
-	var best string
-	var found bool
-	for relPath := range cl {
-		if relPath == absFile || (relPath != "" && strings.HasSuffix(absFile, "/"+relPath)) {
-			if !found || len(relPath) > len(best) {
-				best = relPath
-				found = true
-			}
-		}
-	}
-	return best, found
 }
