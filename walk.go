@@ -82,21 +82,37 @@ func walkWithHandshake[T any](pkg *types.Package, info *types.Info, node ast.Nod
 	ast.Walk(&w, node)
 }
 
+type handshakePhase uint8
+
+const (
+	waitingForApplied handshakePhase = iota
+	waitingForReset
+)
+
 type mutationHandshake[T any] struct {
+	phase   handshakePhase
 	changed chan T
 	applied func(PositionedMutation) T
 	reset   T
 }
 
-func (h mutationHandshake[T]) acknowledgeApplied(mutation PositionedMutation) error {
+func (h *mutationHandshake[T]) acknowledgeApplied(mutation PositionedMutation) error {
+	if h.phase != waitingForApplied {
+		panic("mutation handshake: applied out of order")
+	}
 	h.changed <- h.applied(mutation)
 	<-h.changed
+	h.phase = waitingForReset
 	return nil
 }
 
-func (h mutationHandshake[T]) acknowledgeReset() {
+func (h *mutationHandshake[T]) acknowledgeReset() {
+	if h.phase != waitingForReset {
+		panic("mutation handshake: reset out of order")
+	}
 	h.changed <- h.reset
 	<-h.changed
+	h.phase = waitingForApplied
 }
 
 // VisitMutations calls visit while each mutation is applied and restores the
