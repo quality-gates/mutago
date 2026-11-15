@@ -56,7 +56,6 @@ func FuzzLoad(f *testing.F) {
 			return
 		}
 		if fl != nil {
-			// IDSet and comparison must not panic on the parsed file.
 			_ = fl.IDSet()
 			_ = Capture(fl).Compare(nil)
 		}

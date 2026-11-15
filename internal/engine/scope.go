@@ -2,7 +2,6 @@ package engine
 
 import "github.com/quality-gates/mutago/v2/internal/gitdiff"
 
-// admissionDecision is the result of checking a discovered mutant's scope.
 type admissionDecision uint8
 
 const (

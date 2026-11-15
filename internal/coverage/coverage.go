@@ -411,7 +411,6 @@ type perTestJob struct {
 	binaryPath string
 }
 
-// A result is either a readable profile or a failure to obtain one.
 type perTestResult interface {
 	mergeInto(*PerTestProfile) error
 }
@@ -430,8 +429,6 @@ type profileFailure struct{ err error }
 
 func (r profileFailure) mergeInto(*PerTestProfile) error { return r.err }
 
-// profileBatch owns the jobs whose results must all be accounted for before
-// their combined profile can be used.
 type profileBatch struct {
 	jobs []perTestJob
 }

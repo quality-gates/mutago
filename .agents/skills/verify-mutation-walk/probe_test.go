@@ -96,8 +96,6 @@ func TestWalkHandshakeProbe(t *testing.T) {
 	for _, positioned := range []bool{false, true} {
 		t.Run(fmt.Sprint(positioned), func(t *testing.T) {
 			id := &ast.Ident{Name: "original"}
-			// Drive both protocol phases from the caller; each receive synchronizes
-			// observation of syntax with the walk goroutine.
 			if positioned {
 				ch := MutateWalkWithPositions(nil, nil, id, probeMutator(t, id))
 				for i := 1; i <= 2; i++ {
