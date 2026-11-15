@@ -58,25 +58,25 @@ type mutantSink interface {
 	finish(run *mutationRun, bl baseline.Snapshot) int
 }
 
-func newMutantSink(r *mutationRun, jobs chan<- execJob) mutantSink {
+func newMutantSink(r *mutationRun, pool *executionPool) mutantSink {
 	switch r.exec.mode {
 	case modeDryRun:
 		return &dryRunSink{stdout: r.stdout, totals: make(map[string]int), pending: make(map[string]int)}
 	case modeGenerate:
 		return &generateSink{stderr: r.stderr}
 	default:
-		return &executeSink{r: r, jobs: jobs}
+		return &executeSink{r: r, pool: pool}
 	}
 }
 
 // executeSink queues each mutant for a worker and reports the results.
 type executeSink struct {
 	r    *mutationRun
-	jobs chan<- execJob
+	pool *executionPool
 }
 
 func (s *executeSink) admit(fc *fileContext, mutation mutago.PositionedMutation, mutationID int, prepared preparedMutation) {
-	queueMutation(s.r, s.jobs, fc, mutation, mutationID, fc.originalSource, prepared)
+	queueMutation(s.r, s.pool, fc, mutation, mutationID, fc.originalSource, prepared)
 }
 
 func (s *executeSink) flush(*fileContext) {}

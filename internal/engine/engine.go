@@ -205,8 +205,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 		return Result{ExitCode: returnError}, nil
 	}
 
-	cleanup := newRunCleanup(setup)
-	defer cleanup()
+	defer setup.close()
 
 	report := run.report
 	if exitCode := runBaselineChecks(ctx, runEngine.Stderr, opts, pkgs, run.exec); exitCode != 0 {
@@ -220,7 +219,7 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 
 	loopCode := mutateAll(run, pkgs, coverageProfiles)
 
-	cleanup()
+	setup.close()
 
 	if loopCode != returnOk {
 		return Result{Report: report, ExitCode: loopCode}, ctx.Err()
@@ -232,26 +231,18 @@ func (e *Engine) RunResolved(ctx context.Context, opts *models.Options, bl *base
 	return Result{Report: report, ExitCode: run.sink.finish(run, baselineSnapshot)}, nil
 }
 
-// newRunCleanup returns a function that stops the workers and progress
-// monitor, sends the listener the final report, and removes the temp dir.
-// Only its first call does anything.
-func newRunCleanup(setup *runSetup) func() {
-	run := setup.run
-	if !run.exec.mode.materializes() {
-		return func() {}
-	}
-	var cleanedUp bool
-	return func() {
-		if cleanedUp {
+func (setup *runSetup) close() {
+	setup.closed.Do(func() {
+		run := setup.run
+		if !run.exec.mode.materializes() {
 			return
 		}
-		cleanedUp = true
-		stopExecution(setup.jobs, setup.jobWg, setup.stopProgress, setup.progressWg)
-		if run.exec.mode.executes() {
+		if setup.execution != nil {
+			setup.execution.stop()
 			run.results.summarize(run.report)
 		}
 		removeTmpDir(run.stderr, run.opts, run.tmpDir)
-	}
+	})
 }
 
 func (e *Engine) initDefaults() {
@@ -263,15 +254,11 @@ func (e *Engine) initDefaults() {
 	}
 }
 
-// runSetup is the initialised run plus the worker and progress handles that
-// cleanup must shut down.
 type runSetup struct {
-	run          *mutationRun
-	pkgs         []importing.Package
-	jobs         chan execJob
-	jobWg        *sync.WaitGroup
-	stopProgress chan struct{}
-	progressWg   *sync.WaitGroup
+	run       *mutationRun
+	pkgs      []importing.Package
+	execution *executionPool
+	closed    sync.Once
 }
 
 func (e *Engine) validateAndInitRun(ctx context.Context, opts *models.Options, targets importing.ResolvedTargets) (*runSetup, error) {
@@ -324,17 +311,10 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, mode runMode
 		return nil, err
 	}
 
-	var jobs chan execJob
-	var jobWg *sync.WaitGroup
+	var execution *executionPool
 	runMutantIDFound := &atomic.Bool{}
 	if mode.executes() {
-		jobs, jobWg = startWorkerPool(opts, numWorkers, results, tmpDir)
-	}
-
-	var stopProgress chan struct{}
-	var progressWg *sync.WaitGroup
-	if mode.executes() {
-		stopProgress, progressWg = startProgressMonitor(results)
+		execution = startExecutionPool(numWorkers, results, tmpDir)
 	}
 
 	run := &mutationRun{
@@ -360,15 +340,12 @@ func (e *Engine) initRun(ctx context.Context, opts *models.Options, mode runMode
 		stderr:           e.Stderr,
 		runMutantIDFound: runMutantIDFound,
 	}
-	run.sink = newMutantSink(run, jobs)
+	run.sink = newMutantSink(run, execution)
 
 	return &runSetup{
-		run:          run,
-		pkgs:         pkgs,
-		jobs:         jobs,
-		jobWg:        jobWg,
-		stopProgress: stopProgress,
-		progressWg:   progressWg,
+		run:       run,
+		pkgs:      pkgs,
+		execution: execution,
 	}, nil
 }
 
@@ -808,7 +785,7 @@ func buildJobCoverageScope(r *mutationRun, fc *fileContext, mutation mutago.Posi
 	}
 }
 
-func queueMutation(r *mutationRun, jobs chan<- execJob, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalSourceCode []byte, prepared preparedMutation) {
+func queueMutation(r *mutationRun, pool *executionPool, fc *fileContext, mutation mutago.PositionedMutation, mutationID int, originalSourceCode []byte, prepared preparedMutation) {
 	job := execJob{
 		ctx:            r.ctx,
 		opts:           r.opts,
@@ -831,11 +808,7 @@ func queueMutation(r *mutationRun, jobs chan<- execJob, fc *fileContext, mutatio
 			edit:         prepared.edit,
 		},
 	}
-	select {
-	case <-r.ctx.Done():
-		return
-	case jobs <- job:
-	}
+	pool.submit(r.ctx, job)
 }
 
 // mutationFilePath is where mutant mutationID of fc's file is written.
@@ -1061,15 +1034,21 @@ func perTestUnavailable(ctx context.Context, opts *models.Options, pkgPath strin
 	return nil, nil
 }
 
-func startWorkerPool(opts *models.Options, numWorkers int, results *completedResults, tmpDir string) (chan execJob, *sync.WaitGroup) {
+type executionPool struct {
+	jobs         chan execJob
+	workers      sync.WaitGroup
+	stopProgress chan struct{}
+	progress     sync.WaitGroup
+}
+
+func startExecutionPool(numWorkers int, results *completedResults, tmpDir string) *executionPool {
 	stableExec := prepareStableExec(tmpDir)
-	jobs := make(chan execJob, numWorkers*2)
-	var wg sync.WaitGroup
+	pool := &executionPool{jobs: make(chan execJob, numWorkers*2), stopProgress: make(chan struct{})}
 	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
+		pool.workers.Add(1)
 		go func(paths stableExecPaths) {
-			defer wg.Done()
-			for job := range jobs {
+			defer pool.workers.Done()
+			for job := range pool.jobs {
 				if job.ctx != nil && job.ctx.Err() != nil {
 					continue
 				}
@@ -1077,7 +1056,28 @@ func startWorkerPool(opts *models.Options, numWorkers int, results *completedRes
 			}
 		}(stableExecPaths{wrapper: stableExec, bin: stableBinForWorker(tmpDir, stableExec, i)})
 	}
-	return jobs, &wg
+	pool.progress.Add(1)
+	go func() {
+		defer pool.progress.Done()
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				results.reportProgress()
+			case <-pool.stopProgress:
+				return
+			}
+		}
+	}()
+	return pool
+}
+
+func (pool *executionPool) submit(ctx context.Context, job execJob) {
+	select {
+	case <-ctx.Done():
+	case pool.jobs <- job:
+	}
 }
 
 func stableBinForWorker(tmpDir, wrapper string, id int) string {
@@ -1160,37 +1160,11 @@ func writeStableExecWrapper(dir string) (string, error) {
 	return path, nil
 }
 
-// startProgressMonitor sends the results listener the run's counts every
-// 100ms until the returned channel is closed.
-func startProgressMonitor(results *completedResults) (chan struct{}, *sync.WaitGroup) {
-	stop := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				results.reportProgress()
-			case <-stop:
-				return
-			}
-		}
-	}()
-	return stop, &wg
-}
-
-func stopExecution(jobs chan execJob, jobWg *sync.WaitGroup, stopProgress chan struct{}, progressWg *sync.WaitGroup) {
-	if jobs != nil {
-		close(jobs)
-		jobWg.Wait()
-	}
-	if stopProgress != nil {
-		close(stopProgress)
-		progressWg.Wait()
-	}
+func (pool *executionPool) stop() {
+	close(pool.jobs)
+	pool.workers.Wait()
+	close(pool.stopProgress)
+	pool.progress.Wait()
 }
 
 func removeTmpDir(stderr io.Writer, opts *models.Options, tmpDir string) {
