@@ -656,8 +656,7 @@ func recordOneMutation(r *mutationRun, m mutatorItem, fc *fileContext, mutation 
 	if !ok {
 		return
 	}
-	admit, reason := r.scope.Admit(prepared.candidate)
-	if !admit {
+	if reason := r.scope.Admit(prepared.candidate); reason != admitReason {
 		noteRejectedMutation(r, prepared.candidate, reason)
 		return
 	}
@@ -748,7 +747,7 @@ func recordCaptureFailure(r *mutationRun, mutant models.Mutant, err error) {
 	recordInternalError(r.results, mutant, err)
 }
 
-func noteRejectedMutation(r *mutationRun, c scopeCandidate, reason skipReason) {
+func noteRejectedMutation(r *mutationRun, c scopeCandidate, reason admissionDecision) {
 	switch reason {
 	case skipGitDiff:
 		console.Debug(r.opts, "Skip %s:%d (not in git diff)", c.repoFile, c.line)
@@ -1529,10 +1528,10 @@ func runExecJob(job execJob, results *completedResults) {
 		return
 	}
 
-	execExitCode := mutateExec(job, &mutant)
+	outcome, execExitCode := job.runner.execute(job, &mutant)
 	console.Debug(opts, "Exited with %d", execExitCode)
 
-	recordMutantResult(results, mutant, execExitCode, mutantLocation(opts, mutant))
+	recordMutantResult(results, mutant, outcome, mutantLocation(opts, mutant))
 }
 
 func mutantLocation(opts *models.Options, mutant models.Mutant) string {
@@ -1551,10 +1550,6 @@ func mutantLocation(opts *models.Options, mutant models.Mutant) string {
 		return fmt.Sprintf("%s (%s) [checksum: %s]", loc, mutant.Mutator.MutatorName, mutant.Checksum)
 	}
 	return fmt.Sprintf("%s (%s)", loc, mutant.Mutator.MutatorName)
-}
-
-func mutateExec(job execJob, mutant *models.Mutant) int {
-	return job.runner.run(job, mutant)
 }
 
 func runBuiltinExec(job execJob, mutant *models.Mutant) int {
@@ -1765,21 +1760,19 @@ func mapTestExitToResult(execExitCode int) int {
 	return execExitCode
 }
 
-func recordMutantResult(results *completedResults, mutant models.Mutant, execExitCode int, msg string) {
-	switch execExitCode {
-	case 0:
+func recordMutantResult(results *completedResults, mutant models.Mutant, outcome models.MutantOutcome, msg string) {
+	switch outcome {
+	case models.OutcomeKilled:
 		mutant.ProcessOutput = fmt.Sprintf("%s %s\n", console.KILLED, msg)
-		results.record(models.OutcomeKilled, mutant)
-	case 1:
+	case models.OutcomeEscaped:
 		mutant.ProcessOutput = fmt.Sprintf("%s %s\n", console.ESCAPED, msg)
-		results.record(models.OutcomeEscaped, mutant)
-	case 2:
+	case models.OutcomeSkipped:
 		mutant.ProcessOutput = fmt.Sprintf("%s %s\n", console.SKIP, msg)
-		results.record(models.OutcomeSkipped, mutant)
 	default:
 		mutant.ProcessOutput = fmt.Sprintf("%s exit code for %s\n", console.UNKNOWN, msg)
-		results.record(models.OutcomeErrored, mutant)
+		outcome = models.OutcomeErrored
 	}
+	results.record(outcome, mutant)
 }
 
 func recordNotCovered(results *completedResults, mutant models.Mutant, msg string) {

@@ -21,6 +21,22 @@ type runnerPolicy struct {
 	run       func(execJob, *models.Mutant) int
 }
 
+// Runner commands use the custom-exec convention after any built-in test
+// exit code has been translated. Other exit codes are execution errors.
+func (r runnerPolicy) execute(job execJob, mutant *models.Mutant) (models.MutantOutcome, int) {
+	code := r.run(job, mutant)
+	switch code {
+	case 0:
+		return models.OutcomeKilled, code
+	case 1:
+		return models.OutcomeEscaped, code
+	case 2:
+		return models.OutcomeSkipped, code
+	default:
+		return models.OutcomeErrored, code
+	}
+}
+
 func resolveRunner(opts *models.Options, mode runMode) (runnerPolicy, []string) {
 	r := runnerPolicy{
 		command:   strings.Fields(opts.Exec.Exec),

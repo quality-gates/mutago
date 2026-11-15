@@ -2,12 +2,11 @@ package engine
 
 import "github.com/quality-gates/mutago/v2/internal/gitdiff"
 
-// skipReason is why mutantScope rejected a discovered mutant.
-// admitReason means the mutant is in scope.
-type skipReason int
+// admissionDecision is the result of checking a discovered mutant's scope.
+type admissionDecision uint8
 
 const (
-	admitReason skipReason = iota
+	admitReason admissionDecision = iota
 	skipGitDiff
 	skipMutantID
 	skipBlacklist
@@ -46,21 +45,21 @@ func newMutantScope(gitLines gitdiff.ChangedLines, runID string, blocked map[str
 // Admit reports whether candidate is in scope.
 // The check order is git diff, --run-mutant-id, blacklist, then duplicate.
 // A rejected mutant is not recorded as seen, so it cannot hide a later mutant.
-func (s *mutantScope) Admit(c scopeCandidate) (bool, skipReason) {
+func (s *mutantScope) Admit(c scopeCandidate) admissionDecision {
 	if gitDiffExcludes(s.gitLines, c.repoFile, c.absFile, c.line) {
-		return false, skipGitDiff
+		return skipGitDiff
 	}
 	if s.runID != "" && c.id != s.runID {
-		return false, skipMutantID
+		return skipMutantID
 	}
 	if _, blocked := s.blocked[c.checksum]; blocked {
-		return false, skipBlacklist
+		return skipBlacklist
 	}
 	if _, seen := s.seen[c.checksum]; seen {
-		return false, skipDuplicate
+		return skipDuplicate
 	}
 	s.seen[c.checksum] = struct{}{}
-	return true, admitReason
+	return admitReason
 }
 
 // gitDiffExcludes is the only git-diff scope rule.
