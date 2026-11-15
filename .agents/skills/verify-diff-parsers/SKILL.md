@@ -7,10 +7,10 @@ description: Check the bounded state-machine behavior of the unified-diff and Gi
 
 Run this skill after changing the unified-diff parser in `internal/parser` or the changed-line parser in `internal/gitdiff`. An incorrect first changed line or changed-line set can cause mutation testing to include or skip the wrong code.
 
-The checked baseline is `888a135`. Inspect changes since that commit, including uncommitted changes, and assess whether the generated cases and expectations still describe the implementation's intended behavior:
+The checked baseline is `7bc356292989fda5ecb9c608c25f518576e48ca7`. Inspect changes since that commit, including uncommitted changes, and assess whether the generated cases and expectations still describe the implementation's intended behavior:
 
 ```sh
-git diff 888a135 -- internal/parser internal/gitdiff
+git diff 7bc356292989fda5ecb9c608c25f518576e48ca7 -- internal/parser internal/gitdiff
 git status --short
 ./.agents/skills/verify-diff-parsers/check.sh
 ```

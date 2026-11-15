@@ -9,7 +9,7 @@ A missing or unreadable test profile must prevent a partial coverage map from be
 
 ## Coverage and sync
 
-Last matched to `e8e53ba`, specifically `BuildPerTestProfileForPackages`, `profileBatch.collect`, `runPerTestWorker`, and `parsePerTestProfile` in `internal/coverage/coverage.go`. Before a check, inspect changes since that commit and any uncommitted changes to those functions. Compare each transition with `CoverageBatch.tla` and the real-code probe. Update both when intended behavior changes. Move the sync commit forward only after confirming that both still describe the code.
+Last matched to `7bc356292989fda5ecb9c608c25f518576e48ca7`, specifically `BuildPerTestProfileForPackages`, `profileBatch.collect`, `runPerTestWorker`, and `parsePerTestProfile` in `internal/coverage/coverage.go`. Before a check, inspect changes since that commit and any uncommitted changes to those functions. Compare each transition with `CoverageBatch.tla` and the real-code probe. Update both when intended behavior changes. Move the sync commit forward only after confirming that both still describe the code.
 
 The model treats each job's result delivery as one atomic step and explores good and bad results in every order for three jobs. It checks that a complete result requires every job and no failure. The Go probe exercises the actual batch collector and workers for every good or bad combination of zero to three profiles using scripted test commands. It checks that any error returns no map and that a complete batch retains every test. The model does not execute Go, prove liveness, cover process execution or profile parsing, or model cancellation separately. The Go probe uses two workers but does not establish thread safety or exhaustively explore worker scheduling.
 
