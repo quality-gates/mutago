@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/quality-gates/mutago/v2/internal/models"
+	"github.com/stretchr/testify/require"
 )
 
 const storeDiff = "--- Original\n+++ New\n@@ -1,1 +1,1 @@\n-\treturn a + b\n+\treturn a - b\n"
@@ -54,42 +55,27 @@ func TestBaselineAcrossRuns(t *testing.T) {
 	second.ID = "second"
 	escaped := []models.Mutant{first, second}
 
-	baseline, err := Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := Capture(baseline).Compare(escaped); got.BaselinePresent || len(got.Mutants) != 2 {
-		t.Fatalf("missing baseline should accept no escapes, got %+v", got)
-	}
-	if err := Write(path, nil, root); err != nil {
-		t.Fatal(err)
-	}
-	baseline, err = Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := Capture(baseline).Compare(escaped); !got.BaselinePresent || len(got.Mutants) != 2 {
-		t.Fatalf("empty baseline should mark both escapes as new, got %+v", got)
-	}
-	if err := Write(path, []models.Mutant{first}, root); err != nil {
-		t.Fatal(err)
-	}
-	baseline, err = Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := Capture(baseline).Compare(escaped); !got.BaselinePresent || len(got.Mutants) != 1 || got.Mutants[0].ID != second.ID {
-		t.Fatalf("loaded baseline should accept only first, got %+v", got)
-	}
-	if err := Write(path, []models.Mutant{second}, root); err != nil {
-		t.Fatal(err)
-	}
-	baseline, err = Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := Capture(baseline).Compare(escaped); !got.BaselinePresent || len(got.Mutants) != 1 || got.Mutants[0].ID != first.ID {
-		t.Fatalf("updated baseline should replace accepted escapes, got %+v", got)
+	for _, tc := range []struct {
+		name     string
+		present  bool
+		accepted []models.Mutant
+		want     []models.Mutant
+	}{
+		{name: "missing baseline", want: escaped},
+		{name: "empty baseline", present: true, want: escaped},
+		{name: "loaded baseline", present: true, accepted: []models.Mutant{first}, want: []models.Mutant{second}},
+		{name: "updated baseline", present: true, accepted: []models.Mutant{second}, want: []models.Mutant{first}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.present {
+				require.NoError(t, Write(path, tc.accepted, root))
+			}
+			baseline, err := Load(path)
+			require.NoError(t, err)
+			got := Capture(baseline).Compare(escaped)
+			require.Equal(t, tc.present, got.BaselinePresent)
+			require.Equal(t, tc.want, got.Mutants)
+		})
 	}
 }
 
