@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/quality-gates/mutago/v2/internal/baseline"
 	"github.com/quality-gates/mutago/v2/internal/models"
 
 	// Register mutators for tests
@@ -276,6 +277,64 @@ func escapingPackageOptions(t *testing.T) *models.Options {
 	}
 	opts.Remaining.Targets = []string{"./" + tempDir}
 	return opts
+}
+
+func TestEscapedGateGuidance(t *testing.T) {
+	tests := []struct {
+		name     string
+		baseline *baseline.File
+		escaped  []models.Mutant
+		wantCode int
+		wantText string
+	}{
+		{
+			name:     "without baseline",
+			escaped:  []models.Mutant{{ID: "new"}},
+			wantCode: 4,
+			wantText: "1 mutant(s) escaped",
+		},
+		{
+			name:     "new escape with baseline",
+			baseline: &baseline.File{Version: 1, Mutants: []baseline.Entry{{ID: "accepted"}}},
+			escaped:  []models.Mutant{{ID: "accepted"}, {ID: "new"}},
+			wantCode: 4,
+			wantText: "1 new mutant(s) escaped",
+		},
+		{
+			name:     "accepted escape",
+			baseline: &baseline.File{Version: 1, Mutants: []baseline.Entry{{ID: "accepted"}}},
+			escaped:  []models.Mutant{{ID: "accepted"}},
+			wantCode: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := &models.Options{}
+			opts.Score.FailOnEscaped = true
+			opts.Score.MinMsi = -1
+			opts.Config.MinMsi = -1
+			report := &models.Report{Escaped: tt.escaped}
+			var stderr bytes.Buffer
+			if got := checkQualityGates(&stderr, opts, report, baseline.Capture(tt.baseline)); got != tt.wantCode {
+				t.Errorf("exit code = %d, want %d", got, tt.wantCode)
+			}
+			output := stderr.String()
+			if tt.wantCode == 0 {
+				if output != "" {
+					t.Errorf("accepted survivors produced gate failure output: %q", output)
+				}
+				return
+			}
+			for _, want := range []string{tt.wantText, "Add tests that fail on them."} {
+				if !strings.Contains(output, want) {
+					t.Errorf("expected %q in failure output, got %q", want, output)
+				}
+			}
+			if strings.Contains(output, "--update-baseline") {
+				t.Errorf("failure output suggests accepting escaped mutants: %q", output)
+			}
+		})
+	}
 }
 
 func TestEngineQualityGateMessagesUseInjectedStderr(t *testing.T) {
