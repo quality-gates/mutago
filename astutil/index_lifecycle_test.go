@@ -21,9 +21,9 @@ func f(x int) int { y := x + 1; println(y); return x + y }`)
 	}
 	ClearIdentifierCache()
 	identifiersInStatements(pkg, info, stmts[0:1])
-	incremental := names(identifiersInStatements(pkg, info, stmts[0:len(stmts)]))
+	incremental := names(identifiersInStatements(pkg, info, stmts[0:]))
 	ClearIdentifierCache()
-	fresh := names(identifiersInStatements(pkg, info, stmts[0:len(stmts)]))
+	fresh := names(identifiersInStatements(pkg, info, stmts[0:]))
 	if len(fresh) == 0 {
 		t.Fatal("expected identifier uses")
 	}

@@ -8,6 +8,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestInterruptLifecycleHelper(t *testing.T) {
@@ -65,10 +67,11 @@ func TestInterruptLifecycle(t *testing.T) {
 			go func() { done <- cmd.Wait() }()
 			select {
 			case err := <-done:
+				require.Error(t, err, "second %v did not terminate by signal", sig)
 				status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
-				if err == nil || !ok || !status.Signaled() || status.Signal() != sig {
-					t.Fatalf("second %v did not terminate by signal: %v, %v", sig, err, status)
-				}
+				require.True(t, ok, "process did not return a wait status")
+				require.True(t, status.Signaled(), "process did not terminate by signal")
+				require.Equal(t, sig, status.Signal(), "second signal did not terminate process")
 			case <-time.After(5 * time.Second):
 				t.Fatal("second signal did not terminate process")
 			}
