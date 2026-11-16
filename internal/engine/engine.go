@@ -1403,7 +1403,7 @@ func checkEscapedGate(stderr io.Writer, opts *models.Options, report *models.Rep
 	if escapes.BaselinePresent {
 		qualifier = "new "
 	}
-	fmt.Fprintf(stderr, "%d %smutant(s) escaped — kill them or run --update-baseline to accept\n", len(escapes.Mutants), qualifier)
+	fmt.Fprintf(stderr, "%d %smutant(s) escaped. Add tests that fail on them.\n", len(escapes.Mutants), qualifier)
 	return true
 }
 
