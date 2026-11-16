@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.43] (2026-11-16)
+
 ### Changed
 - Share source-path suffix matching between coverage and changed-line filtering.
 - Make mutation-testing lifecycles explicit and add bounded verification for their transitions.
@@ -790,7 +792,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.42...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.43...HEAD
+[v2.10.43]: https://github.com/quality-gates/mutago/compare/v2.10.42...v2.10.43
 [v2.10.42]: https://github.com/quality-gates/mutago/compare/v2.10.41...v2.10.42
 [v2.10.41]: https://github.com/quality-gates/mutago/compare/v2.10.40...v2.10.41
 [v2.10.40]: https://github.com/quality-gates/mutago/compare/v2.10.39...v2.10.40
