@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Keep coverage parsing proportional to the number of profile lines. A profile line declares a span of covered lines, which the parser now stores as a span instead of inserting one entry per line. A 53-byte crafted profile declaring a 2.1-billion-line span used to run for minutes or never finish; it now parses in microseconds with identical coverage answers.
+
 ## [v2.10.43] (2026-11-16)
 
 ### Changed

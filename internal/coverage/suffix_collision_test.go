@@ -16,9 +16,9 @@ import (
 // correct resolution every time. Under the buggy code this fails with
 // near-certainty (the wrong key is chosen on ~50% of iterations).
 func TestProfileIsCoveredSuffixCollision(t *testing.T) {
-	p := &Profile{coveredLines: make(map[string]map[int]bool)}
-	p.coveredLines["foo/bar.go"] = map[int]bool{5: true}
-	p.coveredLines["bar.go"] = map[int]bool{50: true}
+	p := &Profile{coveredRanges: make(map[string][]lineRange)}
+	p.coveredRanges["foo/bar.go"] = []lineRange{{start: 5, end: 5}}
+	p.coveredRanges["bar.go"] = []lineRange{{start: 50, end: 50}}
 
 	// For any absFile ending in /foo/bar.go: line 5 must be covered, line 50
 	// must NOT (line 50 belongs to the distinct root bar.go).
@@ -50,9 +50,9 @@ func TestProfileIsCoveredSuffixCollision(t *testing.T) {
 
 // Same class of bug for PerTestProfile.CoveringTests.
 func TestPerTestProfileCoveringTestsSuffixCollision(t *testing.T) {
-	p := &PerTestProfile{data: make(map[string]map[int][]string)}
-	p.data["foo/bar.go"] = map[int][]string{5: {"TestA"}}
-	p.data["bar.go"] = map[int][]string{50: {"TestB"}}
+	p := &PerTestProfile{data: make(map[string]map[string][]lineRange)}
+	p.data["foo/bar.go"] = map[string][]lineRange{"TestA": {{start: 5, end: 5}}}
+	p.data["bar.go"] = map[string][]lineRange{"TestB": {{start: 50, end: 50}}}
 
 	var sawLine5MissingA, sawLine50HasB bool
 	for i := 0; i < 2000; i++ {
