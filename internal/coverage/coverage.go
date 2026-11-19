@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -227,20 +226,14 @@ func parseLineNum(s string) (int, error) {
 	return strconv.Atoi(parts[0])
 }
 
-// namedRange is one covered span credited to one test.
-type namedRange struct {
-	start, end int
-	test       string
-}
-
-// PerTestProfile maps each module-relative file path to the spans each test
-// covers. CoveringTests turns the spans containing a line into the sorted list
-// of test function names. Callers look up by absolute file path; the match is
-// done via suffix so it survives GOPATH/module root variations.
+// PerTestProfile maps each module-relative file path to the covered spans of
+// each test. CoveringTests turns the tests whose spans contain a line into the
+// sorted list of test function names. Callers look up by absolute file path;
+// the match is done via suffix so it survives GOPATH/module root variations.
 type PerTestProfile struct {
-	// relPath -> covered spans, one per (profile line, test)
-	data     map[string][]namedRange
-	resolved pathResolver[[]namedRange]
+	// relPath -> test name -> coalesced covered spans of that test
+	data     map[string]map[string][]lineRange
+	resolved pathResolver[map[string][]lineRange]
 }
 
 // CoveringTests returns the sorted test names that cover absFile at lineNum.
@@ -264,20 +257,20 @@ func (p *PerTestProfile) CoveringTestsRelative(relFile string, lineNum int) []st
 	return coveringTests(p.data[filepath.ToSlash(relFile)], lineNum)
 }
 
-// coveringTests returns the names of the tests whose spans include line, each
-// once, sorted. It returns nil when no span covers the line.
-func coveringTests(ranges []namedRange, line int) []string {
+// coveringTests returns the names of the tests whose spans include line,
+// sorted. It returns nil when no test covers the line.
+func coveringTests(tests map[string][]lineRange, line int) []string {
 	var names []string
-	for _, r := range ranges {
-		if r.start <= line && line <= r.end {
-			names = append(names, r.test)
+	for test, ranges := range tests {
+		if lineInRanges(ranges, line) {
+			names = append(names, test)
 		}
 	}
 	if len(names) == 0 {
 		return nil
 	}
 	sort.Strings(names)
-	return slices.Compact(names)
+	return names
 }
 
 // Toolchain builds the commands that per-test profiling runs. The caller
@@ -492,7 +485,7 @@ func (b profileBatch) collect(tc Toolchain, workers int, modulePath string) (*Pe
 	}
 	close(jobs)
 
-	p := &PerTestProfile{data: make(map[string][]namedRange)}
+	p := &PerTestProfile{data: make(map[string]map[string][]lineRange)}
 	var errs []error
 	for range b.jobs {
 		if err := (<-results).mergeInto(p); err != nil {
@@ -546,11 +539,13 @@ func parsePerTestProfile(path, modulePath string) (*Profile, error) {
 
 func applyPerTestResult(p *PerTestProfile, r profileSuccess) {
 	for relPath, ranges := range r.prof.coveredRanges {
-		if _, ok := p.data[relPath]; !ok {
-			p.data[relPath] = nil
+		tests, ok := p.data[relPath]
+		if !ok {
+			tests = make(map[string][]lineRange)
+			p.data[relPath] = tests
 		}
-		for _, rg := range ranges {
-			p.data[relPath] = append(p.data[relPath], namedRange{start: rg.start, end: rg.end, test: r.name})
-		}
+		// Each test's ranges arrive coalesced and sorted from ParseProfile, so
+		// appending keeps this test's slice sorted for binary search.
+		tests[r.name] = append(tests[r.name], ranges...)
 	}
 }

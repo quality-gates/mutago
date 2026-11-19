@@ -166,7 +166,7 @@ func TestParseProfile_LargeRange(t *testing.T) {
 	assert.False(t, p.IsCoveredRelative("pkg/foo.go", 150002))
 }
 
-// The span declared here (2,147,492,648 lines in a 54-byte profile) used to
+// The span declared here (2,147,483,648 lines in a 54-byte profile) used to
 // make the parser run at least as long as the span. It must now parse
 // immediately and answer membership over the whole declared span.
 func TestParseProfile_AbsurdRangeCompletes(t *testing.T) {
@@ -180,6 +180,19 @@ func TestParseProfile_AbsurdRangeCompletes(t *testing.T) {
 	assert.True(t, p.IsCoveredRelative("pkg/foo.go", 2147657774))
 	assert.False(t, p.IsCoveredRelative("pkg/foo.go", 2147657775))
 	assert.False(t, p.IsCoveredRelative("pkg/foo.go", 174126))
+}
+
+// A span ending at max int64 used to wrap the expansion loop and never
+// terminate. It must now parse immediately and answer membership at the end.
+func TestParseProfile_MaxInt64RangeCompletes(t *testing.T) {
+	profile := "mode: set\ngithub.com/example/pkg/foo.go:1.1,9223372036854775807.3 1 1\n"
+	path := writeTmpProfile(t, profile)
+	p, err := ParseProfile(path, modulePath)
+	require.NoError(t, err)
+
+	assert.True(t, p.IsCoveredRelative("pkg/foo.go", 1))
+	assert.True(t, p.IsCoveredRelative("pkg/foo.go", 9223372036854775807))
+	assert.False(t, p.IsCoveredRelative("pkg/foo.go", 0))
 }
 
 // A reversed range declares no covered lines, as it always did.
@@ -592,70 +605,87 @@ func TestCoveringTests_ZeroLine(t *testing.T) {
 	// non-nil for lineNum=0 instead of nil (map key 0 exists).
 	// lineNum=1 assertion kills the numbers/incrementer mutation that
 	// widens the guard from lineNum <= 0 to lineNum <= 1.
-	p := &PerTestProfile{data: map[string][]namedRange{
-		"pkg/foo.go": {{start: 0, end: 0, test: "TestHidden"}, {start: 1, end: 1, test: "TestVisible"}},
+	p := &PerTestProfile{data: map[string]map[string][]lineRange{
+		"pkg/foo.go": {"TestHidden": {{start: 0, end: 0}}, "TestVisible": {{start: 1, end: 1}}},
 	}}
 	assert.Nil(t, p.CoveringTests("/abs/pkg/foo.go", 0))
 	assert.Equal(t, []string{"TestVisible"}, p.CoveringTests("/abs/pkg/foo.go", 1))
 }
 
 func TestCoveringTests_NegativeLine(t *testing.T) {
-	p := &PerTestProfile{data: map[string][]namedRange{
-		"pkg/foo.go": {{start: 0, end: 0, test: "TestHidden"}, {start: 1, end: 1, test: "TestFoo"}},
+	p := &PerTestProfile{data: map[string]map[string][]lineRange{
+		"pkg/foo.go": {"TestHidden": {{start: 0, end: 0}}, "TestFoo": {{start: 1, end: 1}}},
 	}}
 	assert.Nil(t, p.CoveringTests("/abs/pkg/foo.go", -1))
 }
 
 func TestCoveringTests_SuffixMatch(t *testing.T) {
-	// Names arrive unsorted and repeated; the result is sorted and deduplicated.
-	p := &PerTestProfile{data: map[string][]namedRange{
-		"pkg/foo.go": {{start: 5, end: 5, test: "TestB"}, {start: 5, end: 5, test: "TestA"}, {start: 5, end: 5, test: "TestA"}, {start: 6, end: 6, test: "TestA"}},
+	p := &PerTestProfile{data: map[string]map[string][]lineRange{
+		"pkg/foo.go": {"TestB": {{start: 5, end: 5}}, "TestA": {{start: 5, end: 6}}},
 	}}
-	tests := p.CoveringTests("/home/user/go/pkg/foo.go", 5)
-	assert.Equal(t, []string{"TestA", "TestB"}, tests)
+	// Map iteration order is random; the result must stay sorted every call.
+	for range 100 {
+		assert.Equal(t, []string{"TestA", "TestB"}, p.CoveringTests("/home/user/go/pkg/foo.go", 5))
+	}
 	assert.Equal(t, []string{"TestA"}, p.CoveringTests("/home/user/go/pkg/foo.go", 6))
 }
 
 func TestCoveringTests_ExactMatch(t *testing.T) {
-	p := &PerTestProfile{data: map[string][]namedRange{
-		"pkg/foo.go": {{start: 3, end: 3, test: "TestC"}},
+	p := &PerTestProfile{data: map[string]map[string][]lineRange{
+		"pkg/foo.go": {"TestC": {{start: 3, end: 3}}},
 	}}
 	assert.Equal(t, []string{"TestC"}, p.CoveringTests("pkg/foo.go", 3))
 }
 
 func TestCoveringTests_NoMatch(t *testing.T) {
-	p := &PerTestProfile{data: map[string][]namedRange{
-		"pkg/foo.go": {{start: 5, end: 5, test: "TestA"}},
+	p := &PerTestProfile{data: map[string]map[string][]lineRange{
+		"pkg/foo.go": {"TestA": {{start: 5, end: 5}}},
 	}}
 	assert.Nil(t, p.CoveringTests("/different/path/bar.go", 5))
 	assert.Nil(t, p.CoveringTests("/abs/pkg/foo.go", 99))
 }
 
 func TestCoveringTests_EmptyFilenameDoesNotMatchUnrelatedFile(t *testing.T) {
-	p := &PerTestProfile{data: map[string][]namedRange{
-		"": {{start: 1, end: 1, test: "TestUnexpected"}},
+	p := &PerTestProfile{data: map[string]map[string][]lineRange{
+		"": {"TestUnexpected": {{start: 1, end: 1}}},
 	}}
 
 	assert.Nil(t, p.CoveringTests("/unrelated/file.go", 1))
 }
 
 func TestCoveringTests_CachesResolvedPath(t *testing.T) {
-	lines := []namedRange{{start: 5, end: 5, test: "TestA"}}
-	p := &PerTestProfile{data: map[string][]namedRange{"pkg/foo.go": lines}}
+	lines := map[string][]lineRange{"TestA": {{start: 5, end: 5}}}
+	p := &PerTestProfile{data: map[string]map[string][]lineRange{"pkg/foo.go": lines}}
 	absFile := "/workspace/pkg/foo.go"
 
 	assert.Equal(t, []string{"TestA"}, p.CoveringTests(absFile, 5))
-	p.data["pkg/foo.go"] = []namedRange{{start: 5, end: 5, test: "TestB"}}
+	p.data["pkg/foo.go"] = map[string][]lineRange{"TestB": {{start: 5, end: 5}}}
 	assert.Equal(t, []string{"TestA"}, p.CoveringTests(absFile, 5), "subsequent lookups must reuse the resolved path")
 }
 
 func TestCoveringTests_CachesMissingPath(t *testing.T) {
-	p := &PerTestProfile{data: map[string][]namedRange{}}
+	p := &PerTestProfile{data: map[string]map[string][]lineRange{}}
 	absFile := "/workspace/pkg/foo.go"
 
 	assert.Nil(t, p.CoveringTests(absFile, 5))
-	p.data["pkg/foo.go"] = []namedRange{{start: 5, end: 5, test: "TestA"}}
+	p.data["pkg/foo.go"] = map[string][]lineRange{"TestA": {{start: 5, end: 5}}}
 	assert.Nil(t, p.CoveringTests(absFile, 5), "subsequent lookups must reuse the cached miss")
+}
+
+// The per-test path merges whole profiles, so a huge declared span must stay
+// one span per test instead of becoming one entry per line.
+func TestApplyPerTestResult_AbsurdRange(t *testing.T) {
+	profile := "mode: set\ngithub.com/example/pkg/foo.go:174127.1,2147657774.3 1 1\n"
+	path := writeTmpProfile(t, profile)
+	prof, err := ParseProfile(path, modulePath)
+	require.NoError(t, err)
+
+	p := &PerTestProfile{data: make(map[string]map[string][]lineRange)}
+	applyPerTestResult(p, profileSuccess{name: "TestX", prof: prof})
+
+	assert.Equal(t, []string{"TestX"}, p.CoveringTestsRelative("pkg/foo.go", 1000000000))
+	assert.Equal(t, []string{"TestX"}, p.CoveringTestsRelative("pkg/foo.go", 2147657774))
+	assert.Nil(t, p.CoveringTestsRelative("pkg/foo.go", 174126))
 }
 
 // TestBuildPerTestProfile_SingleTestPackage uses a package with exactly one test

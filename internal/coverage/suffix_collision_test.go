@@ -50,9 +50,9 @@ func TestProfileIsCoveredSuffixCollision(t *testing.T) {
 
 // Same class of bug for PerTestProfile.CoveringTests.
 func TestPerTestProfileCoveringTestsSuffixCollision(t *testing.T) {
-	p := &PerTestProfile{data: make(map[string][]namedRange)}
-	p.data["foo/bar.go"] = []namedRange{{start: 5, end: 5, test: "TestA"}}
-	p.data["bar.go"] = []namedRange{{start: 50, end: 50, test: "TestB"}}
+	p := &PerTestProfile{data: make(map[string]map[string][]lineRange)}
+	p.data["foo/bar.go"] = map[string][]lineRange{"TestA": {{start: 5, end: 5}}}
+	p.data["bar.go"] = map[string][]lineRange{"TestB": {{start: 50, end: 50}}}
 
 	var sawLine5MissingA, sawLine50HasB bool
 	for i := 0; i < 2000; i++ {
