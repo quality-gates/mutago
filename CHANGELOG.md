@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.44] (2026-11-19)
+
 ### Fixed
 - Keep coverage parsing proportional to the number of profile lines. A profile line declares a span of covered lines, which the parser now stores as a span instead of inserting one entry per line. A 53-byte crafted profile declaring a 2.1-billion-line span used to run for minutes or never finish; it now parses in microseconds with identical coverage answers.
 
@@ -795,7 +797,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.43...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.44...HEAD
+[v2.10.44]: https://github.com/quality-gates/mutago/compare/v2.10.43...v2.10.44
 [v2.10.43]: https://github.com/quality-gates/mutago/compare/v2.10.42...v2.10.43
 [v2.10.42]: https://github.com/quality-gates/mutago/compare/v2.10.41...v2.10.42
 [v2.10.41]: https://github.com/quality-gates/mutago/compare/v2.10.40...v2.10.41
