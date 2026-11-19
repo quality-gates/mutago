@@ -166,7 +166,7 @@ func TestParseProfile_LargeRange(t *testing.T) {
 	assert.False(t, p.IsCoveredRelative("pkg/foo.go", 150002))
 }
 
-// The span declared here (2,147,483,648 lines in a 54-byte profile) used to
+// The span declared here (2,147,483,648 lines in a 66-byte profile) used to
 // make the parser run at least as long as the span. It must now parse
 // immediately and answer membership over the whole declared span.
 func TestParseProfile_AbsurdRangeCompletes(t *testing.T) {
@@ -670,6 +670,32 @@ func TestCoveringTests_CachesMissingPath(t *testing.T) {
 	assert.Nil(t, p.CoveringTests(absFile, 5))
 	p.data["pkg/foo.go"] = map[string][]lineRange{"TestA": {{start: 5, end: 5}}}
 	assert.Nil(t, p.CoveringTests(absFile, 5), "subsequent lookups must reuse the cached miss")
+}
+
+// Two packages sharing a test name contribute two sorted runs of ranges for
+// that test. Concatenated, they are neither sorted nor non-overlapping, so
+// each merge must re-coalesce before binary search can answer correctly.
+func TestApplyPerTestResult_SharedTestNameReCoalesces(t *testing.T) {
+	prof := func(ranges ...lineRange) *Profile {
+		return &Profile{coveredRanges: map[string][]lineRange{"pkg/foo.go": ranges}}
+	}
+	p := &PerTestProfile{data: make(map[string]map[string][]lineRange)}
+	applyPerTestResult(p, profileSuccess{name: "TestShared", prof: prof(lineRange{start: 10, end: 20})})
+	applyPerTestResult(p, profileSuccess{name: "TestShared", prof: prof(lineRange{start: 1, end: 5})})
+
+	for _, line := range []int{1, 3, 5, 10, 15, 20} {
+		assert.Equal(t, []string{"TestShared"}, p.CoveringTestsRelative("pkg/foo.go", line), "line %d", line)
+	}
+	for _, line := range []int{6, 9, 21} {
+		assert.Nil(t, p.CoveringTestsRelative("pkg/foo.go", line), "line %d", line)
+	}
+
+	// A later nested range must not hide the part of an earlier range that
+	// extends past it.
+	applyPerTestResult(p, profileSuccess{name: "TestNested", prof: prof(lineRange{start: 1, end: 20})})
+	applyPerTestResult(p, profileSuccess{name: "TestNested", prof: prof(lineRange{start: 5, end: 10})})
+	assert.Equal(t, []string{"TestNested", "TestShared"}, p.CoveringTestsRelative("pkg/foo.go", 15))
+	assert.Equal(t, []string{"TestNested", "TestShared"}, p.CoveringTestsRelative("pkg/foo.go", 3))
 }
 
 // The per-test path merges whole profiles, so a huge declared span must stay

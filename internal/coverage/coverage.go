@@ -195,23 +195,29 @@ func (p *Profile) recordCoveredRange(relFile string, r lineRange) {
 // finds the range that contains the line.
 func (p *Profile) coalesceRanges() {
 	for relFile, ranges := range p.coveredRanges {
-		if len(ranges) == 0 {
-			continue
-		}
-		sort.Slice(ranges, func(i, j int) bool { return ranges[i].start < ranges[j].start })
-		merged := ranges[:1]
-		for _, r := range ranges[1:] {
-			last := &merged[len(merged)-1]
-			if r.start <= last.end {
-				if r.end > last.end {
-					last.end = r.end
-				}
-			} else {
-				merged = append(merged, r)
-			}
-		}
-		p.coveredRanges[relFile] = merged
+		p.coveredRanges[relFile] = coalesceLineRanges(ranges)
 	}
+}
+
+// coalesceLineRanges sorts ranges by start line and merges every pair that
+// overlaps. The result is sorted and non-overlapping, as lineInRanges needs.
+func coalesceLineRanges(ranges []lineRange) []lineRange {
+	if len(ranges) == 0 {
+		return ranges
+	}
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start < ranges[j].start })
+	merged := ranges[:1]
+	for _, r := range ranges[1:] {
+		last := &merged[len(merged)-1]
+		if r.start <= last.end {
+			if r.end > last.end {
+				last.end = r.end
+			}
+		} else {
+			merged = append(merged, r)
+		}
+	}
+	return merged
 }
 
 // lineInRanges reports whether line falls in one of the sorted, merged ranges.
@@ -544,8 +550,9 @@ func applyPerTestResult(p *PerTestProfile, r profileSuccess) {
 			tests = make(map[string][]lineRange)
 			p.data[relPath] = tests
 		}
-		// Each test's ranges arrive coalesced and sorted from ParseProfile, so
-		// appending keeps this test's slice sorted for binary search.
-		tests[r.name] = append(tests[r.name], ranges...)
+		// Two packages can share a test name, so a test's ranges can arrive in
+		// more than one sorted run. Re-coalesce after appending to keep the
+		// slice sorted and non-overlapping for binary search.
+		tests[r.name] = coalesceLineRanges(append(tests[r.name], ranges...))
 	}
 }
