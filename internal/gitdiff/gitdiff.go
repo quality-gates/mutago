@@ -1,7 +1,6 @@
 package gitdiff
 
 import (
-	"bufio"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -89,9 +88,9 @@ func (p *changedLinesParser) consume(line string) {
 
 func parse(output string) ChangedLines {
 	state := changedLinesParser{lines: make(ChangedLines)}
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		state.consume(scanner.Text())
+	for line := range strings.Lines(output) {
+		line = strings.TrimSuffix(line, "\n")
+		state.consume(strings.TrimSuffix(line, "\r"))
 	}
 	state.lines.Coalesce()
 	return state.lines
