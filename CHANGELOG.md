@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [v2.10.45] (2026-11-23)
+
 ### Fixed
 - Include changed files after oversized diff lines in `--git-diff-lines` runs.
 
@@ -800,7 +802,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ---
 
-[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.44...HEAD
+[Unreleased]: https://github.com/quality-gates/mutago/compare/v2.10.45...HEAD
+[v2.10.45]: https://github.com/quality-gates/mutago/compare/v2.10.44...v2.10.45
 [v2.10.44]: https://github.com/quality-gates/mutago/compare/v2.10.43...v2.10.44
 [v2.10.43]: https://github.com/quality-gates/mutago/compare/v2.10.42...v2.10.43
 [v2.10.42]: https://github.com/quality-gates/mutago/compare/v2.10.41...v2.10.42
