@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/printer"
+	"go/scanner"
 	"go/token"
 	"go/types"
 	"io"
@@ -1450,11 +1451,102 @@ func captureMutationEdit(fset *token.FileSet, node ast.Node, startPos, endPos to
 	if start < 0 || end < start || end > len(original) {
 		return mutationEdit{}, fmt.Errorf("invalid mutation range %d:%d for %d-byte source", start, end, len(original))
 	}
-	var replacement bytes.Buffer
-	if err := printer.Fprint(&replacement, fset, node); err != nil {
+	var printed bytes.Buffer
+	if err := printer.Fprint(&printed, fset, node); err != nil {
 		return mutationEdit{}, err
 	}
-	return mutationEdit{start: start, end: end, replacement: replacement.Bytes()}, nil
+	return mutationEdit{start: start, end: end, replacement: reindentReplacement(original, start, printed.Bytes())}, nil
+}
+
+// reindentReplacement shifts the lines after the first line of printed by the
+// indentation of the line that holds start in original. The printer renders a
+// node at a base indentation of zero, so without this shift every later line
+// of a multi-line replacement loses the indentation of its original line and
+// a closing brace appears to move out of its block (#354). The first line
+// needs no shift: the source before start already supplies its indentation.
+// A line that starts inside a raw string or a block comment keeps its text,
+// because that text is literal content rather than code indentation.
+func reindentReplacement(original []byte, start int, printed []byte) []byte {
+	if !bytes.Contains(printed, []byte{'\n'}) {
+		return printed
+	}
+	indent := lineIndent(original, start)
+	if len(indent) == 0 {
+		return printed
+	}
+	verbatim := verbatimRanges(printed)
+	lines := bytes.Split(printed, []byte{'\n'})
+	// Line starts are offsets in printed, so record them before any line
+	// grows by the indent.
+	lineStarts := make([]int, len(lines))
+	lineStart := 0
+	for i, line := range lines {
+		lineStarts[i] = lineStart
+		lineStart += len(line) + 1
+	}
+	for i := 1; i < len(lines); i++ {
+		if len(lines[i]) == 0 || inRanges(verbatim, lineStarts[i]) {
+			continue
+		}
+		line := make([]byte, 0, len(indent)+len(lines[i]))
+		line = append(line, indent...)
+		lines[i] = append(line, lines[i]...)
+	}
+	return bytes.Join(lines, []byte{'\n'})
+}
+
+// lineIndent returns the leading tabs and spaces of the line that holds
+// offset start in original.
+func lineIndent(original []byte, start int) []byte {
+	lineStart := bytes.LastIndexByte(original[:start], '\n') + 1
+	indentEnd := lineStart
+	for indentEnd < start && (original[indentEnd] == ' ' || original[indentEnd] == '\t') {
+		indentEnd++
+	}
+	return original[lineStart:indentEnd]
+}
+
+type byteRange struct {
+	start int
+	end   int
+}
+
+// verbatimRanges returns the byte ranges of raw string literals and block
+// comments in printed. The text inside those tokens is content, not code, so
+// reindentation must not touch a line that starts inside one of them.
+func verbatimRanges(printed []byte) []byteRange {
+	fset := token.NewFileSet()
+	file := fset.AddFile("replacement.go", -1, len(printed))
+	var scan scanner.Scanner
+	scan.Init(file, printed, nil, scanner.ScanComments)
+	var ranges []byteRange
+	for {
+		pos, tok, lit := scan.Scan()
+		if tok == token.EOF {
+			return ranges
+		}
+		if !isVerbatim(tok, lit) {
+			continue
+		}
+		start := file.Offset(pos)
+		ranges = append(ranges, byteRange{start: start, end: start + len(lit)})
+	}
+}
+
+func isVerbatim(tok token.Token, lit string) bool {
+	if tok == token.STRING {
+		return strings.HasPrefix(lit, "`")
+	}
+	return tok == token.COMMENT && strings.HasPrefix(lit, "/*")
+}
+
+func inRanges(ranges []byteRange, offset int) bool {
+	for _, r := range ranges {
+		if r.start < offset && offset < r.end {
+			return true
+		}
+	}
+	return false
 }
 
 func (e mutationEdit) materialize(original []byte) ([]byte, error) {

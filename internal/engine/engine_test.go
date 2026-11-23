@@ -103,6 +103,135 @@ func TestMutationEditMaterializesChangedNode(t *testing.T) {
 	}
 }
 
+func TestMutationEditPreservesRawStringContent(t *testing.T) {
+	source := []byte("package sample\n\nfunc f() string {\n\tif true {\n\t\ts := `line1\nline2`\n\t\treturn s\n\t}\n\treturn \"\"\n}\n")
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "sample.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var block *ast.BlockStmt
+	ast.Inspect(file, func(node ast.Node) bool {
+		if stmt, ok := node.(*ast.IfStmt); ok {
+			block = stmt.Body
+		}
+		return true
+	})
+	ret := block.List[1].(*ast.ReturnStmt)
+	ret.Results[0] = &ast.BasicLit{Kind: token.INT, Value: "0"}
+
+	edit, err := captureMutationEdit(fset, block, block.Pos(), block.End(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := edit.materialize(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "package sample\n\nfunc f() string {\n\tif true {\n\t\ts := `line1\nline2`\n\t\treturn 0\n\t}\n\treturn \"\"\n}\n"
+	if string(got) != want {
+		t.Fatalf("unexpected mutation:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestMutationEditPreservesRawStringClosingLine(t *testing.T) {
+	source := []byte("package sample\n\nfunc f() string {\n\tif true {\n\t\ta := 1\n\t\tb := 2\n\t\ts := `line1\nx`\n\t\treturn s\n\t}\n\treturn \"\"\n}\n")
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "sample.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var block *ast.BlockStmt
+	ast.Inspect(file, func(node ast.Node) bool {
+		if stmt, ok := node.(*ast.IfStmt); ok {
+			block = stmt.Body
+		}
+		return true
+	})
+	ret := block.List[3].(*ast.ReturnStmt)
+	ret.Results[0] = &ast.BasicLit{Kind: token.INT, Value: "0"}
+
+	edit, err := captureMutationEdit(fset, block, block.Pos(), block.End(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := edit.materialize(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "package sample\n\nfunc f() string {\n\tif true {\n\t\ta := 1\n\t\tb := 2\n\t\ts := `line1\nx`\n\t\treturn 0\n\t}\n\treturn \"\"\n}\n"
+	if string(got) != want {
+		t.Fatalf("unexpected mutation:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// secondIf returns the second if statement in the issue #354 fixture.
+func secondIf(t *testing.T, fset *token.FileSet, source []byte) *ast.IfStmt {
+	t.Helper()
+	file, err := parser.ParseFile(fset, "sample.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ifs []*ast.IfStmt
+	ast.Inspect(file, func(node ast.Node) bool {
+		if stmt, ok := node.(*ast.IfStmt); ok {
+			ifs = append(ifs, stmt)
+		}
+		return true
+	})
+	if len(ifs) != 2 {
+		t.Fatalf("expected 2 if statements, got %d", len(ifs))
+	}
+	return ifs[1]
+}
+
+func TestMutationEditPreservesIndentForNestedReturnBlock(t *testing.T) {
+	source := []byte("package sample\n\nfunc Clamp(v, lo, hi int) int {\n\tif v < lo {\n\t\treturn lo\n\t}\n\tif v > hi {\n\t\treturn hi\n\t}\n\treturn v\n}\n")
+	fset := token.NewFileSet()
+	stmt := secondIf(t, fset, source)
+	ret := stmt.Body.List[0].(*ast.ReturnStmt)
+	ret.Results[0] = &ast.BasicLit{Kind: token.INT, Value: "0"}
+
+	edit, err := captureMutationEdit(fset, stmt.Body, stmt.Body.Pos(), stmt.Body.End(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := edit.materialize(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "package sample\n\nfunc Clamp(v, lo, hi int) int {\n\tif v < lo {\n\t\treturn lo\n\t}\n\tif v > hi {\n\t\treturn 0\n\t}\n\treturn v\n}\n"
+	if string(got) != want {
+		t.Fatalf("unexpected mutation:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestMutationEditPreservesIndentForNestedIf(t *testing.T) {
+	source := []byte("package sample\n\nfunc Clamp(v, lo, hi int) int {\n\tif v < lo {\n\t\treturn lo\n\t}\n\tif v > hi {\n\t\treturn hi\n\t}\n\treturn v\n}\n")
+	fset := token.NewFileSet()
+	stmt := secondIf(t, fset, source)
+	ret := stmt.Body.List[0].(*ast.ReturnStmt)
+	stmt.Body.List = []ast.Stmt{&ast.AssignStmt{
+		Lhs:    []ast.Expr{&ast.Ident{Name: "_", NamePos: ret.Pos()}},
+		Tok:    token.ASSIGN,
+		TokPos: ret.Pos(),
+		Rhs:    []ast.Expr{ret.Results[0]},
+	}}
+
+	edit, err := captureMutationEdit(fset, stmt, stmt.Pos(), stmt.End(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := edit.materialize(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "package sample\n\nfunc Clamp(v, lo, hi int) int {\n\tif v < lo {\n\t\treturn lo\n\t}\n\tif v > hi {\n\t\t_ = hi\n\t}\n\treturn v\n}\n"
+	if string(got) != want {
+		t.Fatalf("unexpected mutation:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestStableMutationEditKeyIsPositionAware(t *testing.T) {
 	source := []byte("package sample\n\nfunc a() int { return 0 }\n\nfunc b() int { return 0 }\n")
 	editA := mutationEdit{start: 32, end: 33, replacement: []byte("1")}
