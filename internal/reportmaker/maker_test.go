@@ -155,6 +155,68 @@ func TestMakeAgenticJSONReport(t *testing.T) {
 	assert.Equal(t, agenticReminder, parsed.Reminder)
 }
 
+func TestMakeAgenticJSONReportExpressionRemove(t *testing.T) {
+	const wantDescription = "Makes each operand of && and || irrelevant by replacing it with true or false"
+	const wantHint = "Write a test where the replaced operand alone decides the result \u2014 the other operand is true for && or false for || \u2014 and assert the exact outcome"
+	mutant := func(diff string) models.Mutant {
+		return models.Mutant{
+			Mutator: models.Mutator{
+				MutatorName:        "expression/remove",
+				OriginalFilePath:   "access.go",
+				OriginalStartLine:  5,
+				OriginalSourceCode: "return admin || user != \"\" && owner == user",
+			},
+			Diff: diff,
+		}
+	}
+	report := models.Report{
+		Stats: models.Stats{Msi: 0.5},
+		Escaped: []models.Mutant{
+			// Printer wraps after `false ||`, so the new side is two lines.
+			mutant("--- Original\n+++ New\n@@ -2,5 +2,6 @@\n \n func Allowed(admin bool, owner, user string) bool {\n-\treturn admin || user != \"\" && owner == user\n+\treturn false ||\n+\t\tuser != \"\" && owner == user\n }\n"),
+			// Printer wraps after `true &&`, so the new side is two lines.
+			mutant("--- Original\n+++ New\n@@ -2,5 +2,6 @@\n \n func Allowed(admin bool, owner, user string) bool {\n-\treturn admin || user != \"\" && owner == user\n+\treturn admin || true &&\n+\t\towner == user\n }\n"),
+			// Single-line new side.
+			mutant("--- Original\n+++ New\n@@ -2,5 +2,5 @@\n \n func Allowed(admin bool, owner, user string) bool {\n-\treturn admin || user != \"\" && owner == user\n+\treturn admin || user != \"\" && true\n }\n"),
+			// Genuinely multi-line source expression: both sides span two lines.
+			mutant("--- Original\n+++ New\n@@ -2,6 +2,6 @@\n \n func Allowed(admin bool, owner, user string) bool {\n-\treturn admin ||\n-\t\tuser != \"\" && owner == user\n+\treturn admin ||\n+\t\ttrue && owner == user\n }\n"),
+			// No diff: the per-mutator fallback must describe operand replacement.
+			mutant(""),
+		},
+	}
+
+	err := MakeAgenticJSONReport(report, "")
+	require.NoError(t, err)
+	defer os.Remove(models.ReportAgenticJSONFileName)
+
+	content, err := os.ReadFile(models.ReportAgenticJSONFileName)
+	require.NoError(t, err)
+	var parsed struct {
+		Mutants []struct {
+			Mutator     string `json:"mutator"`
+			Description string `json:"description"`
+			KillHint    string `json:"kill_hint"`
+		} `json:"mutants"`
+	}
+	require.NoError(t, json.Unmarshal(content, &parsed))
+	require.Len(t, parsed.Mutants, 5)
+
+	wantDescriptions := []string{
+		"Changes: `return admin || user != \"\" && owner == user` \u2192 `return false || user != \"\" && owner == user`",
+		"Changes: `return admin || user != \"\" && owner == user` \u2192 `return admin || true && owner == user`",
+		"Changes: `return admin || user != \"\" && owner == user` \u2192 `return admin || user != \"\" && true`",
+		"Changes: `return admin || user != \"\" && owner == user` \u2192 `return admin || true && owner == user`",
+		wantDescription,
+	}
+	for i, m := range parsed.Mutants {
+		assert.Equal(t, "expression/remove", m.Mutator)
+		assert.Equal(t, wantDescriptions[i], m.Description, "mutant %d", i)
+		assert.Equal(t, wantHint, m.KillHint, "mutant %d", i)
+		assert.NotContains(t, m.Description, "side effect")
+		assert.NotContains(t, m.KillHint, "side effect")
+	}
+}
+
 func TestCreateOrTruncateReportFile(t *testing.T) {
 	filename := "test_report.tmp"
 
@@ -271,6 +333,11 @@ func TestGenerateInstanceDescriptionFallbackMatchesMutatorBehaviour(t *testing.T
 			mutator: "arithmetic/assignment",
 			diff:    "",
 			want:    "Replaces a compound assignment operator with a plain assignment (e.g. += becomes =)",
+		},
+		{
+			mutator: "expression/remove",
+			diff:    "",
+			want:    "Makes each operand of && and || irrelevant by replacing it with true or false",
 		},
 		{
 			mutator: "loop/break",
