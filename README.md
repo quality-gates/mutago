@@ -195,7 +195,7 @@ Every mutation has to be tested using an [exec command](#write-mutation-exec-com
 
 Alternatively the `--exec` argument can be used to invoke an external exec command. Empty or whitespace-only commands select the built-in runner. Custom commands run with one worker and keep `--exec-timeout` as their timeout. With `--exec`, `--per-test` and a positive `--timeout-coefficient` are ignored with warnings on stderr, even without `--verbose`. `--test-flags` still applies to Go coverage preparation under `--exec --coverage`, but is never appended to script arguments; without coverage, unused test flags produce a warning. The [/scripts/exec](/scripts/exec) directory holds basic exec commands for Go projects. The [test-mutated-package.sh](/scripts/exec/test-mutated-package.sh) script implements all steps and almost all features of the built-in exec command. It can be for example used to test the [github.com/quality-gates/mutago/v2/example](/example) package.
 
-The bundled scripts use a Go overlay and leave the source file and any existing `.tmp` backup unchanged, even if the script times out or is cancelled. Tests that read the source file from disk see the original, while compiled Go code sees the mutation. Keep `overlay.sh` beside either script when copying it. Other custom commands are responsible for their own file changes.
+The bundled scripts use a Go overlay and leave the source file and any existing `.tmp` backup unchanged, even if the script times out or is cancelled. Tests that read the source file from disk see the original, while compiled Go code sees the mutation. Keep `overlay.sh` beside either script when copying it. Other custom commands are responsible for their own file changes. Mutago forwards `--no-diffs` to every custom command as `MUTATE_NO_DIFFS`; the bundled scripts suppress the diffs they print when it is `true`, but arbitrary custom commands may ignore it, so `--no-diffs` does not filter their output.
 
 ```bash
 mutago --exec "$GOPATH/src/github.com/quality-gates/mutago/scripts/exec/test-mutated-package.sh" github.com/quality-gates/mutago/v2/example
@@ -598,6 +598,7 @@ A set of environment variables, which define exactly one mutation, is passed on 
 | MUTATE_PACKAGE  | Defines the import path of the original file.                             |
 | MUTATE_TIMEOUT  | Defines a timeout which should be taken into account by the exec command. |
 | MUTATE_VERBOSE  | Defines if verbose output should be printed.                              |
+| MUTATE_NO_DIFFS | Defines if diff output should be suppressed (`--no-diffs`).               |
 | TEST_RECURSIVE  | Defines if tests should be run recursively.                               |
 
 A command must exit with an appropriate exit code.

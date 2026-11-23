@@ -1812,6 +1812,7 @@ func runCustomExec(job execJob, mutant *models.Mutant) int {
 		"MUTATE_PACKAGE=" + job.pkg.Path(),
 		fmt.Sprintf("MUTATE_TIMEOUT=%d", opts.Exec.Timeout),
 		fmt.Sprintf("MUTATE_VERBOSE=%t", opts.General.Verbose),
+		fmt.Sprintf("MUTATE_NO_DIFFS=%t", opts.General.NoDiffs),
 	}...)
 	if opts.Test.Recursive {
 		execCommand.Env = append(execCommand.Env, "TEST_RECURSIVE=true")

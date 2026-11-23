@@ -110,6 +110,70 @@ func TestExecScriptsClassifyMutants(t *testing.T) {
 	}
 }
 
+// runExecScriptWithEnv runs script with extra environment and returns its
+// exit code and combined output.
+func runExecScriptWithEnv(t *testing.T, script, modDir, originalFile, mutationFile string, extraEnv []string) (int, string) {
+	t.Helper()
+	abs, err := filepath.Abs(script)
+	require.NoError(t, err)
+
+	cmd := exec.Command("bash", abs)
+	cmd.Dir = modDir
+	cmd.Env = append(append(os.Environ(),
+		"MUTATE_ORIGINAL="+originalFile,
+		"MUTATE_CHANGED="+mutationFile,
+		"MUTATE_PACKAGE=example.com/testmod",
+		"MUTATE_TIMEOUT=30",
+	), extraEnv...)
+	out, err := cmd.CombinedOutput()
+	t.Logf("%s output:\n%s", script, out)
+
+	var exitErr *exec.ExitError
+	if err == nil {
+		return 0, string(out)
+	}
+	require.ErrorAs(t, err, &exitErr, "script must exit with a status, not fail to run")
+	return exitErr.ExitCode(), string(out)
+}
+
+// TestExecScriptsRespectNoDiffs covers issue #356: mutago forwards --no-diffs
+// to the bundled scripts as MUTATE_NO_DIFFS, and the scripts must then
+// suppress the diff they would otherwise print, while keeping the exit
+// code that classifies the mutant.
+func TestExecScriptsRespectNoDiffs(t *testing.T) {
+	for _, script := range execScripts {
+		t.Run(script, func(t *testing.T) {
+			// An escaped mutant whose source differs from the original: the
+			// scripts print the diff on escape unless diffs are suppressed.
+			modDir, mutationFile := writeModule(t, "return 1 + 0")
+			code, out := runExecScriptWithEnv(t, script, modDir, "foo.go", mutationFile, nil)
+			assert.Equal(t, escaped, code)
+			assert.Contains(t, out, "--- foo.go", "escaped mutant prints its diff by default")
+			assert.Contains(t, out, "+++ ")
+
+			modDir, mutationFile = writeModule(t, "return 1 + 0")
+			code, out = runExecScriptWithEnv(t, script, modDir, "foo.go", mutationFile, []string{"MUTATE_NO_DIFFS=true"})
+			assert.Equal(t, escaped, code, "suppressing diffs must not change classification")
+			assert.NotContains(t, out, "--- foo.go", "--no-diffs must suppress the escaped-mutant diff")
+			assert.NotContains(t, out, "+++ ")
+			assert.NotContains(t, out, "return 1 + 0")
+
+			// A killed mutant prints its diff only in debug mode; --no-diffs
+			// wins there too.
+			modDir, mutationFile = writeModule(t, "return 2")
+			code, out = runExecScriptWithEnv(t, script, modDir, "foo.go", mutationFile, []string{"MUTATE_DEBUG=true"})
+			assert.Equal(t, killed, code)
+			assert.Contains(t, out, "--- foo.go", "debug mode prints the killed-mutant diff")
+
+			modDir, mutationFile = writeModule(t, "return 2")
+			code, out = runExecScriptWithEnv(t, script, modDir, "foo.go", mutationFile, []string{"MUTATE_DEBUG=true", "MUTATE_NO_DIFFS=true"})
+			assert.Equal(t, killed, code)
+			assert.NotContains(t, out, "--- foo.go", "--no-diffs must suppress the debug diff too")
+			assert.NotContains(t, out, "+++ ")
+		})
+	}
+}
+
 func TestExecScriptsHandleSpecialPaths(t *testing.T) {
 	for _, script := range execScripts {
 		t.Run(script, func(t *testing.T) {

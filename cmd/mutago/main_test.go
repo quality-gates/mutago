@@ -1798,6 +1798,35 @@ func TestMainNoDiffs(t *testing.T) {
 	)
 }
 
+func TestMainNoDiffsReachesCustomExec(t *testing.T) {
+	// --no-diffs must be forwarded to a custom exec command as
+	// MUTATE_NO_DIFFS so the bundled scripts can suppress the diffs they
+	// print themselves. Arbitrary custom scripts may ignore the variable;
+	// mutago cannot filter their output.
+	root, _ := adaptiveTimeoutFixture(t, "example.com/customnodiffs")
+	script := filepath.Join(root, "ok.sh")
+	log := filepath.Join(root, "script.log")
+	writeFixtureFile(t, script, "#!/bin/sh\nprintf '%s\\n' \"$MUTATE_NO_DIFFS\" >> \""+log+"\"\n")
+	require.NoError(t, os.Chmod(script, 0755))
+
+	out := testMain(t, root, []string{"--workers=1", "--exec-timeout=10", "--no-diffs", "--exec=" + script, "--config=mutago.yml", "add.go"}, returnOk, "mutation score")
+	assert.NotContains(t, out, "--- add.go")
+	calls, err := os.ReadFile(log)
+	require.NoError(t, err, "custom script must run")
+	require.NotEmpty(t, calls)
+	for _, call := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
+		assert.Equal(t, "true", call, "--no-diffs must reach the custom script as MUTATE_NO_DIFFS=true")
+	}
+
+	require.NoError(t, os.Remove(log))
+	testMain(t, root, []string{"--workers=1", "--exec-timeout=10", "--exec=" + script, "--config=mutago.yml", "add.go"}, returnOk, "mutation score")
+	calls, err = os.ReadFile(log)
+	require.NoError(t, err)
+	for _, call := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
+		assert.Equal(t, "false", call, "without --no-diffs the script must see MUTATE_NO_DIFFS=false")
+	}
+}
+
 func TestMainOutputStatuses(t *testing.T) {
 	// --output-statuses filters terminal output but must not affect the summary.
 	testMain(
