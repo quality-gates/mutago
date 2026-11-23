@@ -343,6 +343,27 @@ func TestParseProfile_NoModulePrefix(t *testing.T) {
 	assert.True(t, p.IsCovered("/abs/path/to/foo.go", 1))
 }
 
+// TestParseProfile_WorkspaceModulePaths covers #352: `go list -m` prints one
+// line per workspace module, so the module argument can hold several paths.
+// Entries from every module must resolve, and the longest (most specific)
+// prefix wins when one module path is a prefix of another.
+func TestParseProfile_WorkspaceModulePaths(t *testing.T) {
+	profile := `mode: set
+example.com/repro/limits/limits.go:5.1,6.3 1 1
+example.com/repro/tools/tools.go:3.1,4.3 1 1
+`
+	path := writeTmpProfile(t, profile)
+	p, err := ParseProfile(path, "example.com/repro\nexample.com/repro/tools")
+	require.NoError(t, err)
+
+	assert.True(t, p.IsCovered("/work/limits/limits.go", 5), "main-module entry should resolve")
+	assert.True(t, p.IsCovered("/work/tools/tools.go", 3), "second-module entry should resolve")
+	// The tools entry must be stripped by its own (longer) module path, not
+	// by the main module path that prefixes it as a string.
+	assert.True(t, p.IsCoveredRelative("tools.go", 3))
+	assert.False(t, p.IsCoveredRelative("tools/tools.go", 3))
+}
+
 // --- Tests targeting specific escaped mutations in ParseProfile / parseLine ---
 
 // TestParseProfile_ModeLine_SkippedNotParsed verifies that "mode:" lines are

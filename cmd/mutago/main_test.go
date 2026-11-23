@@ -2303,6 +2303,64 @@ func TestMainOutsideTargetModule(t *testing.T) {
 	})
 }
 
+// TestMainCoverageInGoWorkWorkspace covers #352: in a go.work workspace
+// with a second module, --coverage must classify mutants exactly as it does
+// with the workspace off, and --fail-on-escaped must exit 4 when one escapes.
+func TestMainCoverageInGoWorkWorkspace(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/repro\n\ngo 1.26.6\n")
+	limitsDir := filepath.Join(root, "limits")
+	require.NoError(t, os.MkdirAll(limitsDir, 0o755))
+	writeFixtureFile(t, filepath.Join(limitsDir, "limits.go"), `package limits
+
+// Clamp returns v limited to the range from lo to hi.
+func Clamp(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+`)
+	writeFixtureFile(t, filepath.Join(limitsDir, "limits_test.go"), `package limits
+
+import "testing"
+
+func TestClampRaisesALowValue(t *testing.T) {
+	if got := Clamp(-1, 0, 10); got != 0 {
+		t.Errorf("Clamp(-1, 0, 10) = %d, want 0", got)
+	}
+}
+`)
+	toolsDir := filepath.Join(root, "tools")
+	require.NoError(t, os.MkdirAll(toolsDir, 0o755))
+	writeFixtureFile(t, filepath.Join(toolsDir, "go.mod"), "module example.com/repro/tools\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(toolsDir, "tools.go"), "package tools\n")
+	writeFixtureFile(t, filepath.Join(root, "go.work"), "go 1.26.6\n\nuse (\n\t.\n\t./tools\n)\n")
+
+	common := []string{"--coverage", "--fail-on-escaped", "--workers", "1", "--exec-timeout", "30", "./limits"}
+	workspaceOut := testMain(t, root, common, returnMsiThresholdNotMet, "ESCAPED")
+	assert.Contains(t, workspaceOut, "KILLED")
+	assert.Contains(t, workspaceOut, "mutation score")
+
+	t.Setenv("GOWORK", "off")
+	noWorkspaceOut := testMain(t, root, common, returnMsiThresholdNotMet, "ESCAPED")
+	assert.Contains(t, noWorkspaceOut, "KILLED")
+
+	scoreLine := func(out string) string {
+		for _, line := range strings.Split(out, "\n") {
+			if strings.Contains(line, "The mutation score is") {
+				return line
+			}
+		}
+		return ""
+	}
+	assert.NotEmpty(t, scoreLine(workspaceOut))
+	assert.Equal(t, scoreLine(noWorkspaceOut), scoreLine(workspaceOut), "workspace and GOWORK=off must classify mutants identically")
+}
+
 // TestMainTargetOutsideAnyModuleIsToolError covers #287: when no module holds
 // the target, mutago cannot test its package and must not report a score.
 func TestMainTargetOutsideAnyModuleIsToolError(t *testing.T) {
