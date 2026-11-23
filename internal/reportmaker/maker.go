@@ -38,7 +38,7 @@ var mutatorDescriptions = map[string]string{
 	"expression/recover-clear":     "Neutralises a recover() call so a panic propagates instead of being recovered",
 	"expression/string-literal":    "Replaces a non-empty string literal in an == or != comparison with an empty string",
 	"expression/logical":           "Swaps a logical operator (&& becomes ||, or vice versa)",
-	"expression/remove":            "Removes an expression statement entirely, dropping its side effect",
+	"expression/remove":            "Makes each operand of && and || irrelevant by replacing it with true or false",
 	"loop/break":                   "Swaps break and continue statements inside loops",
 	"loop/condition":               "Changes the loop's termination condition",
 	"loop/range_break":             "Inserts a break statement at the beginning of a range loop so only the first iteration runs",
@@ -75,7 +75,7 @@ var killHints = map[string]string{
 	"expression/recover-clear":     "Write a test that triggers the panic and asserts the recovery behaviour a caller would observe — e.g. the function returns an error instead of crashing the process",
 	"expression/string-literal":    "Think about what a caller expects when this string matches vs doesn't. Write a test that supplies a value that should match, and one that should not, and asserts the different outcomes a caller would see through the public API",
 	"expression/logical":           "Write tests where only one operand is true/false so && and || produce different outcomes",
-	"expression/remove":            "Write a test that asserts the side effect or state change this expression produces",
+	"expression/remove":            "Write a test where the replaced operand alone decides the result — the other operand is true for && or false for || — and assert the exact outcome",
 	"loop/break":                   "Write a test that asserts the loop terminates at the right iteration",
 	"loop/condition":               "Write a test with a known input and assert the exact number of loop iterations or the final state",
 	"loop/range_break":             "Write a test that asserts the loop stops at the correct element",
@@ -217,12 +217,20 @@ type agenticReport struct {
 
 // generateInstanceDescription produces a diff-aware description for one escaped
 // mutant. For simple one-line changes it returns "Changes: <from> → <to>".
-// For multi-line or unparseable diffs it falls back to the static per-mutator
+// An expression/remove change whose diff spans lines — the printer can wrap
+// after && or ||, and the source expression may itself span lines — also
+// returns a joined "Changes:" description naming the replaced operand.
+// Other multi-line or unparseable diffs fall back to the static per-mutator
 // description.
 func generateInstanceDescription(mutatorName, diff string) string {
 	fromLines, toLines := diffChangedLines(diff)
 	if desc, ok := singleLineChangeDesc(fromLines, toLines); ok {
 		return desc
+	}
+	if mutatorName == "expression/remove" {
+		if desc, ok := multiLineChangeDesc(fromLines, toLines); ok {
+			return desc
+		}
 	}
 	if desc, ok := mutatorDescriptions[mutatorName]; ok {
 		return desc
@@ -260,6 +268,32 @@ func singleLineChangeDesc(fromLines, toLines []string) (string, bool) {
 		return "", false
 	}
 	return fmt.Sprintf("Changes: `%s` → `%s`", from, to), true
+}
+
+// multiLineChangeDesc returns a "Changes: from → to" description when a
+// replacement diff spans lines on either side, reporting ok=false otherwise.
+// Joining the trimmed lines with a space restores the single logical line
+// that the printer wrapped after a logical operator, so the description
+// still names the replaced operand. String literal contents are left as-is.
+func multiLineChangeDesc(fromLines, toLines []string) (string, bool) {
+	from := joinDiffLines(fromLines)
+	to := joinDiffLines(toLines)
+	if from == "" || to == "" || from == to {
+		return "", false
+	}
+	return fmt.Sprintf("Changes: `%s` → `%s`", from, to), true
+}
+
+// joinDiffLines trims each diff line and joins the non-empty ones with a
+// single space.
+func joinDiffLines(lines []string) string {
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // MakeAgenticJSONReport writes mutago-agentic.json with enriched escaped-mutant
