@@ -8,6 +8,38 @@ import (
 	"testing"
 )
 
+func TestParseChangedLinesIncludesFileAfterLongDiffLine(t *testing.T) {
+	for _, k := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_QUARANTINE_PATH"} {
+		t.Setenv(k, "")
+		os.Unsetenv(k)
+	}
+	dir := t.TempDir()
+	runGit(t, dir, "init", "-q")
+	runGit(t, dir, "config", "user.email", "t@t.com")
+	runGit(t, dir, "config", "user.name", "t")
+	write := func(name, contents string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("a.go", "// before\n")
+	write("z.go", "return 1\n")
+	runGit(t, dir, "add", ".")
+	runGit(t, dir, "commit", "-qm", "baseline")
+	write("a.go", "// "+strings.Repeat("x", 70000)+"\n")
+	write("z.go", "return 2\n")
+	t.Chdir(dir)
+
+	changed, err := ParseChangedLines("HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !IsRelativeLineChanged(changed, "z.go", 1) {
+		t.Fatalf("later changed file missing: %v", changed)
+	}
+}
+
 // TestParseChangedLines_StaleBranchExcludesTargetChanges guards against a bug
 // where a feature branch that is behind its target picked up changes that
 // landed on the target branch after the feature branched off.

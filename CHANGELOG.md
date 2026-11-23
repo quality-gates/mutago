@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Include changed files after oversized diff lines in `--git-diff-lines` runs.
+
 ## [v2.10.44] (2026-11-19)
 
 ### Fixed
