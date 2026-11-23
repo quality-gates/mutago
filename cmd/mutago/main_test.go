@@ -777,6 +777,48 @@ func TestMainExposesMutationChecksums(t *testing.T) {
 	assert.NotContains(t, blacklistedOut, "ESCAPED")
 }
 
+// TestMainNestedStatementDiffsPreserveIndentation covers #354: a replaced
+// statement inside a nested block must keep its indentation in the diff,
+// so the closing brace does not appear to move out of the block.
+func TestMainNestedStatementDiffsPreserveIndentation(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/clamp\n\ngo 1.26.6\n")
+	writeFixtureFile(t, filepath.Join(root, "mutago.yml"), "json_output: true\nenable_mutators:\n  - statement/return\n  - branch/if\n")
+	writeFixtureFile(t, filepath.Join(root, "clamp.go"), "package clamp\n\nfunc Clamp(v, lo, hi int) int {\n\tif v < lo {\n\t\treturn lo\n\t}\n\tif v > hi {\n\t\treturn hi\n\t}\n\treturn v\n}\n")
+	writeFixtureFile(t, filepath.Join(root, "clamp_test.go"), "package clamp\n\nimport \"testing\"\n\nfunc TestClampRaisesALowValue(t *testing.T) {\n\tif got := Clamp(-1, 0, 10); got != 0 {\n\t\tt.Errorf(\"Clamp(-1, 0, 10) = %d, want 0\", got)\n\t}\n}\n")
+
+	agenticReportPath := filepath.Join(root, "mutago-agentic.json")
+	previousAgenticReportFileName := models.ReportAgenticJSONFileName
+	models.ReportAgenticJSONFileName = agenticReportPath
+	t.Cleanup(func() { models.ReportAgenticJSONFileName = previousAgenticReportFileName })
+
+	out := testMain(t, root, []string{"--workers", "1", "--exec-timeout", "30", "--logger-agentic-json", "--config", filepath.Join(root, "mutago.yml"), "."}, returnOk, "mutation score")
+	assert.Contains(t, out, "ESCAPED")
+
+	data, err := os.ReadFile(agenticReportPath)
+	require.NoError(t, err)
+	var agentic struct {
+		Mutants []struct {
+			Mutator string `json:"mutator"`
+			Diff    string `json:"diff"`
+		} `json:"mutants"`
+	}
+	require.NoError(t, json.Unmarshal(data, &agentic))
+	diffs := make(map[string]string, len(agentic.Mutants))
+	for _, m := range agentic.Mutants {
+		diffs[m.Mutator] = m.Diff
+	}
+	require.Contains(t, diffs, "statement/return")
+	require.Contains(t, diffs, "branch/if")
+	assert.Contains(t, diffs["statement/return"], "-\t\treturn hi\n+\t\treturn 0\n")
+	assert.Contains(t, diffs["branch/if"], "-\t\treturn hi\n+\t\t_ = hi\n")
+	for name, diff := range diffs {
+		assert.NotContains(t, diff, "\n+}\n", "closing brace must not appear as an added line in %s diff: %q", name, diff)
+		assert.NotContains(t, diff, "\n+\treturn 0\n", name)
+		assert.NotContains(t, diff, "\n+\t_ = hi\n", name)
+	}
+}
+
 func TestMainReportsOriginalASTLines(t *testing.T) {
 	tmpDir := t.TempDir()
 	reportPath := tmpDir + "/line-position-report.json"

@@ -8,6 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Fixed
 - Resolve `--coverage` profile paths against every module in a `go.work` workspace, so covered mutants are no longer reported as not covered and `--fail-on-escaped` exits 4 when one escapes (#352).
+- Keep the indentation of a replaced statement in mutant diffs, so a closing brace no longer appears to move out of its block (#354).
 
 ## [v2.10.45] (2026-11-23)
 
