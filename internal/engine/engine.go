@@ -458,6 +458,10 @@ func resolveGoDir(runner runnerPolicy, files []string) (string, error) {
 	return "", nil
 }
 
+// detectModulePath returns the output of `go list -m`. Outside a workspace
+// that is the single module path; in a go.work workspace it holds one line
+// per workspace module. ParseProfile accepts that newline-separated form
+// and strips whichever module owns each coverage entry (#352).
 func detectModulePath(goDir string) string {
 	out, err := goCommandIn(context.Background(), goDir, "list", "-m").Output()
 	if err != nil {

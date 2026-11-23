@@ -32,6 +32,11 @@ type Profile struct {
 // using modulePath to strip the module prefix from each entry, leaving relative
 // paths that can be matched against absolute file paths.
 //
+// modulePath may hold several newline-separated module paths, as `go list -m`
+// prints one line per module in a go.work workspace (#352). An entry is
+// stripped by the longest matching module path, so entries from any workspace
+// module resolve against the module that owns them.
+//
 // Example: with modulePath="github.com/acme/app", the profile entry
 // "github.com/acme/app/pkg/foo.go:5.1,10.3 2 1" becomes key "pkg/foo.go".
 func ParseProfile(path, modulePath string) (*Profile, error) {
@@ -42,19 +47,31 @@ func ParseProfile(path, modulePath string) (*Profile, error) {
 	defer f.Close()
 
 	p := &Profile{coveredRanges: make(map[string][]lineRange)}
-	prefix := modulePath + "/"
+	prefixes := modulePrefixes(modulePath)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "mode:") {
 			continue
 		}
-		if err := p.parseLine(line, prefix); err != nil {
+		if err := p.parseLine(line, prefixes); err != nil {
 			return nil, fmt.Errorf("coverage parse %q: %w", line, err)
 		}
 	}
 	p.coalesceRanges()
 	return p, scanner.Err()
+}
+
+// modulePrefixes turns a module path argument into the "/"-suffixed
+// prefixes that profile entries may carry, one per non-empty line.
+func modulePrefixes(modulePath string) []string {
+	var prefixes []string
+	for _, line := range strings.Split(modulePath, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			prefixes = append(prefixes, line+"/")
+		}
+	}
+	return prefixes
 }
 
 type pathResolver[V any] struct {
@@ -109,15 +126,15 @@ func (p *Profile) IsLineCoveredAnywhere(line int) bool {
 	return false
 }
 
-// parseLine parses one data line from a coverage profile and strips modulePfx
-// from the file name before storing coverage data.
+// parseLine parses one data line from a coverage profile and strips the
+// matching module prefix from the file name before storing coverage data.
 // Format: file:startLine.startCol,endLine.endCol stmtCount hitCount
-func (p *Profile) parseLine(line, modulePfx string) error {
+func (p *Profile) parseLine(line string, modulePfxs []string) error {
 	colonIdx := strings.LastIndex(line, ":")
 	if colonIdx < 0 {
 		return nil
 	}
-	relFile := relativeCoverageFile(line[:colonIdx], modulePfx)
+	relFile := relativeCoverageFile(line[:colonIdx], modulePfxs)
 
 	fields := strings.Fields(line[colonIdx+1:])
 	if len(fields) != 3 {
@@ -141,13 +158,18 @@ func (p *Profile) parseLine(line, modulePfx string) error {
 	return nil
 }
 
-// relativeCoverageFile strips modulePfx from a coverage file path, falling back
-// to the raw path when the prefix is absent, and normalises separators.
-func relativeCoverageFile(rawFile, modulePfx string) string {
-	relFile := strings.TrimPrefix(rawFile, modulePfx)
-	if relFile == rawFile {
-		// Module prefix not present — use the raw path as-is.
-		relFile = rawFile
+// relativeCoverageFile strips the longest matching module prefix from a
+// coverage file path, falling back to the raw path when no prefix matches,
+// and normalises separators. The shortest remainder wins, so a nested
+// module path beats a shorter module path that prefixes it as a string.
+func relativeCoverageFile(rawFile string, modulePfxs []string) string {
+	relFile := rawFile
+	for _, prefix := range modulePfxs {
+		if strings.HasPrefix(rawFile, prefix) {
+			if stripped := strings.TrimPrefix(rawFile, prefix); len(stripped) < len(relFile) {
+				relFile = stripped
+			}
+		}
 	}
 	return filepath.ToSlash(relFile)
 }
