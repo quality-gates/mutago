@@ -68,6 +68,13 @@ write_overlay() {
 	fi
 	printf '}}'
 }
+# print_diff prints the mutation diff unless mutago was run with --no-diffs,
+# which it forwards as MUTATE_NO_DIFFS=true. Only the bundled scripts honour
+# the variable; arbitrary custom exec commands may print their own output.
+print_diff() {
+	if [ "$MUTATE_NO_DIFFS" != true ]; then echo "$GOMUTESTING_DIFF"; fi
+}
+
 finish_test_run() {
 	local outcome=$GOMUTESTING_RESULT
 	if [ "$outcome" -eq 1 ] && [[ "$GOMUTESTING_TEST" == "go: "* && "$GOMUTESTING_TEST" != *$'\nFAIL'* ]]; then
@@ -79,21 +86,21 @@ finish_test_run() {
 	fi
 	case "$outcome" in
 	0)
-		echo "$GOMUTESTING_DIFF"
+		print_diff
 		exit 1
 		;;
 	1)
-		if [ "$MUTATE_DEBUG" = true ]; then echo "$GOMUTESTING_DIFF"; fi
+		if [ "$MUTATE_DEBUG" = true ]; then print_diff; fi
 		exit 0
 		;;
 	2)
 		if [ "$MUTATE_VERBOSE" = true ]; then echo "Mutation did not compile"; fi
-		if [ "$MUTATE_DEBUG" = true ]; then echo "$GOMUTESTING_DIFF"; fi
+		if [ "$MUTATE_DEBUG" = true ]; then print_diff; fi
 		exit 2
 		;;
 	*)
 		echo "Unknown exit code"
-		echo "$GOMUTESTING_DIFF"
+		print_diff
 		exit "$outcome"
 		;;
 	esac
