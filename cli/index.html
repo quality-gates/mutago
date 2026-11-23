@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -931,7 +931,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>--no-diffs</code></td>
-<td style="text-align: left;">Suppress diff output for all mutation results (useful in CI where diffs are noisy and the JSON report is consumed instead)</td>
+<td style="text-align: left;">Suppress diff output for all mutation results (useful in CI where diffs are noisy and the JSON report is consumed instead). With <code>--exec</code>, mutago forwards it to the custom command as <code>MUTATE_NO_DIFFS</code>; the bundled scripts under <code>scripts/exec</code> suppress the diffs they print, but arbitrary custom exec output is not filtered</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>--output-statuses</code></td>
