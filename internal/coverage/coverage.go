@@ -314,9 +314,12 @@ type Toolchain interface {
 	// CompileTestBinary writes pkgPath's test binary to binaryPath,
 	// instrumented for -coverpkg=coverPkg.
 	CompileTestBinary(pkgPath, coverPkg, binaryPath string) *exec.Cmd
-	// RunTest runs testName from binaryPath, writing its coverage profile
+	// PackageDir prints the source directory of pkgPath.
+	PackageDir(pkgPath string) *exec.Cmd
+	// RunTest runs testName from binaryPath in pkgDir, as go test runs a
+	// test binary in its package directory, writing its coverage profile
 	// to profilePath.
-	RunTest(binaryPath, testName, profilePath string) *exec.Cmd
+	RunTest(binaryPath, pkgDir, testName, profilePath string) *exec.Cmd
 }
 
 // CountTests returns the number of test functions (Test*, Fuzz*)
@@ -433,15 +436,15 @@ func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPac
 		return nil, err
 	}
 	defer os.RemoveAll(buildDir)
+	// Tests run in their package directories, so the binary and profile
+	// paths must not depend on the current one.
+	if buildDir, err = filepath.Abs(buildDir); err != nil {
+		return nil, err
+	}
 	var batch profileBatch
 	for i, pkg := range pkgs {
-		binaryDir := filepath.Join(buildDir, strconv.Itoa(i))
-		binaryPath, err := compileCoverageTestBinary(tc, pkg.ImportPath, pkgPath, binaryDir)
-		if err != nil {
+		if err := batch.addPackage(tc, pkg, pkgPath, filepath.Join(buildDir, strconv.Itoa(i))); err != nil {
 			return nil, err
-		}
-		for _, name := range pkg.Tests {
-			batch.jobs = append(batch.jobs, perTestJob{name: name, binaryPath: binaryPath})
 		}
 	}
 	if workers <= 0 {
@@ -467,6 +470,9 @@ func runError(tc Toolchain, err error) error {
 type perTestJob struct {
 	name       string
 	binaryPath string
+	// pkgDir is the test's package directory, where its binary runs so
+	// relative paths such as testdata/ resolve as they do under go test.
+	pkgDir string
 }
 
 type perTestResult interface {
@@ -489,6 +495,36 @@ func (r profileFailure) mergeInto(*PerTestProfile) error { return r.err }
 
 type profileBatch struct {
 	jobs []perTestJob
+}
+
+// addPackage compiles pkg's test binary in binaryDir and adds a job for each
+// test of pkg. Each job runs in the package directory of pkg.
+func (b *profileBatch) addPackage(tc Toolchain, pkg TestPackage, coverPkg, binaryDir string) error {
+	binaryPath, err := compileCoverageTestBinary(tc, pkg.ImportPath, coverPkg, binaryDir)
+	if err != nil {
+		return err
+	}
+	pkgDir, err := packageDir(tc, pkg.ImportPath)
+	if err != nil {
+		return err
+	}
+	for _, name := range pkg.Tests {
+		b.jobs = append(b.jobs, perTestJob{name: name, binaryPath: binaryPath, pkgDir: pkgDir})
+	}
+	return nil
+}
+
+// packageDir returns the source directory of pkgPath.
+func packageDir(tc Toolchain, pkgPath string) (string, error) {
+	out, err := tc.PackageDir(pkgPath).Output()
+	if err != nil {
+		return "", runError(tc, fmt.Errorf("package directory of %s: %w", pkgPath, err))
+	}
+	dir := strings.TrimSuffix(string(out), "\n")
+	if dir == "" {
+		return "", fmt.Errorf("package directory of %s: go list printed none", pkgPath)
+	}
+	return dir, nil
 }
 
 func compileCoverageTestBinary(tc Toolchain, pkgPath, coverPkg, binaryDir string) (string, error) {
@@ -540,7 +576,7 @@ func runPerTestWorker(tc Toolchain, jobs <-chan perTestJob, results chan<- perTe
 		_ = os.MkdirAll(profDir, 0755)
 		profPath := filepath.Join(profDir, "coverage.out")
 
-		_ = tc.RunTest(job.binaryPath, job.name, profPath).Run() // test failures are expected; we only care about coverage
+		_ = tc.RunTest(job.binaryPath, job.pkgDir, job.name, profPath).Run() // test failures are expected; we only care about coverage
 
 		prof, err := parsePerTestProfile(profPath, modulePath)
 		if err != nil {

@@ -185,15 +185,26 @@ func (t perTestToolchain) CompileTestBinary(pkgPath, coverPkg, binaryPath string
 	}.command(t.Context())
 }
 
-// RunTest runs one test of a binary from CompileTestBinary. The user's runner
-// flags come first so the explicit -test.run, profile and timeout win.
-func (t perTestToolchain) RunTest(binaryPath, testName, profilePath string) *exec.Cmd {
+// PackageDir runs `go list` with the user's build flags to print pkgPath's
+// source directory.
+func (t perTestToolchain) PackageDir(pkgPath string) *exec.Cmd {
+	args := append([]string{"list", "-f", "{{.Dir}}"}, buildTestFlags(t.testFlags)...)
+	return goCommandIn(t.Context(), t.dir, append(args, pkgPath)...)
+}
+
+// RunTest runs one test of a binary from CompileTestBinary in pkgDir, the
+// directory go test runs a package's tests in, so a test that opens
+// testdata/ by a relative path covers the same lines as in the mutant runs.
+// The user's runner flags come first so the explicit -test.run, profile and
+// timeout win.
+func (t perTestToolchain) RunTest(binaryPath, pkgDir, testName, profilePath string) *exec.Cmd {
 	args := append(testBinaryFlags(t.testFlags),
 		"-test.run=^"+testName+"$",
 		"-test.coverprofile="+profilePath,
 		fmt.Sprintf("-test.timeout=%ds", t.timeoutSeconds))
 	cmd := exec.CommandContext(t.Context(), binaryPath, args...)
-	cmd.Env = os.Environ()
+	cmd.Dir = pkgDir
+	cmd.Env = cmd.Environ()
 	return cmd
 }
 

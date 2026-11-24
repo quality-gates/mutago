@@ -8,9 +8,11 @@ import (
 	"go/token"
 	"go/types"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -651,6 +653,77 @@ func TestEngineCoverageHonorsTestFlags(t *testing.T) {
 		t.Fatalf("expected at least one killed mutant when coverage honors -short; notCovered=%d escaped=%d stdout=%q",
 			res.Report.Stats.NotCoveredCount, res.Report.Stats.EscapedCount, stdout.String())
 	}
+}
+
+// TestEnginePerTestRunsTestsInPackageDir ensures --per-test profiling runs
+// each test in its package directory, as go test does. testdata/pertestdir's
+// TestDouble reads testdata/cases.txt by a relative path. Run from this
+// directory it fails before reaching Double and covers nothing, so mutants of
+// Double run only TestDoubleRuns, which checks nothing, and escape although
+// TestDouble kills them.
+func TestEnginePerTestRunsTestsInPackageDir(t *testing.T) {
+	opts := &models.Options{}
+	opts.General.Workers = 1
+	opts.Exec.Coverage = true
+	opts.Exec.Timeout = 30
+	opts.Remaining.Targets = []string{"./testdata/pertestdir"}
+
+	plain := mutantOutcomes(t, opts)
+	opts.Exec.PerTest = true
+	perTest := mutantOutcomes(t, opts)
+	if !slices.Contains(slices.Collect(maps.Values(plain)), "killed") {
+		t.Fatalf("expected at least one killed mutant in pertestdir fixture; outcomes=%v", plain)
+	}
+	if !maps.Equal(plain, perTest) {
+		t.Fatalf("per-test outcomes differ from plain coverage outcomes\nplain:    %v\nper-test: %v", plain, perTest)
+	}
+
+	// The full suite also kills every mutant, so check that the per-test map
+	// itself credits TestDouble.
+	prof, err := buildPerTestCoverageProfile(context.Background(), io.Discard, opts,
+		"github.com/quality-gates/mutago/v2/internal/engine/testdata/pertestdir",
+		"github.com/quality-gates/mutago/v2", t.TempDir(), execConfig{numWorkers: 1})
+	if err != nil {
+		t.Fatalf("per-test profile: %v", err)
+	}
+	src, err := filepath.Abs("testdata/pertestdir/double.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tests := prof.CoveringTests(src, 4); !slices.Contains(tests, "TestDouble") {
+		t.Fatalf("tests covering double.go:4 = %q, want TestDouble among them", tests)
+	}
+}
+
+// mutantOutcomes runs the engine with opts and maps each mutant ID to its
+// outcome.
+func mutantOutcomes(t *testing.T, opts *models.Options) map[string]string {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	e := &Engine{Stdout: &stdout, Stderr: &stderr}
+	res, err := e.Run(context.Background(), opts, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Report == nil {
+		t.Fatal("expected report to be populated, got nil")
+	}
+	outcomes := map[string]string{}
+	for outcome, mutants := range map[string][]models.Mutant{
+		"killed":      res.Report.Killed,
+		"escaped":     res.Report.Escaped,
+		"skipped":     res.Report.Skipped,
+		"errored":     res.Report.Errored,
+		"not covered": res.Report.NotCovered,
+	} {
+		for _, m := range mutants {
+			outcomes[m.ID] = outcome
+		}
+	}
+	if int64(len(outcomes)) != res.Report.Stats.TotalMutantsCount {
+		t.Fatalf("%d mutant outcomes, want %d; stdout=%q", len(outcomes), res.Report.Stats.TotalMutantsCount, stdout.String())
+	}
+	return outcomes
 }
 
 // TestEngineCoverageTimeoutFailsBaseline ensures --coverage passes the execution timeout
