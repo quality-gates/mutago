@@ -1576,22 +1576,26 @@ func TestMainPerTestRecursiveKeepsSubpackageTests(t *testing.T) {
 	// Only a subpackage test checks Double; the root test merely calls it.
 	// With --test-recursive the per-test filter must keep the subpackage test
 	// eligible, so every mutant is killed as in an unfiltered recursive run (#250).
+	// The subpackage test reads its own testdata/ by a relative path, so it
+	// covers Double only when it runs in its own package directory.
 	root := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(root, "sub"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "sub", "testdata"), 0755))
 	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/rec\n\ngo 1.22\n")
 	writeFixtureFile(t, filepath.Join(root, "rec.go"), "package rec\n\nfunc Double(x int) int {\n\treturn x * 2\n}\n")
 	writeFixtureFile(t, filepath.Join(root, "rec_test.go"), "package rec\n\nimport \"testing\"\n\nfunc TestTouch(t *testing.T) { _ = Double(1) }\n")
 	writeFixtureFile(t, filepath.Join(root, "sub", "sub.go"), "package sub\n")
-	writeFixtureFile(t, filepath.Join(root, "sub", "sub_test.go"), "package sub\n\nimport (\n\t\"testing\"\n\n\t\"example.com/rec\"\n)\n\nfunc TestDouble(t *testing.T) {\n\tif rec.Double(3) != 6 {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n")
+	writeFixtureFile(t, filepath.Join(root, "sub", "testdata", "in"), "3")
+	writeFixtureFile(t, filepath.Join(root, "sub", "sub_test.go"), "package sub\n\nimport (\n\t\"os\"\n\t\"testing\"\n\n\t\"example.com/rec\"\n)\n\nfunc TestDouble(t *testing.T) {\n\tif _, err := os.Stat(\"testdata/in\"); err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif rec.Double(3) != 6 {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n")
 
 	out := testMain(
 		t,
 		root,
-		[]string{"--workers", "1", "--exec-timeout", "30", "--coverage", "--per-test", "--test-recursive", "--min-msi", "100", "."},
+		[]string{"--workers", "1", "--exec-timeout", "30", "--coverage", "--per-test", "--test-recursive", "--verbose", "--min-msi", "100", "."},
 		returnOk,
 		"mutation score",
 	)
 	assert.NotContains(t, out, "ESCAPED")
+	assert.Contains(t, out, `Per-test coverage map built for "example.com/rec"`)
 }
 
 func TestMainPerTestRecursiveKeepsTestsForCollidingPackagePaths(t *testing.T) {

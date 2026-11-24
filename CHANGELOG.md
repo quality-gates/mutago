@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Run each `--per-test` profiling test in its package directory, as `go test` does, so a test that reads `testdata/` by a relative path keeps its coverage and its mutants are not falsely reported as escaped (#374).
 - Correct the agentic `expression/remove` description and kill hint to describe replacing an operand of `&&` or `||` with `true` or `false`, including multi-line diffs, instead of telling the reader to assert a side effect (#369).
 - Suppress diffs printed by the bundled custom exec scripts when `--no-diffs` is passed, by forwarding it as `MUTATE_NO_DIFFS`. Arbitrary custom exec output is not filtered (#356).
 - Resolve `--coverage` profile paths against every module in a `go.work` workspace, so covered mutants are no longer reported as not covered and `--fail-on-escaped` exits 4 when one escapes (#352).

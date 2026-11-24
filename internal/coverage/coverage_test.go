@@ -43,7 +43,11 @@ func (g goToolchain) CompileTestBinary(pkgPath, coverPkg, binaryPath string) *ex
 	return exec.Command("go", "test", "-c", "-cover", "-covermode=set", "-coverpkg="+coverPkg, "-o", binaryPath, pkgPath)
 }
 
-func (g goToolchain) RunTest(binaryPath, testName, profilePath string) *exec.Cmd {
+func (g goToolchain) PackageDir(pkgPath string) *exec.Cmd {
+	return exec.Command("go", "list", "-f", "{{.Dir}}", pkgPath)
+}
+
+func (g goToolchain) RunTest(binaryPath, _, testName, profilePath string) *exec.Cmd {
 	g.record("run " + testName)
 	return exec.Command(binaryPath, "-test.run=^"+testName+"$", "-test.coverprofile="+profilePath, "-test.timeout=30s")
 }
@@ -863,12 +867,14 @@ func TestBuildPerTestProfile_NoTests(t *testing.T) {
 
 // scriptedToolchain compiles nothing and runs each test as the shell script
 // named for it in runs, with $1 set to the test's profile path. Compiling
-// runs the compile script, when set.
+// runs the compile script, when set, and so does finding the package
+// directory with the pkgDir script.
 // Its commands are bound to ctx, the run context (none means background),
 // and testRuns, when set, counts the test commands built.
 type scriptedToolchain struct {
 	runs     map[string]string
 	compile  string
+	pkgDir   string
 	ctx      context.Context
 	testRuns *atomic.Int32
 }
@@ -892,11 +898,19 @@ func (s scriptedToolchain) CompileTestBinary(_, _, _ string) *exec.Cmd {
 	}
 	return exec.CommandContext(s.Context(), "true")
 }
-func (s scriptedToolchain) RunTest(_, testName, profilePath string) *exec.Cmd {
+func (s scriptedToolchain) PackageDir(string) *exec.Cmd {
+	if s.pkgDir != "" {
+		return exec.CommandContext(s.Context(), "sh", "-c", s.pkgDir)
+	}
+	return exec.CommandContext(s.Context(), "pwd")
+}
+func (s scriptedToolchain) RunTest(_, pkgDir, testName, profilePath string) *exec.Cmd {
 	if s.testRuns != nil {
 		s.testRuns.Add(1)
 	}
-	return exec.CommandContext(s.Context(), "sh", "-c", s.runs[testName], "sh", profilePath)
+	cmd := exec.CommandContext(s.Context(), "sh", "-c", s.runs[testName], "sh", profilePath)
+	cmd.Dir = pkgDir
+	return cmd
 }
 
 const writeValidProfile = `printf 'mode: set\nexample.com/m/rec/rec.go:3.24,5.2 1 1\n' > "$1"`
@@ -1036,6 +1050,51 @@ func TestBuildPerTestProfile_CompileErrors(t *testing.T) {
 		assert.Nil(t, prof)
 		assertProfileBuildsCleaned(t, tmp)
 	})
+}
+
+// Each test runs in the directory go list prints, even one whose name ends
+// in a space.
+func TestBuildPerTestProfile_RunsTestsInPackageDir(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	pkgDir := filepath.Join(root, "pkg ")
+	require.NoError(t, os.Mkdir(pkgDir, 0755))
+	ranIn := filepath.Join(t.TempDir(), "ran-in")
+	t.Setenv("PKG_DIR", pkgDir)
+	t.Setenv("RAN_IN", ranIn)
+	tc := scriptedToolchain{
+		pkgDir: `printf '%s\n' "$PKG_DIR"`,
+		runs:   map[string]string{"TestTouch": `pwd -P > "$RAN_IN"; ` + writeValidProfile},
+	}
+	pkgs := []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}}}
+
+	prof, err := buildWithin(t, 10*time.Second, tc, pkgs, t.TempDir())
+
+	require.NoError(t, err)
+	require.NotNil(t, prof)
+	got, err := os.ReadFile(ranIn)
+	require.NoError(t, err)
+	assert.Equal(t, pkgDir+"\n", string(got))
+}
+
+// A package directory that go list cannot print leaves no profile, so mutants
+// run against the full suite and no test runs in the wrong directory.
+func TestBuildPerTestProfile_PackageDirErrors(t *testing.T) {
+	pkgs := []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}}}
+	for name, script := range map[string]string{"failed": "pwd; exit 2", "empty": "true"} {
+		t.Run(name, func(t *testing.T) {
+			var testRuns atomic.Int32
+			tc := scriptedToolchain{pkgDir: script, testRuns: &testRuns, runs: map[string]string{"TestTouch": writeValidProfile}}
+
+			tmp := t.TempDir()
+			prof, err := buildWithin(t, 10*time.Second, tc, pkgs, tmp)
+
+			assert.ErrorContains(t, err, "package directory of example.com/m/rec")
+			assert.Nil(t, prof)
+			assert.Zero(t, testRuns.Load())
+			assertProfileBuildsCleaned(t, tmp)
+		})
+	}
 }
 
 func assertProfileBuildsCleaned(t *testing.T, tmp string) {

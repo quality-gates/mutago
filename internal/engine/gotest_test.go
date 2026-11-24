@@ -222,7 +222,7 @@ func TestPerTestToolchainCommands(t *testing.T) {
 				{"list tests", tc.ListTests(pkg).Args, tt.list},
 				{"list packages", tc.ListPackages(pkg + "/...").Args, tt.packages},
 				{"compile", tc.CompileTestBinary(pkg, pkg, "/b/tests").Args, tt.compile},
-				{"run", tc.RunTest("/b/tests", "TestA", "/b/TestA/c.out").Args, tt.run},
+				{"run", tc.RunTest("/b/tests", "/src/pkg", "TestA", "/b/TestA/c.out").Args, tt.run},
 			} {
 				if !slices.Equal(c.got, c.want) {
 					t.Errorf("%s\n got %q\nwant %q", c.kind, c.got, c.want)
@@ -245,7 +245,7 @@ func TestPerTestToolchainCommandsUseRunContext(t *testing.T) {
 		"list tests":    tc.ListTests("example.com/m/pkg"),
 		"list packages": tc.ListPackages("example.com/m/pkg/..."),
 		"compile":       tc.CompileTestBinary("example.com/m/pkg", "example.com/m/pkg", filepath.Join(t.TempDir(), "tests")),
-		"run":           tc.RunTest(os.Args[0], "TestA", filepath.Join(t.TempDir(), "c.out")),
+		"run":           tc.RunTest(os.Args[0], t.TempDir(), "TestA", filepath.Join(t.TempDir(), "c.out")),
 	} {
 		if err := cmd.Start(); !errors.Is(err, context.Canceled) {
 			if err == nil {
