@@ -1245,6 +1245,8 @@ func allReportMutants(rep *models.Report) []models.Mutant {
 	muts = append(muts, rep.Killed...)
 	muts = append(muts, rep.Escaped...)
 	muts = append(muts, rep.NotCovered...)
+	muts = append(muts, rep.Skipped...)
+	muts = append(muts, rep.Errored...)
 	return muts
 }
 
@@ -1258,8 +1260,8 @@ func checkCaseMutantCoverage(t *testing.T, mut models.Mutant, covStatuses, noCov
 		if covStatus == "NOT COVERED" {
 			t.Errorf("line %d mutant %s was unexpectedly marked NOT COVERED with --coverage", line, mut.ID)
 		} else if noCovStatus != "" && covStatus != noCovStatus {
-			t.Errorf("line %d mutant %s status %s under --coverage does not match status %s without coverage",
-				line, mut.ID, covStatus, noCovStatus)
+			t.Errorf("line %d mutant %s (%s) status %s under --coverage does not match status %s without coverage\ndiff:\n%s\ncoverage output: %s",
+				line, mut.ID, mut.Mutator.MutatorName, covStatus, noCovStatus, mut.Diff, mut.ProcessOutput)
 		}
 		if line == 5 {
 			return 1, 0, 0
@@ -1316,8 +1318,13 @@ func TestLabel(t *testing.T) {
 		t.Fatalf("failed to write pkg_test.go: %v", err)
 	}
 
+	// One worker: this test classifies filtered mutants, it does not test
+	// parallel execution. Concurrent `go test` subprocesses for the same
+	// package make the coverage-on/off equivalence assertion flaky under
+	// load (#368); dedicated worker tests cover parallelism instead.
 	optsNoCov := &models.Options{}
 	optsNoCov.Exec.Timeout = 10
+	optsNoCov.General.Workers = 1
 	optsNoCov.Remaining.Targets = []string{"./" + tempDir}
 
 	var stdoutNoCov, stderrNoCov bytes.Buffer
@@ -1331,6 +1338,7 @@ func TestLabel(t *testing.T) {
 	optsCov := &models.Options{}
 	optsCov.Exec.Coverage = true
 	optsCov.Exec.Timeout = 10
+	optsCov.General.Workers = 1
 	optsCov.Remaining.Targets = []string{"./" + tempDir}
 
 	var stdoutCov, stderrCov bytes.Buffer

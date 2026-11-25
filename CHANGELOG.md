@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Suppress diffs printed by the bundled custom exec scripts when `--no-diffs` is passed, by forwarding it as `MUTATE_NO_DIFFS`. Arbitrary custom exec output is not filtered (#356).
 - Resolve `--coverage` profile paths against every module in a `go.work` workspace, so covered mutants are no longer reported as not covered and `--fail-on-escaped` exits 4 when one escapes (#352).
 - Keep the indentation of a replaced statement in mutant diffs, so a closing brace no longer appears to move out of its block (#354).
+- Make the case-expression coverage equivalence test deterministic by running it with one worker and reporting the mutant diff and output when coverage-on/off statuses differ, so a flaky subprocess run under load no longer fails the suite without a diagnosis (#368).
 
 ## [v2.10.45] (2026-11-23)
 
