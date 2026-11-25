@@ -33,6 +33,17 @@ type ChangedLines map[string][]LineRange
 //
 // If no merge-base can be found (e.g. unrelated histories), it falls back to
 // diffing against <base> directly.
+//
+// The diff invocation pins its output format with explicit flags so that
+// display/content configuration cannot change what the parser sees (issue
+// #353): --no-color defeats color.diff/color.ui, --src-prefix/--dst-prefix
+// defeat diff.mnemonicPrefix/diff.noprefix/diff.srcPrefix/diff.dstPrefix,
+// --no-ext-diff defeats diff.external and GIT_EXTERNAL_DIFF, --no-relative
+// defeats diff.relative when run from a subdirectory, --no-textconv defeats
+// textconv drivers that would rewrite file contents (and line numbers), and
+// core.quotepath=false keeps non-ASCII paths unquoted. Without these, those
+// settings make the +++ line unrecognisable or the paths wrong, and
+// ParseChangedLines silently returns an empty or incomplete scope.
 func ParseChangedLines(base string) (ChangedLines, error) {
 	diffBase := base
 	if mb, err := exec.Command("git", "merge-base", base, "HEAD").Output(); err == nil {
@@ -40,9 +51,11 @@ func ParseChangedLines(base string) (ChangedLines, error) {
 			diffBase = s
 		}
 	}
-	out, err := exec.Command("git", "diff", "--unified=0", diffBase).Output()
+	out, err := exec.Command("git", "-c", "core.quotepath=false", "diff",
+		"--unified=0", "--no-color", "--no-ext-diff", "--no-textconv",
+		"--no-relative", "--src-prefix=a/", "--dst-prefix=b/", diffBase).Output()
 	if err != nil {
-		return nil, fmt.Errorf("git diff --unified=0 %s: %w", diffBase, err)
+		return nil, fmt.Errorf("git diff --unified=0 --no-color --no-ext-diff --no-textconv --no-relative --src-prefix=a/ --dst-prefix=b/ %s: %w", diffBase, err)
 	}
 	return parse(string(out)), nil
 }
