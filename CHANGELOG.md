@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Find changed lines for `--git-diff-lines` whatever the user's git config sets for `git diff` output (color, path prefixes, external diff, relative paths, textconv, quoted non-ASCII paths). Before, any of those settings made the run find no changed lines and exit 0 with an empty score instead of testing the change (#353).
 - Correct the agentic `expression/remove` description and kill hint to describe replacing an operand of `&&` or `||` with `true` or `false`, including multi-line diffs, instead of telling the reader to assert a side effect (#369).
 - Suppress diffs printed by the bundled custom exec scripts when `--no-diffs` is passed, by forwarding it as `MUTATE_NO_DIFFS`. Arbitrary custom exec output is not filtered (#356).
 - Resolve `--coverage` profile paths against every module in a `go.work` workspace, so covered mutants are no longer reported as not covered and `--fail-on-escaped` exits 4 when one escapes (#352).
