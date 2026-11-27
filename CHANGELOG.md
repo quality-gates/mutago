@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Run each `--per-test` profiling binary in its own package directory with a matching `PWD` (resolved via `go list -f {{.Dir}}`), so tests that read `testdata/` or other package-relative paths record coverage when `mutago` is invoked from outside the package or with `--test-recursive` (#374).
 - Find changed lines for `--git-diff-lines` whatever the user's git config sets for `git diff` output (color, path prefixes, external diff, relative paths, textconv, quoted non-ASCII paths). Before, any of those settings made the run find no changed lines and exit 0 with an empty score instead of testing the change (#353).
 - Correct the agentic `expression/remove` description and kill hint to describe replacing an operand of `&&` or `||` with `true` or `false`, including multi-line diffs, instead of telling the reader to assert a side effect (#369).
 - Suppress diffs printed by the bundled custom exec scripts when `--no-diffs` is passed, by forwarding it as `MUTATE_NO_DIFFS`. Arbitrary custom exec output is not filtered (#356).

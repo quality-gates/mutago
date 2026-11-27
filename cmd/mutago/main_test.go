@@ -1680,6 +1680,105 @@ func TestMainPerTestHonoursBuildTags(t *testing.T) {
 	assert.NotContains(t, out, "ESCAPED")
 }
 
+func TestMainPerTestRunsInPackageDir(t *testing.T) {
+	// Per-test profiling binaries must run in their own package directory with
+	// a matching PWD, just like `go test`. Otherwise tests reading relative
+	// testdata/ fail before covering the target and weaker tests mask mutants (#374).
+	t.Run("single package from parent dir", func(t *testing.T) {
+		root := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "calc", "testdata"), 0o755))
+		writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/pkgdir\n\ngo 1.22\n")
+		writeFixtureFile(t, filepath.Join(root, "calc", "testdata", "want"), "6\n")
+		writeFixtureFile(t, filepath.Join(root, "calc", "calc.go"), "package calc\n\nfunc Double(x int) int {\n\treturn x * 2\n}\n")
+		writeFixtureFile(t, filepath.Join(root, "calc", "calc_test.go"), `package calc
+
+import (
+	"os"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+func TestDouble(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pwd := os.Getenv("PWD"); pwd != "" && pwd != wd {
+		t.Fatalf("PWD = %q, want %q", pwd, wd)
+	}
+	want, err := os.ReadFile("testdata/want")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strconv.Itoa(Double(3)); got != strings.TrimSpace(string(want)) {
+		t.Fatalf("Double(3) = %s, want %s", got, want)
+	}
+}
+
+func TestDoubleRuns(t *testing.T) { _ = Double(1) }
+`)
+		for _, perTest := range []bool{false, true} {
+			t.Run(fmt.Sprintf("per-test=%t", perTest), func(t *testing.T) {
+				args := []string{"--workers", "1", "--exec-timeout", "30", "--coverage", "--min-msi", "100"}
+				if perTest {
+					args = append(args, "--per-test")
+				}
+				out := testMain(t, root, append(args, "./calc/"), returnOk, "mutation score")
+				assert.Contains(t, out, "KILLED")
+				assert.NotContains(t, out, "ESCAPED")
+			})
+		}
+	})
+
+	t.Run("recursive subpackages", func(t *testing.T) {
+		root := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "rec", "sub", "testdata"), 0o755))
+		writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/pkgdirrec\n\ngo 1.22\n")
+		writeFixtureFile(t, filepath.Join(root, "rec", "rec.go"), "package rec\n\nfunc Double(x int) int {\n\treturn x * 2\n}\n")
+		writeFixtureFile(t, filepath.Join(root, "rec", "rec_test.go"), "package rec\n\nimport \"testing\"\n\nfunc TestTouch(t *testing.T) { _ = Double(1) }\n")
+		writeFixtureFile(t, filepath.Join(root, "rec", "sub", "testdata", "want"), "6\n")
+		writeFixtureFile(t, filepath.Join(root, "rec", "sub", "sub.go"), "package sub\n")
+		writeFixtureFile(t, filepath.Join(root, "rec", "sub", "sub_test.go"), `package sub
+
+import (
+	"os"
+	"strconv"
+	"strings"
+	"testing"
+
+	"example.com/pkgdirrec/rec"
+)
+
+func TestDouble(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pwd := os.Getenv("PWD"); pwd != "" && pwd != wd {
+		t.Fatalf("PWD = %q, want %q", pwd, wd)
+	}
+	want, err := os.ReadFile("testdata/want")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strconv.Itoa(rec.Double(3)); got != strings.TrimSpace(string(want)) {
+		t.Fatalf("Double(3) = %s, want %s", got, want)
+	}
+}
+`)
+		out := testMain(
+			t,
+			root,
+			[]string{"--workers", "1", "--exec-timeout", "30", "--coverage", "--per-test", "--test-recursive", "--min-msi", "100", "./rec"},
+			returnOk,
+			"mutation score",
+		)
+		assert.Contains(t, out, "KILLED")
+		assert.NotContains(t, out, "ESCAPED")
+	})
+}
+
 func TestMainIgnoreSourceLinesFilterStatementMutationsByPosition(t *testing.T) {
 	root := t.TempDir()
 	writeFixtureFile(t, filepath.Join(root, "go.mod"), "module example.com/sourcefilter\n\ngo 1.22\n")

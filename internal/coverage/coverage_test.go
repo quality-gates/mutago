@@ -38,14 +38,21 @@ func (g goToolchain) ListPackages(pattern string) *exec.Cmd {
 	return exec.Command("go", "list", pattern)
 }
 
+func (g goToolchain) PackageDir(pkgPath string) *exec.Cmd {
+	return exec.Command("go", "list", "-f", "{{.Dir}}", pkgPath)
+}
+
 func (g goToolchain) CompileTestBinary(pkgPath, coverPkg, binaryPath string) *exec.Cmd {
 	g.record("compile")
 	return exec.Command("go", "test", "-c", "-cover", "-covermode=set", "-coverpkg="+coverPkg, "-o", binaryPath, pkgPath)
 }
 
-func (g goToolchain) RunTest(binaryPath, testName, profilePath string) *exec.Cmd {
+func (g goToolchain) RunTest(binaryPath, pkgDir, testName, profilePath string) *exec.Cmd {
 	g.record("run " + testName)
-	return exec.Command(binaryPath, "-test.run=^"+testName+"$", "-test.coverprofile="+profilePath, "-test.timeout=30s")
+	cmd := exec.Command(binaryPath, "-test.run=^"+testName+"$", "-test.coverprofile="+profilePath, "-test.timeout=30s")
+	cmd.Dir = pkgDir
+	cmd.Env = cmd.Environ()
+	return cmd
 }
 
 func TestBuildPerTestProfileCompilesOnce(t *testing.T) {
@@ -791,22 +798,37 @@ func writeRecursiveModule(t *testing.T) {
 
 func TestListTestPackages(t *testing.T) {
 	writeRecursiveModule(t)
+	wd, err := os.Getwd()
+	require.NoError(t, err)
 
 	flat, err := ListTestPackages(goToolchain{}, "example.com/m/rec", false)
 	require.NoError(t, err)
-	assert.Equal(t, []TestPackage{{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}}}, flat)
+	assert.Equal(t, []TestPackage{{ImportPath: "example.com/m/rec", Dir: filepath.Join(wd, "rec"), Tests: []string{"TestTouch"}}}, flat)
 
 	tree, err := ListTestPackages(goToolchain{}, "example.com/m/rec", true)
 	require.NoError(t, err)
 	assert.Equal(t, []TestPackage{
-		{ImportPath: "example.com/m/rec", Tests: []string{"TestTouch"}},
-		{ImportPath: "example.com/m/rec/sub", Tests: []string{"TestDouble", "TestTouch"}},
+		{ImportPath: "example.com/m/rec", Dir: filepath.Join(wd, "rec"), Tests: []string{"TestTouch"}},
+		{ImportPath: "example.com/m/rec/sub", Dir: filepath.Join(wd, "rec", "sub"), Tests: []string{"TestDouble", "TestTouch"}},
 	}, tree, "packages without tests are left out")
 
 	_, err = ListTestPackages(goToolchain{}, "example.com/m/broken", true)
 	assert.Error(t, err, "a package tree that go list rejects")
 	_, err = ListTestPackages(goToolchain{}, "example.com/m/nope", false)
 	assert.Error(t, err, "a package whose tests cannot be listed")
+
+	t.Run("directory resolution failure returns error", func(t *testing.T) {
+		for name, script := range map[string]string{
+			"command fails": "echo /some/dir; exit 1",
+			"empty output":  "true",
+		} {
+			t.Run(name, func(t *testing.T) {
+				tc := scriptedToolchain{pkgDir: script}
+				_, err := ListTestPackages(tc, "example.com/m/rec", false)
+				assert.Error(t, err)
+			})
+		}
+	})
 }
 
 func TestBuildPerTestProfileForPackages_AttributesSubpackageTests(t *testing.T) {
@@ -869,6 +891,7 @@ func TestBuildPerTestProfile_NoTests(t *testing.T) {
 type scriptedToolchain struct {
 	runs     map[string]string
 	compile  string
+	pkgDir   string
 	ctx      context.Context
 	testRuns *atomic.Int32
 }
@@ -886,17 +909,39 @@ func (s scriptedToolchain) ListTests(string) *exec.Cmd {
 func (s scriptedToolchain) ListPackages(string) *exec.Cmd {
 	return exec.CommandContext(s.Context(), "echo", "example.com/m/rec")
 }
+func (s scriptedToolchain) PackageDir(string) *exec.Cmd {
+	if s.pkgDir != "" {
+		return exec.CommandContext(s.Context(), "sh", "-c", s.pkgDir)
+	}
+	return exec.CommandContext(s.Context(), "echo", "/pkg/dir")
+}
 func (s scriptedToolchain) CompileTestBinary(_, _, _ string) *exec.Cmd {
 	if s.compile != "" {
 		return exec.CommandContext(s.Context(), "sh", "-c", s.compile)
 	}
 	return exec.CommandContext(s.Context(), "true")
 }
-func (s scriptedToolchain) RunTest(_, testName, profilePath string) *exec.Cmd {
+func (s scriptedToolchain) RunTest(_, pkgDir, testName, profilePath string) *exec.Cmd {
 	if s.testRuns != nil {
 		s.testRuns.Add(1)
 	}
-	return exec.CommandContext(s.Context(), "sh", "-c", s.runs[testName], "sh", profilePath)
+	cmd := exec.CommandContext(s.Context(), "sh", "-c", s.runs[testName], "sh", profilePath)
+	cmd.Dir = pkgDir
+	return cmd
+}
+
+func TestBuildPerTestProfileForPackages_RunsInPackageDir(t *testing.T) {
+	pkgDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "marker"), []byte("ok"), 0o600))
+	tc := scriptedToolchain{
+		runs: map[string]string{
+			"TestTouch": `test -f marker && ` + writeValidProfile,
+		},
+	}
+	pkgs := []TestPackage{{ImportPath: "example.com/m/rec", Dir: pkgDir, Tests: []string{"TestTouch"}}}
+	prof, err := BuildPerTestProfileForPackages(tc, "example.com/m/rec", pkgs, "example.com/m", t.TempDir(), 1)
+	require.NoError(t, err)
+	require.NotNil(t, prof)
 }
 
 const writeValidProfile = `printf 'mode: set\nexample.com/m/rec/rec.go:3.24,5.2 1 1\n' > "$1"`

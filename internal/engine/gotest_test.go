@@ -221,12 +221,23 @@ func TestPerTestToolchainCommands(t *testing.T) {
 			}{
 				{"list tests", tc.ListTests(pkg).Args, tt.list},
 				{"list packages", tc.ListPackages(pkg + "/...").Args, tt.packages},
+				{"package dir", tc.PackageDir(pkg).Args, append([]string{"go", "list", "-f", "{{.Dir}}"}, tt.packages[2:len(tt.packages)-1]...)},
 				{"compile", tc.CompileTestBinary(pkg, pkg, "/b/tests").Args, tt.compile},
-				{"run", tc.RunTest("/b/tests", "TestA", "/b/TestA/c.out").Args, tt.run},
+				{"run", tc.RunTest("/b/tests", "/pkg/dir", "TestA", "/b/TestA/c.out").Args, tt.run},
 			} {
+				if c.kind == "package dir" {
+					c.want = append(c.want, pkg)
+				}
 				if !slices.Equal(c.got, c.want) {
 					t.Errorf("%s\n got %q\nwant %q", c.kind, c.got, c.want)
 				}
+			}
+			runCmd := tc.RunTest("/b/tests", "/pkg/dir", "TestA", "/b/TestA/c.out")
+			if runCmd.Dir != "/pkg/dir" {
+				t.Errorf("run Dir = %q, want %q", runCmd.Dir, "/pkg/dir")
+			}
+			if !slices.Contains(runCmd.Env, "PWD=/pkg/dir") {
+				t.Errorf("run Env missing PWD=/pkg/dir")
 			}
 		})
 	}
@@ -244,8 +255,9 @@ func TestPerTestToolchainCommandsUseRunContext(t *testing.T) {
 	for kind, cmd := range map[string]*exec.Cmd{
 		"list tests":    tc.ListTests("example.com/m/pkg"),
 		"list packages": tc.ListPackages("example.com/m/pkg/..."),
+		"package dir":   tc.PackageDir("example.com/m/pkg"),
 		"compile":       tc.CompileTestBinary("example.com/m/pkg", "example.com/m/pkg", filepath.Join(t.TempDir(), "tests")),
-		"run":           tc.RunTest(os.Args[0], "TestA", filepath.Join(t.TempDir(), "c.out")),
+		"run":           tc.RunTest(os.Args[0], "", "TestA", filepath.Join(t.TempDir(), "c.out")),
 	} {
 		if err := cmd.Start(); !errors.Is(err, context.Canceled) {
 			if err == nil {
