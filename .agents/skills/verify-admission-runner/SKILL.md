@@ -13,7 +13,7 @@ Last matched to `7bc356292989fda5ecb9c608c25f518576e48ca7`: `mutantScope.Admit`,
 
 The TLA+ model treats each candidate admission as an atomic step and explores every sequence for two edit keys. `OnlyAcceptedAreSeen` means rejection cannot poison a key; a counterexample shows a rejection that adds a key before any admission. It abstracts all reasons for rejection into one event. It does not model concurrent discovery, edit construction, program execution, cancellation, or unbounded key sets.
 
-The real-code check runs `TestMutantScopeAdmitDuplicateAndOrder` and `TestRunnerOutcomes`. The former exercises an out-of-scope candidate followed by an eligible candidate with the same key and then a duplicate. The latter executes controlled subprocesses through both runners and checks the reported outcome for success, test failure, build and setup failure, driver errors, and custom exits 0, 1, 2, and 7. These finite cases do not prove the shell scripts or arbitrary commands correct.
+The real-code check runs `TestMutantScopeAdmitDuplicateAndOrder` and `TestRunnerOutcomes`. The former exercises an out-of-scope candidate followed by an eligible candidate with the same key and then a duplicate. The latter executes controlled subprocesses through both runners and checks the reported outcome for success, test failure, a signal-killed test binary (`signal: killed` with exit 1, which is an error, not a kill), build and setup failure, driver errors, and custom exits 0, 1, 2, and 7. These finite cases do not prove the shell scripts or arbitrary commands correct.
 
 ## Run and interpret
 

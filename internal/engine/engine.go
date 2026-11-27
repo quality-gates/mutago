@@ -1773,12 +1773,18 @@ func runGoTest(job execJob, overlayName string) int {
 }
 
 // classifyGoTestResult distinguishes a test failure from a package build or
-// setup failure. All make `go test` exit 1, but a mutant that never compiled
-// or whose package failed setup was not killed by a test and must be skipped
-// instead.
+// setup failure, and from a test binary killed by a signal. All make `go test`
+// exit 1. A mutant that never compiled or whose package failed setup was not
+// killed by a test and must be skipped. A binary that died with `signal: killed`
+// was not killed by a test either; returning 3 makes the runner record an error
+// so the crash cannot count as a kill. The go test output is already printed
+// when debugging, which keeps the signal text available for diagnosis.
 func classifyGoTestResult(execExitCode int, output []byte) int {
 	if execExitCode == 1 && (bytes.Contains(output, []byte("[build failed]")) || bytes.Contains(output, []byte("[setup failed]"))) {
 		return 2
+	}
+	if execExitCode == 1 && bytes.Contains(output, []byte("signal: killed")) {
+		return 3
 	}
 	return execExitCode
 }

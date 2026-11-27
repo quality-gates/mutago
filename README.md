@@ -241,7 +241,7 @@ The output shows eight mutations. Six were killed (tests detected the mutation â
 
 The summary shows the **mutation score** (MSI): killed / total. For the example above, 6/8 = 75.00%. A score of 100% means every mutation was caught.
 
-Skipped and errored mutants count toward the total but not as kills. Covered-code MSI uses the same calculation after excluding not-covered mutants.
+Skipped and errored mutants count toward the total but not as kills. A test binary killed by a signal is an error, not a kill. Covered-code MSI uses the same calculation after excluding not-covered mutants.
 
 ### <a name="black-list-false-positives"></a>Blacklist false positives
 
