@@ -80,7 +80,7 @@ Mutant test runs also pass `-failfast`. One failing test is enough to kill a mut
 
 `--per-test` builds its map the same way. Listing packages and tests gets only your build flags (`-tags`, `-race`, `-gcflags`, `-ldflags`, `-mod`, and so on), so tests behind a build tag are mapped. The coverage test binary is compiled with all of your flags, and each test runs with your runner flags (`-short`, `-count`, `-v`, ...) in `-test.*` form. Flags may be written `-name`, `--name`, or `-name=value`.
 
-If a generated mutant does not compile, it is skipped rather than counted as killed by a test.
+If a generated mutant does not compile, it is skipped rather than counted as killed by a test. A test binary killed by a signal (`signal: killed` from `go test`, exit 1) is an error, not a kill or an escape. `--debug` still prints that output so the crash can be diagnosed. A genuine test failure is still a kill, and `[build failed]` or `[setup failed]` is still a skip.
 
 ## Filtering
 
