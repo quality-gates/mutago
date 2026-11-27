@@ -311,12 +311,14 @@ type Toolchain interface {
 	ListTests(pkgPath string) *exec.Cmd
 	// ListPackages lists the import paths matching pattern.
 	ListPackages(pattern string) *exec.Cmd
+	// PackageDir resolves the filesystem directory of pkgPath.
+	PackageDir(pkgPath string) *exec.Cmd
 	// CompileTestBinary writes pkgPath's test binary to binaryPath,
 	// instrumented for -coverpkg=coverPkg.
 	CompileTestBinary(pkgPath, coverPkg, binaryPath string) *exec.Cmd
-	// RunTest runs testName from binaryPath, writing its coverage profile
-	// to profilePath.
-	RunTest(binaryPath, testName, profilePath string) *exec.Cmd
+	// RunTest runs testName from binaryPath in pkgDir, writing its coverage
+	// profile to profilePath.
+	RunTest(binaryPath, pkgDir, testName, profilePath string) *exec.Cmd
 }
 
 // CountTests returns the number of test functions (Test*, Fuzz*)
@@ -352,9 +354,11 @@ func isTestFuncName(name string) bool {
 		strings.HasPrefix(name, "Fuzz")
 }
 
-// TestPackage names one package and the runnable top-level tests it declares.
+// TestPackage names one package, its directory, and the runnable top-level
+// tests it declares.
 type TestPackage struct {
 	ImportPath string
+	Dir        string
 	Tests      []string
 }
 
@@ -377,10 +381,26 @@ func ListTestPackages(tc Toolchain, pkgPath string, recursive bool) ([]TestPacka
 			return nil, err
 		}
 		if len(names) > 0 {
-			pkgs = append(pkgs, TestPackage{ImportPath: path, Tests: names})
+			dir, err := packageDir(tc, path)
+			if err != nil {
+				return nil, err
+			}
+			pkgs = append(pkgs, TestPackage{ImportPath: path, Dir: dir, Tests: names})
 		}
 	}
 	return pkgs, nil
+}
+
+func packageDir(tc Toolchain, pkgPath string) (string, error) {
+	out, err := tc.PackageDir(pkgPath).Output()
+	if err != nil {
+		return "", runError(tc, err)
+	}
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		return "", fmt.Errorf("package directory for %q is empty", pkgPath)
+	}
+	return dir, nil
 }
 
 func listPackages(tc Toolchain, pattern string) ([]string, error) {
@@ -428,7 +448,11 @@ func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPac
 	if len(pkgs) == 0 {
 		return nil, nil
 	}
-	buildDir, err := os.MkdirTemp(tmpDir, "per-test-")
+	absTmpDir, err := filepath.Abs(tmpDir)
+	if err != nil {
+		return nil, err
+	}
+	buildDir, err := os.MkdirTemp(absTmpDir, "per-test-")
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +465,7 @@ func BuildPerTestProfileForPackages(tc Toolchain, pkgPath string, pkgs []TestPac
 			return nil, err
 		}
 		for _, name := range pkg.Tests {
-			batch.jobs = append(batch.jobs, perTestJob{name: name, binaryPath: binaryPath})
+			batch.jobs = append(batch.jobs, perTestJob{name: name, binaryPath: binaryPath, dir: pkg.Dir})
 		}
 	}
 	if workers <= 0 {
@@ -467,6 +491,7 @@ func runError(tc Toolchain, err error) error {
 type perTestJob struct {
 	name       string
 	binaryPath string
+	dir        string
 }
 
 type perTestResult interface {
@@ -540,7 +565,7 @@ func runPerTestWorker(tc Toolchain, jobs <-chan perTestJob, results chan<- perTe
 		_ = os.MkdirAll(profDir, 0755)
 		profPath := filepath.Join(profDir, "coverage.out")
 
-		_ = tc.RunTest(job.binaryPath, job.name, profPath).Run() // test failures are expected; we only care about coverage
+		_ = tc.RunTest(job.binaryPath, job.dir, job.name, profPath).Run() // test failures are expected; we only care about coverage
 
 		prof, err := parsePerTestProfile(profPath, modulePath)
 		if err != nil {

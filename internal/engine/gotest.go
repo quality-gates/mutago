@@ -173,6 +173,13 @@ func (t perTestToolchain) ListPackages(pattern string) *exec.Cmd {
 	return goCommandIn(t.Context(), t.dir, append(args, pattern)...)
 }
 
+// PackageDir resolves the filesystem directory of pkgPath with the user's
+// build flags, so each per-test binary runs in its own package directory.
+func (t perTestToolchain) PackageDir(pkgPath string) *exec.Cmd {
+	args := append([]string{"list", "-f", "{{.Dir}}"}, buildTestFlags(t.testFlags)...)
+	return goCommandIn(t.Context(), t.dir, append(args, pkgPath)...)
+}
+
 func (t perTestToolchain) CompileTestBinary(pkgPath, coverPkg, binaryPath string) *exec.Cmd {
 	return goTestInvocation{
 		kind:           compileTestBinary,
@@ -185,15 +192,17 @@ func (t perTestToolchain) CompileTestBinary(pkgPath, coverPkg, binaryPath string
 	}.command(t.Context())
 }
 
-// RunTest runs one test of a binary from CompileTestBinary. The user's runner
-// flags come first so the explicit -test.run, profile and timeout win.
-func (t perTestToolchain) RunTest(binaryPath, testName, profilePath string) *exec.Cmd {
+// RunTest runs one test of a binary from CompileTestBinary in pkgDir. The
+// user's runner flags come first so the explicit -test.run, profile and
+// timeout win.
+func (t perTestToolchain) RunTest(binaryPath, pkgDir, testName, profilePath string) *exec.Cmd {
 	args := append(testBinaryFlags(t.testFlags),
 		"-test.run=^"+testName+"$",
 		"-test.coverprofile="+profilePath,
 		fmt.Sprintf("-test.timeout=%ds", t.timeoutSeconds))
 	cmd := exec.CommandContext(t.Context(), binaryPath, args...)
-	cmd.Env = os.Environ()
+	cmd.Dir = pkgDir
+	cmd.Env = cmd.Environ()
 	return cmd
 }
 
